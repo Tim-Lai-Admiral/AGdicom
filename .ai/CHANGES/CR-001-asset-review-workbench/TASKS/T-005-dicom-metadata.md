@@ -1,0 +1,93 @@
+# Task T-005: DICOM 识别与元数据
+
+## Metadata
+
+```yaml
+id: T-005
+cr: CR-001
+type: feature
+status: planned
+owner: Builder
+reviewer: Reviewer
+priority: high
+depends_on: [T-003]
+branch: feature/CR-001-T-005-dicom
+```
+
+## Objective
+
+用 dicom-parser 解析 DICOM 元数据：series/切片数分组、去标识化标记检测、基础元数据面板；无压缩像素用 Canvas 灰度渲染单切片预览，压缩/损坏优雅降级。
+
+## Context and inputs
+
+- Requirement(s): R-003
+- Current architecture/design references: CR-001 ARCHITECTURE.md（DICOM 解析）
+- Dependency output: T-003 导入
+
+## Scope
+
+Allowed changes:
+
+- `src/features/viewer/dicom/parseDicom.ts`：dicom-parser 封装，输出 `DicomMeta`（Modality、SOP Class、TransferSyntax、Rows/Columns、PixelSpacing、SeriesInstanceUID、PatientName/ID、切片数按 series 分组、去标识化标记 0012,0062/0063、患者字段空检测）。
+- `src/features/viewer/dicom/decodePixel.ts`：无压缩像素解码 + min-max 灰度 → ImageData。
+- `src/features/viewer/dicom/DicomViewer.tsx`：元数据面板 + 切片选择 + Canvas 预览；压缩/解析失败显示"仅元数据/无法解析"降级文案。
+- `src/features/viewer/dicom/*.test.ts`：单测（用 T-009 合成样本或内置最小 fixture）。
+- `src/App.tsx`：点击 dicom 素材打开查看器。
+
+## Out of scope
+
+- 压缩传输语法解码（JPEG 等）——明确降级。
+- 完整阅片能力（窗宽窗位交互、MPR）。
+
+## Expected behavior
+
+1. 打开 DICOM 详情显示元数据面板，按 SeriesInstanceUID 显示切片数。
+2. 无压缩文件可渲染所选切片灰度预览。
+3. 压缩/损坏文件显示降级提示，其余元数据仍展示，应用不崩溃。
+
+## Acceptance criteria
+
+### Functional
+
+- [ ] 合成样本系列正确显示切片数（≥2）与去标识化标记（0012,0062=YES 或患者字段为空）。
+- [ ] 无压缩文件切片预览可渲染且内容可辨认（非全黑/全白）。
+- [ ] 损坏文件打开不崩溃并显示降级文案。
+
+### Error handling and compatibility
+
+- [ ] 解析异常统一走降级路径。
+- [ ] 大 series 的解析在异步中完成，不阻塞界面。
+
+### UI (if applicable)
+
+- [ ] 元数据以可读表格展示；预览区有切片序号指示。
+
+## Technical constraints
+
+- 仅依赖 dicom-parser；像素解码仅支持无压缩（Explicit/Implicit VR Little Endian）。
+- 不得在界面出现任何诊断/治疗暗示文案。
+
+## Implementation notes
+
+- 单测 fixture：若 T-009 样本未就绪，可在测试内用 dicom-parser 最小构造或内置小型 base64 fixture。
+
+## Test requirements
+
+- [ ] Unit: 元数据抽取、去标识化检测、像素 min-max 归一化、降级路径。
+- [ ] Manual/E2E: 导入合成样本与损坏文件验证。
+
+## Definition of done
+
+- [ ] Acceptance criteria satisfied.
+- [ ] Required tests pass.
+- [ ] No unrelated changes.
+- [ ] Git diff is ready for review.
+- [ ] Reviewer has approved.
+
+## Builder result
+
+> Builder fills this before requesting review.
+
+## Reviewer result
+
+> Reviewer fills this using the Review template.
