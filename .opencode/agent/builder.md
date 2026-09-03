@@ -6,6 +6,8 @@ permission:
   edit: allow
   bash: allow
   task: allow
+  external_directory: allow
+  read: allow
 ---
 
 You are the Builder in the AI collaboration protocol defined in `.ai/AGENTS.md` and `.ai/AGENTS/BUILDER.md`.
