@@ -89,6 +89,20 @@ Allowed changes:
 
 > Builder fills this before requesting review.
 
+- Implementation summary: Builder（glm-5.3-flash）完成全部实现后在收尾阶段触发 40 步检查点，按协议交出状态报告，协调者代为提交：
+  - `useModelLoader.ts`：STL 加载状态机（ReadableStream 分块读取+字节级进度、四类损坏校验、retry、≥10MB 大文件提示、dispose 释放）
+  - `Model3DViewer.tsx`：dialog 弹层（WebGLRenderer+双光源、包围盒 fit、OrbitControls 左键旋转/滚轮缩放/右键平移、进度条、错误重试、WebGL 不可用降级、Esc 关闭、卸载完整释放）
+  - `buildStlFile.ts`：代码内最小二进制 STL fixture（四面体 284 字节 + 损坏变体）
+  - App 接线："加载内置样本"按钮 fetch `public/samples/stl/` 4 个样本复用 T-003 导入管线；model 卡片点击打开查看器
+- Files changed: 4 新建（model3d 目录）+ 5 修改（App/App.test/AssetGrid/styles 等）；样本 STL 由协调者另行提交（dee49f8）
+- Tests run and result: `scripts\verify.ps1` → **185/185 测试全绿（18 文件）+ tsc -b 无错误 + vite build 通过**；实样本 Node 层解析验证：aorta 78864 / CB 84236 / LA 283198 / LVOT 160740 三角面，包围球半径均有限
+- Commit / PR: `6df7402` feat: 3D 查看器基础实现（分支 feature/CR-001-T-006-3d-viewer）
+- Known limitations / follow-ups:
+  1. **需人工浏览器验证**：4 个 STL 实际渲染与三项交互手感（jsdom 无法测 WebGL）；LA 13.5MB 加载进度体验
+  2. three.js 使主包达 ~807KB，未做 dynamic import 代码分割 → 已登记 TD-002
+  3. 损坏文件"修复后重试"需重新导入新文件（重试仅重发同一来源）
+- 步数事件：Builder 达 40 步硬检查点，工具停用前完成全部实现与验证，未写 CHECKPOINT 文件（无阻塞），状态以报告完整移交
+
 ## Reviewer result
 
 > Reviewer fills this using the Review template.
