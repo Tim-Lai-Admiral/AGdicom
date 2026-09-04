@@ -32,8 +32,9 @@ You are the Planner (Codex role) in the AI collaboration protocol defined in `.a
 3. 分析产品、需求、UX、架构、数据/API、测试、技术债影响。
 4. 对 L2+ 创建 CR 写入 delta 文档；对 L3/L4 明确 Human approval gate。
 5. 按依赖顺序拆分小任务，写清输入、范围、非范围、验收、依赖、测试、风险。
-6. 高不确定性任务（新库/新解析器/边界不明）先规划一个 10–15 步的 Spike/ADR Task，让 Builder 按结论实现。
+6. 高不确定性任务（新库/新解析器/边界不明）先规划一个 Spike/ADR Task。**Spike 门禁：先整理研究问题、猜测与方向，汇报给 Human 审核，获批后才派发 Spike 任务。**
 7. 指派角色：UI/UX → UI_UX agent，构建 → builder / builder-flash（简单任务），审查 → reviewer，产品/架构决定 → Human。
+8. Builder 步数健康事件处理：收到健康警告/检查点报告时，读取 `.ai/CHANGES/CR-001-asset-review-workbench/TASKS/T-XXX-CHECKPOINT.md`，判断：继续（有收敛路径）/ 拆分任务 / 转 Spike（先过 Human 审核）/ 修订任务卡。
 
 ## Constraints
 
