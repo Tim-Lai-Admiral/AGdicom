@@ -7,6 +7,7 @@
  * dicom 卡片主体可点击打开 DICOM 查看器（onOpenDicom，T-005 接入；未提供时保持
  * 不可交互，兼容无查看器的使用场景）；model 卡片主体可点击打开 3D 模型查看器
  * （onOpenModel，T-006 接入；未提供时保持不可交互）；
+ * 卡片元信息区提供“评审”按钮打开评审面板（onOpenReview，T-007 接入；未提供时不渲染）；
  * 状态徽标可点击切换状态（setAssetStatus 计算与 saveState 持久化由上层完成）。
  *
  * objectUrl 说明：T-003 导入时为 image 素材创建会话级 objectUrl（URL.createObjectURL），
@@ -30,6 +31,8 @@ export interface AssetGridProps {
   onOpenDicom?: (assetId: string) => void
   /** 点击 model 卡片主体：打开 3D 模型查看器（T-006）；未提供时 model 卡片不可交互 */
   onOpenModel?: (assetId: string) => void
+  /** 点击卡片“评审”按钮：打开评审面板（T-007）；未提供时不渲染该按钮 */
+  onOpenReview?: (assetId: string) => void
 }
 
 /** 图片预览缺失时的占位提示（objectUrl 为会话字段，刷新后需重新导入该图片） */
@@ -125,6 +128,7 @@ function AssetCard({
   onSetStatus,
   onOpenDicom,
   onOpenModel,
+  onOpenReview,
 }: {
   asset: Asset
   selected: boolean
@@ -132,6 +136,7 @@ function AssetCard({
   onSetStatus: (assetId: string, status: AssetStatus) => void
   onOpenDicom?: (assetId: string) => void
   onOpenModel?: (assetId: string) => void
+  onOpenReview?: (assetId: string) => void
 }) {
   const isImage = asset.kind === 'image'
   const isDicomOpenable = asset.kind === 'dicom' && onOpenDicom !== undefined
@@ -190,6 +195,16 @@ function AssetCard({
           status={asset.status}
           onSetStatus={(status) => onSetStatus(asset.id, status)}
         />
+        {onOpenReview !== undefined ? (
+          <button
+            type="button"
+            className="asset-card__review"
+            aria-label={`评审“${asset.name}”`}
+            onClick={() => onOpenReview(asset.id)}
+          >
+            评审
+          </button>
+        ) : null}
       </div>
     </li>
   )
@@ -202,6 +217,7 @@ export default function AssetGrid({
   onSetStatus,
   onOpenDicom,
   onOpenModel,
+  onOpenReview,
 }: AssetGridProps) {
   return (
     <ul className="asset-grid">
@@ -214,6 +230,7 @@ export default function AssetGrid({
           onSetStatus={onSetStatus}
           onOpenDicom={onOpenDicom}
           onOpenModel={onOpenModel}
+          onOpenReview={onOpenReview}
         />
       ))}
     </ul>

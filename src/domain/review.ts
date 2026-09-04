@@ -102,6 +102,27 @@ export function addAssetTag(
 }
 
 /**
+ * 保存素材备注：更新 asset.note 并刷新 updatedAt。
+ * 备注属于标注信息，不追加评审历史（历史仅记录评审结论）；
+ * 内容与原值完全相同或素材不存在时为 no-op（返回原状态引用）。
+ */
+export function updateAssetNote(
+  state: AppState,
+  assetId: string,
+  note: string,
+  now?: string | Date,
+): AppState {
+  const asset: Asset | undefined = state.assets[assetId]
+  if (asset === undefined || asset.note === note) return state
+  const at = toTimestamp(now)
+  return {
+    assets: { ...state.assets, [assetId]: { ...asset, note, updatedAt: at } },
+    tags: state.tags,
+    reviews: state.reviews,
+  }
+}
+
+/**
  * 移除素材标签：计数按实际使用情况重算，注册表保留条目（计数可为 0）便于复用。
  * 标签不存在或名称为空白时为 no-op（返回原状态引用）。
  */
