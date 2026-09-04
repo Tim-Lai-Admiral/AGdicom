@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
 import { loadState } from './store/repository.ts'
 import { buildDicomFile } from './features/viewer/dicom/__fixtures__/buildDicomFile.ts'
+import { buildStlFile } from './features/viewer/model3d/__fixtures__/buildStlFile.ts'
 
 function makeFile(name: string, size = 64, type = ''): File {
   return new File([new Uint8Array(size)], name, { type })
@@ -242,5 +243,65 @@ describe('App', () => {
     // 取消选择一张后：比较按钮回到不可用
     fireEvent.click(screen.getByRole('button', { name: '取消选择“heart.png”' }))
     expect(compareButton().disabled).toBe(true)
+  })
+
+  it('loads built-in STL samples and opens the 3D viewer from a model card', async () => {
+    // 内置样本与查看器加载统一 stub fetch：返回最小二进制 STL（284 字节）。
+    // 样本按钮走 blob()（转 File），查看器走 arrayBuffer()（loader 读取），两者都要提供。
+    const stlBytes = new Uint8Array(buildStlFile())
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        headers: { get: () => String(stlBytes.byteLength) },
+        body: null,
+        blob: async () => new Blob([stlBytes], { type: 'model/stl' }),
+        arrayBuffer: async () => stlBytes.slice().buffer,
+      })),
+    )
+    // jsdom 无 WebGL：getContext 返回 null → 查看器走降级提示分支
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    // jsdom 无 URL.createObjectURL：注入桩让 model 素材带上会话 objectUrl（查看器需要）
+    const originalCreateObjectURL = Object.getOwnPropertyDescriptor(URL, 'createObjectURL')
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: () => 'blob:mock-model',
+      configurable: true,
+      writable: true,
+    })
+    try {
+      const { container } = render(<App />)
+      dropFiles(container, [makeFile('heart.png', 64, 'image/png')])
+      await waitFor(() => {
+        expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
+      })
+
+      // 一键加载内置样本：fetch 4 个 STL → File → T-003 导入管线注册（去重）
+      fireEvent.click(screen.getByRole('button', { name: '加载内置样本（STL）' }))
+      await waitFor(() => {
+        expect(screen.getByText('成功导入 4 个素材')).toBeTruthy()
+      })
+      expect(screen.getByText('aorta.stl')).toBeTruthy()
+
+      // 点击 model 卡片打开 3D 查看器；jsdom 无 WebGL → 降级提示而非崩溃
+      fireEvent.click(screen.getByRole('button', { name: '查看“aorta.stl”的 3D 模型' }))
+      const dialog = screen.getByRole('dialog', { name: '3D 模型预览' })
+      await waitFor(() => {
+        expect(within(dialog).getByText(/不支持 WebGL/)).toBeTruthy()
+      })
+      expect(within(dialog).getByText('左键拖拽：旋转')).toBeTruthy()
+      expect(within(dialog).getByText('右键拖拽：平移')).toBeTruthy()
+
+      // Esc 关闭；素材库仍在
+      fireEvent.keyDown(window, { key: 'Escape' })
+      expect(screen.queryByRole('dialog', { name: '3D 模型预览' })).toBeNull()
+      expect(screen.getByText('素材库（5）')).toBeTruthy()
+    } finally {
+      if (originalCreateObjectURL === undefined) {
+        delete (URL as { createObjectURL?: unknown }).createObjectURL
+      } else {
+        Object.defineProperty(URL, 'createObjectURL', originalCreateObjectURL)
+      }
+    }
   })
 })

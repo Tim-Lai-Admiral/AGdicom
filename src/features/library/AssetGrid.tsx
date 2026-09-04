@@ -5,7 +5,8 @@
  * 不破坏网格；dicom/model 显示类型图标占位）、名称、类型中文标签、状态徽标。
  * 交互：image 卡片主体可点击切换“比较选中”（最多两张，选中集合与上限由上层管理）；
  * dicom 卡片主体可点击打开 DICOM 查看器（onOpenDicom，T-005 接入；未提供时保持
- * 不可交互，兼容无查看器的使用场景）；model 卡片主体暂不可交互（查看器属 T-006）；
+ * 不可交互，兼容无查看器的使用场景）；model 卡片主体可点击打开 3D 模型查看器
+ * （onOpenModel，T-006 接入；未提供时保持不可交互）；
  * 状态徽标可点击切换状态（setAssetStatus 计算与 saveState 持久化由上层完成）。
  *
  * objectUrl 说明：T-003 导入时为 image 素材创建会话级 objectUrl（URL.createObjectURL），
@@ -27,6 +28,8 @@ export interface AssetGridProps {
   onSetStatus: (assetId: string, status: AssetStatus) => void
   /** 点击 dicom 卡片主体：打开 DICOM 查看器（T-005）；未提供时 dicom 卡片不可交互 */
   onOpenDicom?: (assetId: string) => void
+  /** 点击 model 卡片主体：打开 3D 模型查看器（T-006）；未提供时 model 卡片不可交互 */
+  onOpenModel?: (assetId: string) => void
 }
 
 /** 图片预览缺失时的占位提示（objectUrl 为会话字段，刷新后需重新导入该图片） */
@@ -121,15 +124,18 @@ function AssetCard({
   onToggleSelect,
   onSetStatus,
   onOpenDicom,
+  onOpenModel,
 }: {
   asset: Asset
   selected: boolean
   onToggleSelect: (assetId: string) => void
   onSetStatus: (assetId: string, status: AssetStatus) => void
   onOpenDicom?: (assetId: string) => void
+  onOpenModel?: (assetId: string) => void
 }) {
   const isImage = asset.kind === 'image'
   const isDicomOpenable = asset.kind === 'dicom' && onOpenDicom !== undefined
+  const isModelOpenable = asset.kind === 'model' && onOpenModel !== undefined
   const mainContent = (
     <>
       <CardThumb asset={asset} />
@@ -161,6 +167,15 @@ function AssetCard({
         >
           {mainContent}
         </button>
+      ) : isModelOpenable ? (
+        <button
+          type="button"
+          className="asset-card__main"
+          aria-label={`查看“${asset.name}”的 3D 模型`}
+          onClick={() => onOpenModel?.(asset.id)}
+        >
+          {mainContent}
+        </button>
       ) : (
         <div className="asset-card__main">{mainContent}</div>
       )}
@@ -186,6 +201,7 @@ export default function AssetGrid({
   onToggleSelect,
   onSetStatus,
   onOpenDicom,
+  onOpenModel,
 }: AssetGridProps) {
   return (
     <ul className="asset-grid">
@@ -197,6 +213,7 @@ export default function AssetGrid({
           onToggleSelect={onToggleSelect}
           onSetStatus={onSetStatus}
           onOpenDicom={onOpenDicom}
+          onOpenModel={onOpenModel}
         />
       ))}
     </ul>

@@ -840,3 +840,205 @@ button.asset-card__main:hover .asset-card__name {
     width: 9rem;
   }
 }
+
+/* --- 内置样本加载（CR-001 T-006）：素材库头部的次级按钮 --- */
+.library__samples {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0.35rem 1rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.library__samples:hover:not(:disabled) {
+  background: var(--color-bg);
+  border-color: var(--color-primary);
+}
+
+.library__samples:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.library__samples-error {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: #fbe9e6;
+  color: var(--color-danger);
+  font-size: 0.875rem;
+}
+
+/* --- 3D 模型查看器（CR-001 T-006 / R-004）：three.js 网格预览 --- */
+.model3d-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 32, 0.62);
+}
+
+.model3d-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: min(72rem, 100%);
+  max-height: calc(100vh - 2rem);
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: 0 12px 40px rgba(15, 23, 32, 0.25);
+}
+
+.model3d-viewer__header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.model3d-viewer__title {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.model3d-viewer__file {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.model3d-viewer__esc-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.model3d-viewer__close {
+  margin-left: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0.4rem 1rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.model3d-viewer__close:hover {
+  background: var(--color-bg);
+}
+
+.model3d-viewer__notice {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: #fdf3df;
+  color: var(--color-warning);
+  font-size: 0.875rem;
+}
+
+.model3d-viewer__stage {
+  position: relative;
+  height: min(60vh, 34rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #10141a; /* 与 DICOM 预览一致的深色底 */
+  overflow: hidden;
+}
+
+.model3d-viewer__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none; /* OrbitControls 触屏操作需要 */
+}
+
+.model3d-viewer__canvas.is-hidden {
+  display: none;
+}
+
+.model3d-viewer__overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  text-align: center;
+  color: #dfe6ef;
+  font-size: 0.9375rem;
+}
+
+.model3d-viewer__overlay--error {
+  color: #f2b0a6;
+}
+
+.model3d-viewer__overlay p {
+  margin: 0;
+  max-width: 36rem;
+  overflow-wrap: anywhere;
+}
+
+.model3d-viewer__progress {
+  width: min(20rem, 80%);
+  height: 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.model3d-viewer__progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-primary);
+  transition: width 0.15s ease;
+}
+
+.model3d-viewer__loading-bytes {
+  color: #aab7c5;
+  font-size: 0.8125rem;
+}
+
+.model3d-viewer__retry {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0.4rem 1.25rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.model3d-viewer__retry:hover {
+  background: var(--color-bg);
+}
+
+.model3d-viewer__hints {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 40rem) {
+  /* 窄屏：降低画布高度，保证提示与关闭按钮可见 */
+  .model3d-viewer__stage {
+    height: 46vh;
+  }
+}
