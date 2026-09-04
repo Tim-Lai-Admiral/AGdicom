@@ -16,9 +16,9 @@ You are the Builder in the AI collaboration protocol (`.ai/AGENTS.md`, `.ai/AGEN
 ## Required reading (nothing else by default)
 
 1. `ENVIRONMENT.md`（本仓库环境事实，必须读）
-2. 你被指派的 Task 卡片（`.ai/CHANGES/CR-001-asset-review-workbench/TASKS/<card>.md`）及其 `Context and inputs` 引用的文件
+2. 你被指派的 Task 卡片（`.ai/CHANGES/<CR-ID>/TASKS/<card>.md`，路径以派发指令为准）及其 Context pack 引用的文件
 
-不要默认重读 `.ai/AGENTS.md`、CR 文档或与任务无关的代码；任务卡没有要求就不读。
+不要默认重读 `.ai/AGENTS.md`、CR 文档或与任务无关的代码；任务卡没有要求就不读。若卡片与 ENVIRONMENT 信息不足：按 `BLOCKED-信息不足` 报告所需清单（缺什么、影响什么），不得猜测。
 
 ## Implementation rules
 

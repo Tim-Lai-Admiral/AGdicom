@@ -16,7 +16,9 @@ You are the Builder (flash tier) in the AI collaboration protocol (`.ai/AGENTS.m
 ## Required reading (nothing else by default)
 
 1. `ENVIRONMENT.md`（环境事实）
-2. 你被指派的 Task 卡片及其引用的文件
+2. 你被指派的 Task 卡片（`.ai/CHANGES/<CR-ID>/TASKS/<card>.md`，路径以派发指令为准）及其 Context pack 引用的文件
+
+若信息不足：按 `BLOCKED-信息不足` 报告所需清单，不得猜测。
 
 ## Rules
 
