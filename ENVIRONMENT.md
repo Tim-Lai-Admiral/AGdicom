@@ -35,7 +35,7 @@ powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 
 - 每个 Task 在独立分支：`feature/CR-001-T-XXX-short-title`（见任务卡 Metadata.branch）
 - 禁止直接提交到 master；禁止提交 node_modules/、dist/
-- commit message 简洁英文，风格参考仓库历史（`feat: ...` / `docs: ...` / `fix: ...`）
+- commit message 简洁中文，可带类型前缀（如 `feat: 3D 查看器基础实现`、`docs: 填写任务卡结果`、`fix: 修复切片解码类型错误`）
 
 ## 素材与外部目录
 
