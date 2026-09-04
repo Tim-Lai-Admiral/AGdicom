@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
 import { loadState } from './store/repository.ts'
+import { buildDicomFile } from './features/viewer/dicom/__fixtures__/buildDicomFile.ts'
 
 function makeFile(name: string, size = 64, type = ''): File {
   return new File([new Uint8Array(size)], name, { type })
@@ -25,6 +26,7 @@ describe('App', () => {
   })
   afterEach(() => {
     cleanup() // vitest 未启用 globals，RTL 自动清理不生效，需手动卸载
+    vi.unstubAllGlobals()
     localStorage.clear()
   })
 
@@ -129,6 +131,69 @@ describe('App', () => {
     ])
   })
 
+  it('opens the DICOM viewer from a dicom card, parses the file and persists metadata', async () => {
+    // jsdom 的 blob URL 无法被 fetch 正确读取（环境限制），stub fetch 返回真实 fixture 字节，
+    // 覆盖 App 层“点击 → 解析 → onMetasParsed 回写 → saveState 持久化”完整链路
+    const dicomBytes = new Uint8Array(
+      buildDicomFile({ patientName: '', patientID: '', patientIdentityRemoved: 'YES' }),
+    )
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => dicomBytes.slice().buffer,
+      })),
+    )
+    // jsdom 无 2D Canvas：返回 null 触发查看器的“环境不支持”降级分支（不崩溃）
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    const { container } = render(<App />)
+    dropFiles(container, [new File([dicomBytes], 'scan.dcm', { type: 'application/dicom' })])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '查看“scan.dcm”的 DICOM 详情' }))
+    const dialog = screen.getByRole('dialog', { name: 'DICOM 详情' })
+    await waitFor(() => {
+      expect(within(dialog).getByText('CT')).toBeTruthy()
+    })
+    expect(within(dialog).getAllByText('已置空')).toHaveLength(2)
+    expect(within(dialog).getByText('是', { selector: '.dicom-viewer__deid-yes' })).toBeTruthy()
+    expect(within(dialog).getByText('1 张（本序列）')).toBeTruthy()
+
+    // 解析出的元数据已回写素材并持久化（刷新后元数据表格仍可展示）
+    const stored = loadState()
+    const asset = Object.values(stored.state.assets)[0]
+    expect(asset?.dicomMeta?.modality).toBe('CT')
+    expect(asset?.dicomMeta?.deidentified).toBe(true)
+    expect(asset?.dicomMeta?.sliceCount).toBe(1)
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '关闭' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByText('素材库（1）')).toBeTruthy()
+  })
+
+  it('shows the degrade message in the DICOM viewer when the bytes cannot be read', async () => {
+    const { container } = render(<App />)
+    dropFiles(container, [makeFile('scan.dcm', 128)])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '查看“scan.dcm”的 DICOM 详情' }))
+    const dialog = screen.getByRole('dialog', { name: 'DICOM 详情' })
+    // jsdom 环境 fetch(blob:nodedata:...) 返回乱码（非 DICOM）→ 解析失败 → 降级文案，不崩溃
+    await waitFor(() => {
+      expect(within(dialog).getAllByText(/无法解析该 DICOM 文件/).length).toBeGreaterThan(0)
+    })
+    expect(within(dialog).getByText('1 个文件无法解析，已按可用内容降级展示')).toBeTruthy()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '关闭' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByText('素材库（1）')).toBeTruthy()
+  })
+
   it('compares two selected images side by side and exits via button and Esc', async () => {
     const { container } = render(<App />)
     dropFiles(container, [
@@ -141,10 +206,13 @@ describe('App', () => {
       expect(screen.getByText('成功导入 4 个素材')).toBeTruthy()
     })
 
-    // 未选中两张前“比较”不可用；非 image 卡片点击不参与选择
+    // 未选中两张前“比较”不可用；dicom 卡片点击打开 DICOM 查看器（不参与比较选择）
     expect(compareButton().disabled).toBe(true)
-    fireEvent.click(screen.getByText('scan.dcm'))
+    fireEvent.click(screen.getByRole('button', { name: '查看“scan.dcm”的 DICOM 详情' }))
+    expect(screen.getByRole('dialog', { name: 'DICOM 详情' })).toBeTruthy()
     expect(compareButton().disabled).toBe(true)
+    fireEvent.keyDown(window, { key: 'Escape' }) // 关闭查看器，继续比较流程
+    expect(screen.queryByRole('dialog')).toBeNull()
 
     // 选中第一张：提示已选 1/2，比较仍不可用
     fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))

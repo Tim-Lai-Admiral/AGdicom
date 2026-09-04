@@ -50,6 +50,10 @@ export interface AssetFile {
  * DICOM 元数据（R-003）。
  * 形状先于此处定义，数据由 T-005 用 dicom-parser 解析填充；
  * 除 sliceCount / deidentified 外均可缺省（文件损坏或字段缺失时降级为仅展示已有信息）。
+ *
+ * T-005 增量扩展（均为可选字段，旧数据/旧版本导出文件不受影响）：
+ * - instanceNumber：多文件 series 的切片排序依据（0020,0013）；
+ * - deidentifiedEvidence：去标识化依据的结构化说明（布尔 + 依据）。
  */
 export interface DicomMeta {
   /** Modality，如 CT / MR */
@@ -70,13 +74,26 @@ export interface DicomMeta {
   patientName?: string
   /** 患者 ID：去标识化后缺失或为空 */
   patientID?: string
+  /** 本文件的切片序号（InstanceNumber (0020,0013)；多文件 series 排序用，缺失为 undefined） */
+  instanceNumber?: number
   /** 所属 series 的切片数（按 SeriesInstanceUID 分组统计，单文件时为 1） */
   sliceCount: number
   /** 去标识化标记（PatientIdentityRemoved / DeidentificationMethod / 患者字段为空） */
   deidentified: boolean
   /** 去标识化方法（DeidentificationMethod 字段原文） */
   deidentificationMethod?: string
+  /** 去标识化依据（结构化说明；deidentified 为 true 时非空） */
+  deidentifiedEvidence?: DicomDeidEvidence[]
 }
+
+/** 去标识化依据类型（DicomMeta.deidentifiedEvidence 的条目，由 DICOM 解析层检测） */
+export type DicomDeidEvidence =
+  /** (0012,0062) PatientIdentityRemoved 标记为 YES */
+  | 'patient-identity-removed'
+  /** (0012,0063) DeidentificationMethod 字段非空 */
+  | 'deidentification-method'
+  /** PatientName 与 PatientID 均缺失或为空 */
+  | 'empty-patient-fields'
 
 /** 单条评审记录：结论状态 + 评审意见 + 时间戳（R-005） */
 export interface ReviewRecord {

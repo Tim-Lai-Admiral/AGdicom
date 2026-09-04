@@ -233,6 +233,52 @@ describe('parseImportFile rejects invalid files', () => {
       expect(issues.some((issue) => issue.includes('deidentified 应为'))).toBe(true)
     }
   })
+
+  it('round-trips the T-005 optional meta fields (instanceNumber / deidentifiedEvidence)', () => {
+    const state = makeState([
+      makeAsset({
+        id: 'asset-2',
+        kind: 'dicom',
+        dicomMeta: makeDicomMeta({
+          instanceNumber: 7,
+          deidentifiedEvidence: ['patient-identity-removed', 'empty-patient-fields'],
+        }),
+      }),
+    ])
+    const restored = parseImportFile(serializeExport(state, NOW))
+    expect(restored.assets['asset-2']?.dicomMeta?.instanceNumber).toBe(7)
+    expect(restored.assets['asset-2']?.dicomMeta?.deidentifiedEvidence).toEqual([
+      'patient-identity-removed',
+      'empty-patient-fields',
+    ])
+  })
+
+  it('rejects invalid T-005 optional meta fields', () => {
+    const base = (dicomMeta: Record<string, unknown>): string =>
+      JSON.stringify({
+        schemaVersion: 1,
+        exportedAt: NOW,
+        state: {
+          assets: {
+            a1: { ...makeAsset({ id: 'a1', kind: 'dicom' }), dicomMeta },
+          },
+          tags: {},
+          reviews: {},
+        },
+      })
+    for (const dicomMeta of [
+      { sliceCount: 1, deidentified: false, instanceNumber: '7' },
+      { sliceCount: 1, deidentified: false, instanceNumber: Number.NaN },
+      { sliceCount: 1, deidentified: false, deidentifiedEvidence: 'not-array' },
+      {
+        sliceCount: 1,
+        deidentified: false,
+        deidentifiedEvidence: ['made-up-evidence'],
+      },
+    ]) {
+      expect(() => parseImportFile(base(dicomMeta))).toThrow(/数据结构校验未通过/)
+    }
+  })
 })
 
 describe('findNameConflicts', () => {

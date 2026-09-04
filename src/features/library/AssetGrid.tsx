@@ -4,6 +4,8 @@
  * 卡片：缩略图（image 用会话级 objectUrl 渲染，缺失或加载失败时显示占位与提示，
  * 不破坏网格；dicom/model 显示类型图标占位）、名称、类型中文标签、状态徽标。
  * 交互：image 卡片主体可点击切换“比较选中”（最多两张，选中集合与上限由上层管理）；
+ * dicom 卡片主体可点击打开 DICOM 查看器（onOpenDicom，T-005 接入；未提供时保持
+ * 不可交互，兼容无查看器的使用场景）；model 卡片主体暂不可交互（查看器属 T-006）；
  * 状态徽标可点击切换状态（setAssetStatus 计算与 saveState 持久化由上层完成）。
  *
  * objectUrl 说明：T-003 导入时为 image 素材创建会话级 objectUrl（URL.createObjectURL），
@@ -23,6 +25,8 @@ export interface AssetGridProps {
   onToggleSelect: (assetId: string) => void
   /** 点击状态徽标：设置新状态（持久化由上层完成） */
   onSetStatus: (assetId: string, status: AssetStatus) => void
+  /** 点击 dicom 卡片主体：打开 DICOM 查看器（T-005）；未提供时 dicom 卡片不可交互 */
+  onOpenDicom?: (assetId: string) => void
 }
 
 /** 图片预览缺失时的占位提示（objectUrl 为会话字段，刷新后需重新导入该图片） */
@@ -116,14 +120,16 @@ function AssetCard({
   selected,
   onToggleSelect,
   onSetStatus,
+  onOpenDicom,
 }: {
   asset: Asset
   selected: boolean
   onToggleSelect: (assetId: string) => void
   onSetStatus: (assetId: string, status: AssetStatus) => void
+  onOpenDicom?: (assetId: string) => void
 }) {
   const isImage = asset.kind === 'image'
-  // 比较选中仅对 image 卡片开放；其他类型卡片主体暂不可交互（查看器属于 T-005/T-006）
+  const isDicomOpenable = asset.kind === 'dicom' && onOpenDicom !== undefined
   const mainContent = (
     <>
       <CardThumb asset={asset} />
@@ -143,6 +149,15 @@ function AssetCard({
             selected ? `取消选择“${asset.name}”` : `选择“${asset.name}”加入比较`
           }
           onClick={() => onToggleSelect(asset.id)}
+        >
+          {mainContent}
+        </button>
+      ) : isDicomOpenable ? (
+        <button
+          type="button"
+          className="asset-card__main"
+          aria-label={`查看“${asset.name}”的 DICOM 详情`}
+          onClick={() => onOpenDicom?.(asset.id)}
         >
           {mainContent}
         </button>
@@ -170,6 +185,7 @@ export default function AssetGrid({
   selectedIds,
   onToggleSelect,
   onSetStatus,
+  onOpenDicom,
 }: AssetGridProps) {
   return (
     <ul className="asset-grid">
@@ -180,6 +196,7 @@ export default function AssetGrid({
           selected={selectedIds.includes(asset.id)}
           onToggleSelect={onToggleSelect}
           onSetStatus={onSetStatus}
+          onOpenDicom={onOpenDicom}
         />
       ))}
     </ul>
