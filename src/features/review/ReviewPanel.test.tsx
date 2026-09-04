@@ -190,4 +190,12 @@ describe('ReviewPanel', () => {
       expect(radio.value).toBe(status)
     })
   })
+
+  it('renders the embedded AI suggestion section with the Mock notice (T-008)', () => {
+    setup()
+    expect(screen.getByText('AI 建议')).toBeTruthy()
+    expect(screen.getByText('Mock 生成')).toBeTruthy()
+    // 图片素材（heart.png 无数字序号）：命名建议由资产 ID 稳定哈希生成
+    expect(screen.getByText(/^图片-\d{3}$/)).toBeTruthy()
+  })
 })

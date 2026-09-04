@@ -3,7 +3,7 @@ import { useState } from 'react'
 import type { Asset, AssetStatus, AppState, DicomMeta } from './domain/types.ts'
 import { collectTagNames, DEFAULT_ASSET_FILTER, filterAssets } from './domain/filter.ts'
 import type { AssetFilter } from './domain/filter.ts'
-import { addAssetTag, applyReview, removeAssetTag, setAssetStatus, updateAssetNote } from './domain/review.ts'
+import { addAssetTag, applyReview, removeAssetTag, setAssetStatus, updateAssetName, updateAssetNote } from './domain/review.ts'
 import { loadState, saveState } from './store/repository.ts'
 import type { LoadIssue } from './store/repository.ts'
 import ImportZone from './features/library/ImportZone.tsx'
@@ -132,6 +132,13 @@ function App() {
     const next = updateAssetNote(state, assetId, note)
     if (next === state) return
     commit(next, '备注已在本会话保存，但持久化失败')
+  }
+
+  /** 评审面板 AI 建议：采纳命名建议（重命名素材并持久化，仅用户点击触发，绝不自动改名） */
+  const handleRenameAsset = (assetId: string, name: string): void => {
+    const next = updateAssetName(state, assetId, name)
+    if (next === state) return
+    commit(next, '命名已在本会话更新，但保存失败')
   }
 
   /** 导入备份：以备份数据整体替换当前状态（导入前已经过 io.ts 深度校验与冲突确认） */
@@ -308,6 +315,7 @@ function App() {
           onRemoveTag={(tagName) => handleRemoveTag(reviewAsset.id, tagName)}
           onSubmitReview={(status, comment) => handleSubmitReview(reviewAsset.id, status, comment)}
           onSaveNote={(note) => handleSaveNote(reviewAsset.id, note)}
+          onAcceptAiName={(name) => handleRenameAsset(reviewAsset.id, name)}
           onClose={handleCloseReview}
         />
       ) : null}
