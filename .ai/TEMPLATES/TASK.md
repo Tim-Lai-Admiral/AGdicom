@@ -23,6 +23,7 @@ branch: feature/CR-XXX-T-XXX-short-title
 - Requirement(s): R-XXX
 - Current architecture/design references: <!-- exact paths/sections -->
 - Dependency output: <!-- task/commit/contract; none if no dependency -->
+- Context pack: <!-- 本任务适用约束摘要（R-ID、架构/设计要点、关键 API/文件）；Builder 以此为上下文，无需重读整份 CR 文档 -->
 
 ## Scope
 
