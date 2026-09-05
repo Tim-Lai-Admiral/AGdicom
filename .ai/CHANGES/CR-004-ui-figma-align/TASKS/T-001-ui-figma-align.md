@@ -55,3 +55,21 @@ branch: feature/CR-004-T-001-ui-figma-align
 ## Definition of done
 
 - [ ] 验收通过；PR（body 写概要）；Reviewer 审查
+
+## Builder result
+
+- **实现摘要**：
+  - 左栏：AssetGrid 卡片 → rec SeriesSidebar 行风格（38px 方形缩略图复用 `.sidebar-thumb` + 名称行 + 元信息行「类型 · 状态点」mono 字体；选中行 accent 左边框 + 底色）；三类素材行均可点击；DICOM series 展开/切片缩略图保留并同风格
+  - 状态：`StatusBadge`（可点击循环徽标）删除 → 新 `StatusDot`（圆点+文字双通道，仅展示，保留 pending/passed/rejected 语义与文案）；状态修改入口唯一化为「选中素材 → 右栏评审面板」，持久化契约不变（App 移除 setAssetStatus 直改路径与 handleSetStatus）
+  - 顶栏：rec 视觉语言（44px 面板底、tool-btn 16px 线性图标、垂直分隔线、mono 风格筛选组）；aria-label 保持原可访问名，存量顶栏测试零适配；W/L 预设本就在右栏（preset-btn/range-input 已是 rec 类），未移动
+  - 右栏：ReviewPanel/ReviewHistory 徽标换 StatusDot；右栏页签改 preset-btn 风格；section-header/meta-row 已用 rec 类
+  - 清理：styles.css 删除 `.asset-card*`（含评审按钮/选中标记/缩略图）、`.status-badge*`（含 workbench 覆盖）、`.workbench__tool*`、`.asset-grid`；新增 `.asset-list/.asset-row*/.status-dot*`；grep 确认无 `.asset-card`/`.status-badge`/行内“评审”按钮残留
+  - 附带低风险修复：导出弹层原 `top: calc(100% + 4px)` 无定位祖先时相对视口会跑到屏外，改锚定 `.workbench`（新增 position: relative）顶栏下方 48px
+- **文件清单**：`src/App.tsx`、`src/App.test.tsx`、`src/styles.css`、`src/features/library/AssetGrid.tsx`(+test)、`src/features/library/StatusBadge.tsx`(删)+test(删)、`src/features/library/StatusDot.tsx`(新)+test(新)、`src/features/workbench/TopToolbar.tsx`、`src/features/review/ReviewPanel.tsx`(+test)、`src/features/review/ReviewHistory.tsx`
+- **验证结果**：`scripts\verify.ps1` 全绿（28 文件 / 270 测试通过 + tsc -b && vite build 通过）。测试数 274 → 270：StatusBadge 6 个按钮循环用例随入口移除，新增 StatusDot 2 个展示用例（净 -4）
+- **语义适配的测试（功能不变）**：App.test 状态用例改走「选中→右栏评审」链路并断言行内状态点；`.asset-card__kind` → `.asset-row__kind`；AssetGrid.test 卡片断言 → 行断言（`已选中` 文字标记移除，改断言 `li.asset-row.is-selected` 与 aria-pressed）；ReviewPanel.test `.status-badge` → `.status-dot` 选择器
+- **commit**：94dfd37（feat）；本文档：docs commit
+- **PR**：https://github.com/Tim-Lai-Admiral/AGdicom/pull/20
+- **已知限制 / 需 Reviewer 关注**：
+  - 任务卡 Manual 项（浏览器全链路目检，对照 rec/ 截图）无法在 Builder 环境完成，需 Reviewer 在浏览器（`npm run dev`）目检左栏行/顶栏/右栏视觉与全链路功能
+  - 「preset chips」落在右栏 W/L 面板与右栏页签（与 rec 相同组件类）；顶栏按任务卡列举的功能清单重排，未添加 W/L 预设 chips（功能位置不变）
