@@ -41,6 +41,9 @@ const TRANSFER_SYNTAX_LABELS: Readonly<Record<string, string>> = {
   [EXPLICIT_VR_LITTLE_ENDIAN_UID]: 'Explicit VR Little Endian（无压缩）',
   '1.2.840.10008.1.2.2': 'Explicit VR Big Endian（无压缩，暂不支持预览）',
   '1.2.840.10008.1.2.5': 'RLE Lossless（压缩，仅元数据）',
+  // JPEG 2000 与 JPEG 同属 1.2.840.10008.1.2.4 家族，UID 需精确区分（T-005 Minor）
+  '1.2.840.10008.1.2.4.90': 'JPEG 2000 无损压缩（仅元数据）',
+  '1.2.840.10008.1.2.4.91': 'JPEG 2000 压缩（仅元数据）',
 }
 
 /** 去标识化依据的可读说明 */
@@ -60,6 +63,8 @@ function transferSyntaxLabel(uid: string | undefined): string {
   if (uid === undefined) return '未提供'
   const known = TRANSFER_SYNTAX_LABELS[uid]
   if (known !== undefined) return known
+  // 已知映射之外的 JPEG / JPEG 2000 家族 UID（按家族前缀精确区分）
+  if (uid.startsWith('1.2.840.10008.1.2.4.9')) return 'JPEG 2000 压缩（仅元数据）'
   if (uid.startsWith('1.2.840.10008.1.2.4')) return 'JPEG 压缩（仅元数据）'
   return `未识别（${uid}）`
 }
@@ -126,6 +131,7 @@ export default function DicomViewer({
   const completedIdsRef = useRef(new Set<string>())
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLElement>(null)
   const onMetasParsedRef = useRef(onMetasParsed)
   useEffect(() => {
     onMetasParsedRef.current = onMetasParsed
@@ -267,15 +273,50 @@ export default function DicomViewer({
     }
   }, [selectedAssetId, selectedAsset, sessionMetas, sessionErrors, parseProgress])
 
-  // ---- 弹层交互：打开时聚焦关闭按钮；Esc 关闭 ----
+  // ---- 弹层交互：打开时聚焦关闭按钮；Tab / Shift+Tab 焦点圈定在弹层内；Esc 关闭；
+  // 关闭（卸载）后焦点还原到打开前的触发元素（T-005 Minor 无障碍项）----
   useEffect(() => {
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
     closeButtonRef.current?.focus()
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const dialog = dialogRef.current
+      if (dialog === null) return
+      const focusables = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), select:not([disabled]), input:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+        ),
+      )
+      if (focusables.length === 0) {
+        event.preventDefault()
+        closeButtonRef.current?.focus()
+        return
+      }
+      const first = focusables[0] as HTMLElement
+      const last = focusables[focusables.length - 1] as HTMLElement
+      const active = document.activeElement
+      const activeInside = active instanceof HTMLElement && dialog.contains(active)
+      if (event.shiftKey) {
+        if (!activeInside || active === first) {
+          event.preventDefault()
+          last.focus()
+        }
+        return
+      }
+      if (!activeInside || active === last) {
+        event.preventDefault()
+        first.focus()
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
+      previouslyFocused?.focus()
     }
   }, [onClose])
 
@@ -295,7 +336,13 @@ export default function DicomViewer({
 
   return (
     <div className="dicom-viewer-overlay">
-      <section className="dicom-viewer" role="dialog" aria-modal="true" aria-label="DICOM 详情">
+      <section
+        ref={dialogRef}
+        className="dicom-viewer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="DICOM 详情"
+      >
         <header className="dicom-viewer__header">
           <h2 className="dicom-viewer__title">DICOM 详情</h2>
           <p className="dicom-viewer__file" title={asset.file.fileName}>

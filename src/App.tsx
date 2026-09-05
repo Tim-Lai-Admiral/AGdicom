@@ -1,5 +1,5 @@
 import './styles.css'
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import type { Asset, AssetStatus, AppState, DicomMeta } from './domain/types.ts'
 import { collectTagNames, DEFAULT_ASSET_FILTER, filterAssets } from './domain/filter.ts'
 import type { AssetFilter } from './domain/filter.ts'
@@ -12,7 +12,8 @@ import Filters from './features/library/Filters.tsx'
 import AssetGrid from './features/library/AssetGrid.tsx'
 import CompareView from './features/library/CompareView.tsx'
 import DicomViewer from './features/viewer/dicom/DicomViewer.tsx'
-import Model3DViewer from './features/viewer/model3d/Model3DViewer.tsx'
+// TD-002：three.js（~800KB）随 3D 查看器拆为独立 chunk，仅在首次打开 3D 模型时按需加载
+const Model3DViewer = lazy(() => import('./features/viewer/model3d/Model3DViewer.tsx'))
 import ReviewPanel from './features/review/ReviewPanel.tsx'
 import ExportImport from './features/review/ExportImport.tsx'
 
@@ -304,7 +305,15 @@ function App() {
         />
       ) : null}
       {modelViewerAsset !== undefined && modelViewerAsset.kind === 'model' ? (
-        <Model3DViewer asset={modelViewerAsset} onClose={handleCloseModel} />
+        <Suspense
+          fallback={
+            <div className="model3d-lazy-loading" role="status">
+              正在加载 3D 模型查看器…
+            </div>
+          }
+        >
+          <Model3DViewer asset={modelViewerAsset} onClose={handleCloseModel} />
+        </Suspense>
       ) : null}
       {reviewAsset !== undefined ? (
         <ReviewPanel

@@ -252,6 +252,33 @@ describe('DicomViewer: 降级路径（不崩溃）', () => {
     expect(putImageData).not.toHaveBeenCalled()
   })
 
+  it('labels JPEG 2000 transfer syntaxes precisely instead of generic JPEG text', async () => {
+    // T-005 Minor ②：1.2.840.10008.1.2.4 家族需区分 JPEG 与 JPEG 2000（.90 无损 / .91）
+    const jpeg2000 = buildDicomFile({
+      transferSyntax: '1.2.840.10008.1.2.4.90',
+      patientName: '',
+      patientID: '',
+      patientIdentityRemoved: 'YES',
+    })
+    const assets = [
+      makeDicomAsset({
+        id: 'j2',
+        name: 'j2k.dcm',
+        file: { fileName: 'j2k.dcm', fileSize: 512, fileType: '' },
+        objectUrl: 'blob:j2',
+      }),
+    ]
+    stubFetchFor({ 'blob:j2': new Uint8Array(jpeg2000) })
+    stubCanvasContext()
+
+    render(
+      <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('JPEG 2000 无损压缩（仅元数据）')).toBeTruthy()
+    })
+  })
+
   it('shows a readable error for a corrupt file without crashing', async () => {
     const good = buildDicomFile({ instanceNumber: '1' })
     const assets = [
@@ -331,5 +358,50 @@ describe('DicomViewer: 弹层交互', () => {
 
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(2)
+  })
+
+  it('traps Tab focus within the dialog (focus cycle)', async () => {
+    // T-005 Minor ③：焦点圈定——Shift+Tab 从首元素循环到末元素，Tab 从末元素循环回首元素
+    const { assets, files } = buildThreeSliceSeries()
+    stubFetchFor(files)
+    stubCanvasContext()
+
+    render(
+      <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
+    )
+    const dialog = await screen.findByRole('dialog', { name: 'DICOM 详情' })
+    const closeButton = within(dialog).getByRole('button', { name: '关闭' }) as HTMLButtonElement
+    // 打开切片 #3：下一张禁用，可聚焦元素顺序 = [关闭, 上一张, 选择切片]
+    // 切片导航在异步解析完成后才渲染，需等待
+    const select = (await within(dialog).findByLabelText('选择切片')) as HTMLSelectElement
+
+    // 打开时焦点自动落在关闭按钮（弹层内第一个可聚焦元素）
+    expect(document.activeElement).toBe(closeButton)
+
+    // Shift+Tab：从第一个可聚焦元素反向循环到最后一个
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(select)
+
+    // Tab：从最后一个可聚焦元素正向循环回第一个
+    fireEvent.keyDown(window, { key: 'Tab' })
+    expect(document.activeElement).toBe(closeButton)
+  })
+
+  it('restores focus to the previously focused trigger after the dialog unmounts', () => {
+    // T-005 Minor ③：关闭（卸载）后焦点还原到打开查看器前的触发元素
+    const trigger = document.createElement('button')
+    trigger.textContent = '打开 DICOM 详情'
+    document.body.appendChild(trigger)
+    trigger.focus()
+    expect(document.activeElement).toBe(trigger)
+
+    const { unmount } = render(
+      <DicomViewer asset={makeDicomAsset()} dicomAssets={[makeDicomAsset()]} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
+    )
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '关闭' }))
+
+    unmount()
+    expect(document.activeElement).toBe(trigger)
+    trigger.remove()
   })
 })
