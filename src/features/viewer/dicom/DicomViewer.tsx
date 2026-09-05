@@ -1,8 +1,9 @@
 /**
- * DICOM 查看器（CR-001 T-005 / R-003）。
+ * DICOM 查看器（CR-001 T-005 / R-003；CR-003 T-003 增强 W/L 与测量 Mock）。
  *
- * 应用内弹层（role="dialog"，非路由）：元数据表格（可读中文标签）+ 切片选择器
- * （多文件 series 按 InstanceNumber 排序切换）+ Canvas 灰度预览（min-max 归一化）。
+ * 应用内查看区（role="dialog"，非路由）：元数据表格（可读中文标签）+ 切片选择器
+ * （多文件 series 按 InstanceNumber 排序切换）+ Canvas 灰度预览（自动 min-max 或
+ * 显式窗宽窗位，R-003 修改）+ 测量工具（拖拽绘制 + 距离标注，Mock 非临床，R-010）。
  *
  * 数据流：
  * - 打开时对素材库中所有含会话 objectUrl 的 DICOM 素材异步逐个解析（每个文件间让出
@@ -16,10 +17,15 @@
  * 展示内容仅为工程元数据，不包含任何诊断/治疗暗示。
  */
 import { useEffect, useRef, useState } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { DataSet } from 'dicom-parser'
 import type { Asset, DicomMeta } from '../../../domain/types.ts'
 import { DicomParseError, parseDicomFile } from './parseDicom.ts'
 import { decodeDicomFrame } from './decodePixel.ts'
+import { AUTO_WINDOW_LEVEL } from './windowLevel.ts'
+import type { WindowLevelState } from './windowLevel.ts'
+import { clientToImagePoint, formatMeasureLength, measureLength } from './measure.ts'
+import type { MeasureLength, MeasurePoint } from './measure.ts'
 import { DEID_EVIDENCE_LABELS, sopClassLabel, transferSyntaxLabel } from './metaLabels.ts'
 import { findDicomSeriesGroup, groupDicomBySeries, sliceCountByAsset } from './seriesUtils.ts'
 import type { DicomSeriesEntry } from './seriesUtils.ts'
@@ -50,6 +56,14 @@ function parseIssueMessage(error: unknown): string {
   return `无法解析该 DICOM 文件：${String(error)}`
 }
 
+/** 单条已完成测量：端点（图像像素坐标）+ 落笔时按当时 PixelSpacing 算得的长度 */
+interface MeasureEntry {
+  id: number
+  a: MeasurePoint
+  b: MeasurePoint
+  length: MeasureLength
+}
+
 export interface DicomViewerProps {
   /** 当前打开的 DICOM 素材 */
   asset: Asset
@@ -59,6 +73,8 @@ export interface DicomViewerProps {
   onMetasParsed: (metas: Record<string, DicomMeta>) => void
   /** 关闭查看器（“关闭”按钮与 Esc 键均触发） */
   onClose: () => void
+  /** 窗宽窗位（R-003 修改）；缺省自动 min-max（与既有行为等价）。App 持有，右栏面板可调 */
+  windowLevel?: WindowLevelState
 }
 
 export default function DicomViewer({
@@ -66,6 +82,7 @@ export default function DicomViewer({
   dicomAssets,
   onMetasParsed,
   onClose,
+  windowLevel = AUTO_WINDOW_LEVEL,
 }: DicomViewerProps) {
   /** 本会话（本次打开）解析出的元数据，优先于持久化记录 */
   const [sessionMetas, setSessionMetas] = useState<Record<string, DicomMeta>>({})
@@ -81,9 +98,18 @@ export default function DicomViewer({
   const [previewMessage, setPreviewMessage] = useState<string | null>(null)
   const [previewPending, setPreviewPending] = useState(false)
   const [previewRendered, setPreviewRendered] = useState(false)
+  /** 当前预览帧尺寸（测量覆盖层 SVG viewBox 用） */
+  const [previewSize, setPreviewSize] = useState<{ width: number; height: number } | null>(null)
+  /** 测量工具开关（R-010 Mock：拖拽绘制线 + 距离标注，非临床） */
+  const [measureMode, setMeasureMode] = useState(false)
+  /** 已完成的测量线；切换素材/切片即清空，不持久化（R-010） */
+  const [measures, setMeasures] = useState<MeasureEntry[]>([])
+  /** 拖拽中的草稿测量线；null = 未在拖拽 */
+  const [draftMeasure, setDraftMeasure] = useState<{ a: MeasurePoint; b: MeasurePoint } | null>(null)
 
   const datasetsRef = useRef(new Map<string, DataSet>())
   const completedIdsRef = useRef(new Set<string>())
+  const nextMeasureIdRef = useRef(1)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLElement>(null)
@@ -178,6 +204,7 @@ export default function DicomViewer({
     setPreviewRendered(false)
     setPreviewMessage(null)
     setPreviewPending(false)
+    setPreviewSize(null)
     const target = selectedAsset
     const targetMeta = sessionMetas[target.id] ?? target.dicomMeta
 
@@ -207,7 +234,10 @@ export default function DicomViewer({
       return
     }
     try {
-      const image = decodeDicomFrame(dataset)
+      // 显式 WC/WW（手动）或自动 min-max（缺省，与既有行为等价，R-003 修改）
+      const image = windowLevel.auto
+        ? decodeDicomFrame(dataset)
+        : decodeDicomFrame(dataset, 0, { wc: windowLevel.wc, ww: windowLevel.ww })
       if (cancelled) return
       const canvas = canvasRef.current
       const ctx = canvas !== null ? canvas.getContext('2d') : null
@@ -218,6 +248,7 @@ export default function DicomViewer({
       canvas.width = image.width
       canvas.height = image.height
       ctx.putImageData(image, 0, 0)
+      setPreviewSize({ width: image.width, height: image.height })
       setPreviewRendered(true)
     } catch (error) {
       if (cancelled) return
@@ -226,7 +257,13 @@ export default function DicomViewer({
     return () => {
       cancelled = true
     }
-  }, [selectedAssetId, selectedAsset, sessionMetas, sessionErrors, parseProgress])
+  }, [selectedAssetId, selectedAsset, sessionMetas, sessionErrors, parseProgress, windowLevel])
+
+  // ---- 测量清空语义（R-010）：切换切片即清空测量（素材切换由 App 以 key 重挂载达成）----
+  useEffect(() => {
+    setMeasures([])
+    setDraftMeasure(null)
+  }, [selectedAssetId])
 
   // ---- 弹层交互：打开时聚焦关闭按钮；Tab / Shift+Tab 焦点圈定在弹层内；Esc 关闭；
   // 关闭（卸载）后焦点还原到打开前的触发元素（T-005 Minor 无障碍项）----
@@ -280,7 +317,62 @@ export default function DicomViewer({
     if (next !== undefined) setSelectedAssetId(next.assetId)
   }
 
+  // ---- 测量工具指针交互（R-010 Mock）：工具开启且预览渲染后可拖拽，抬起落笔 ----
+  const canvasPointFromEvent = (event: ReactPointerEvent<HTMLCanvasElement>): MeasurePoint | null => {
+    const canvas = canvasRef.current
+    if (canvas === null) return null
+    return clientToImagePoint(
+      event.clientX,
+      event.clientY,
+      canvas.getBoundingClientRect(),
+      canvas.width,
+      canvas.height,
+    )
+  }
+
+  const handleMeasurePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>): void => {
+    if (!measureMode || !previewRendered || event.button !== 0) return
+    const point = canvasPointFromEvent(event)
+    if (point === null) return
+    setDraftMeasure({ a: point, b: point })
+    try {
+      canvasRef.current?.setPointerCapture(event.pointerId)
+    } catch {
+      // jsdom 等环境不支持 pointer capture：不影响拖拽主流程
+    }
+  }
+
+  const handleMeasurePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>): void => {
+    if (draftMeasure === null) return
+    const point = canvasPointFromEvent(event)
+    if (point === null) return
+    setDraftMeasure({ a: draftMeasure.a, b: point })
+  }
+
+  const handleMeasurePointerUp = (event: ReactPointerEvent<HTMLCanvasElement>): void => {
+    if (draftMeasure === null) return
+    const start = draftMeasure.a
+    const point = canvasPointFromEvent(event) ?? draftMeasure.b
+    setDraftMeasure(null)
+    if (point.x === start.x && point.y === start.y) return // 单击（零长度）不算测量
+    // 距离口径见 measure.ts：PixelSpacing 可用 → 确定性 mm；否则 Mock（图像像素）
+    setMeasures((prev) => [
+      ...prev,
+      {
+        id: nextMeasureIdRef.current++,
+        a: start,
+        b: point,
+        length: measureLength(start, point, selectedMeta?.pixelSpacing),
+      },
+    ])
+  }
+
   const failedCount = Object.keys(sessionErrors).length
+  // 测量覆盖层视觉尺寸随图像分辨率缩放（端点半径/字号在 viewBox 坐标系内取值）
+  const measureImageSpan = Math.max(previewSize?.width ?? 0, previewSize?.height ?? 0)
+  const measureEndpointRadius = Math.max(2, Math.round(measureImageSpan / 150))
+  const measureLabelFontSize = Math.max(11, Math.min(24, Math.round(measureImageSpan / 32)))
+  const measureLabelOffset = measureLabelFontSize * 0.7
   const metaMissingMessage =
     parseProgress !== null
       ? '正在解析该 DICOM 文件的元数据…'
@@ -325,14 +417,99 @@ export default function DicomViewer({
               <canvas
                 ref={canvasRef}
                 className={
-                  previewRendered ? 'dicom-viewer__canvas' : 'dicom-viewer__canvas is-hidden'
+                  previewRendered
+                    ? measureMode
+                      ? 'dicom-viewer__canvas is-measuring'
+                      : 'dicom-viewer__canvas'
+                    : 'dicom-viewer__canvas is-hidden'
                 }
                 aria-label="所选切片的灰度预览"
+                onPointerDown={handleMeasurePointerDown}
+                onPointerMove={handleMeasurePointerMove}
+                onPointerUp={handleMeasurePointerUp}
               />
+              {previewRendered && previewSize !== null && (measures.length > 0 || draftMeasure !== null) ? (
+                <svg
+                  className="dicom-viewer__measure-overlay"
+                  viewBox={`0 0 ${previewSize.width} ${previewSize.height}`}
+                  preserveAspectRatio="xMidYMid meet"
+                  aria-hidden="true"
+                >
+                  {measures.map((measure) => (
+                    <g key={measure.id}>
+                      <line
+                        className="dicom-viewer__measure-line"
+                        x1={measure.a.x}
+                        y1={measure.a.y}
+                        x2={measure.b.x}
+                        y2={measure.b.y}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      <circle
+                        className="dicom-viewer__measure-endpoint"
+                        cx={measure.a.x}
+                        cy={measure.a.y}
+                        r={measureEndpointRadius}
+                      />
+                      <circle
+                        className="dicom-viewer__measure-endpoint"
+                        cx={measure.b.x}
+                        cy={measure.b.y}
+                        r={measureEndpointRadius}
+                      />
+                      <text
+                        className="dicom-viewer__measure-label"
+                        x={(measure.a.x + measure.b.x) / 2}
+                        y={(measure.a.y + measure.b.y) / 2 - measureLabelOffset}
+                        textAnchor="middle"
+                        fontSize={measureLabelFontSize}
+                      >
+                        {formatMeasureLength(measure.length)}
+                      </text>
+                    </g>
+                  ))}
+                  {draftMeasure !== null ? (
+                    <line
+                      className="dicom-viewer__measure-line is-draft"
+                      x1={draftMeasure.a.x}
+                      y1={draftMeasure.a.y}
+                      x2={draftMeasure.b.x}
+                      y2={draftMeasure.b.y}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ) : null}
+                </svg>
+              ) : null}
               {previewMessage !== null ? (
                 <p className="dicom-viewer__preview-message" role={previewPending ? 'status' : 'alert'}>
                   {previewMessage}
                 </p>
+              ) : null}
+            </div>
+            <div className="dicom-viewer__tools">
+              <button
+                type="button"
+                className={
+                  measureMode ? 'dicom-viewer__tool-btn is-active' : 'dicom-viewer__tool-btn'
+                }
+                aria-pressed={measureMode}
+                disabled={!previewRendered}
+                onClick={() => setMeasureMode((value) => !value)}
+              >
+                测量（模拟）
+              </button>
+              <button
+                type="button"
+                className="dicom-viewer__tool-btn"
+                disabled={measures.length === 0}
+                onClick={() => setMeasures([])}
+              >
+                清空测量
+              </button>
+              {measureMode || measures.length > 0 ? (
+                <span className="dicom-viewer__measure-hint" role="status">
+                  模拟测量，非临床：距离标注仅供界面演示
+                </span>
               ) : null}
             </div>
             {orderedSlices.length > 0 ? (

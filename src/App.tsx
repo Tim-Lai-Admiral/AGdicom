@@ -1,5 +1,5 @@
 import './styles.css'
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Asset, AssetStatus, AppState, DicomMeta } from './domain/types.ts'
 import { collectTagNames, DEFAULT_ASSET_FILTER, filterAssets } from './domain/filter.ts'
@@ -12,12 +12,15 @@ import { useImport } from './features/library/useImport.ts'
 import AssetGrid from './features/library/AssetGrid.tsx'
 import CompareView from './features/library/CompareView.tsx'
 import DicomViewer from './features/viewer/dicom/DicomViewer.tsx'
+import { AUTO_WINDOW_LEVEL } from './features/viewer/dicom/windowLevel.ts'
+import type { WindowLevelState } from './features/viewer/dicom/windowLevel.ts'
 // TD-002：three.js（~800KB）随 3D 查看器拆为独立 chunk，仅在首次打开 3D 模型时按需加载
 const Model3DViewer = lazy(() => import('./features/viewer/model3d/Model3DViewer.tsx'))
 import ReviewPanel from './features/review/ReviewPanel.tsx'
 import ExportImport from './features/review/ExportImport.tsx'
 import TopToolbar from './features/workbench/TopToolbar.tsx'
 import MetadataPanel from './features/workbench/MetadataPanel.tsx'
+import WindowLevelPanel from './features/workbench/WindowLevelPanel.tsx'
 import DicomSeriesExpansion from './features/workbench/DicomSeriesExpansion.tsx'
 import ImageStage from './features/workbench/ImageStage.tsx'
 
@@ -53,10 +56,17 @@ function App() {
   const [samplesLoading, setSamplesLoading] = useState(false)
   const [samplesError, setSamplesError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  /** 窗宽窗位（CR-003 T-003 / R-003 修改）：默认自动 min-max；右栏面板调节，中央查看器消费 */
+  const [windowLevel, setWindowLevel] = useState<WindowLevelState>(AUTO_WINDOW_LEVEL)
   const { importFiles, importing, importingLarge, feedback, clearFeedback } = useImport({
     state,
     onStateChange: setState,
   })
+
+  // 进入/切换素材时 W/L 复位为自动 min-max（R-003：默认进入时自动 min-max）
+  useEffect(() => {
+    setWindowLevel(AUTO_WINDOW_LEVEL)
+  }, [activeAssetId])
 
   const assets = Object.values(state.assets)
   const filteredAssets = filterAssets(assets, filter)
@@ -225,6 +235,7 @@ function App() {
         dicomAssets={dicomAssets}
         onMetasParsed={handleDicomMetasParsed}
         onClose={closeActiveAsset}
+        windowLevel={windowLevel}
       />
     )
   } else if (activeAsset !== undefined && activeAsset.kind === 'model') {
@@ -395,7 +406,12 @@ function App() {
                 </button>
               </div>
             ) : null}
-            {showMetaPanel && activeAsset !== undefined ? <MetadataPanel asset={activeAsset} /> : null}
+            {showMetaPanel && activeAsset !== undefined ? (
+              <>
+                <WindowLevelPanel windowLevel={windowLevel} onChange={setWindowLevel} />
+                <MetadataPanel asset={activeAsset} />
+              </>
+            ) : null}
             {(showReviewPanel || showDicomReview) && activeAsset !== undefined ? (
               <ReviewPanel
                 asset={activeAsset}

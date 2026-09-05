@@ -682,13 +682,91 @@ button.asset-card__main:hover .asset-card__name {
 }
 
 .dicom-viewer__canvas {
-  max-width: 100%;
-  max-height: 100%;
+  /* 画布盒占满预览区，像素经 object-fit: contain 等比缩放并居中；
+     与测量覆盖层 SVG（viewBox + preserveAspectRatio="xMidYMid meet"）逐点对齐 */
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
   image-rendering: pixelated; /* 低分辨率切片放大时保持像素结构可见 */
 }
 
 .dicom-viewer__canvas.is-hidden {
   display: none;
+}
+
+.dicom-viewer__canvas.is-measuring {
+  cursor: crosshair; /* 测量工具激活时的视口工具态 */
+}
+
+/* --- 测量工具（CR-003 T-003 / R-010 Mock）：SVG 覆盖层 + 工具行 --- */
+.dicom-viewer__measure-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* 不拦截画布拖拽 */
+}
+
+.dicom-viewer__measure-line {
+  stroke: var(--color-warning);
+  stroke-width: 2;
+}
+
+.dicom-viewer__measure-line.is-draft {
+  stroke-dasharray: 6 4;
+  opacity: 0.85;
+}
+
+.dicom-viewer__measure-endpoint {
+  fill: var(--color-warning);
+}
+
+.dicom-viewer__measure-label {
+  fill: var(--color-warning);
+  font-family: var(--font-mono-data, ui-monospace, monospace);
+  paint-order: stroke; /* 描边垫底，保证深浅背景上可读 */
+  stroke: rgba(3, 5, 7, 0.85);
+  stroke-width: 3px;
+}
+
+.dicom-viewer__tools {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.dicom-viewer__tool-btn {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8125rem;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dicom-viewer__tool-btn:hover:not(:disabled) {
+  background: var(--color-bg);
+}
+
+.dicom-viewer__tool-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.dicom-viewer__tool-btn.is-active {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.dicom-viewer__measure-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-warning);
 }
 
 .dicom-viewer__preview-message {
@@ -1978,6 +2056,72 @@ button.asset-card__main:hover .asset-card__name {
 .meta-panel__evidence li {
   margin: 0.15rem 0;
   overflow-wrap: anywhere;
+}
+
+/* --- 右栏窗宽窗位（W/L）面板（CR-003 T-003 / R-003 修改） --- */
+.wl-panel {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+}
+
+.wl-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem 0;
+}
+
+.wl-panel__title {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent, #00c4d8);
+}
+
+.wl-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+
+.wl-panel__mode {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #8a94a8);
+}
+
+.wl-panel__slider-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.wl-panel__slider-head label {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #8a94a8);
+}
+
+.wl-panel__value {
+  font-family: var(--font-mono-data, ui-monospace, monospace);
+  font-size: 0.75rem;
+  color: var(--text-primary, #e2e6f0);
+}
+
+.wl-panel__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.wl-panel__hint {
+  margin: 0;
+  font-size: 0.6875rem;
+  color: var(--text-muted, #434c60);
 }
 
 /* --- 左栏 DICOM series / 切片展开区 --- */

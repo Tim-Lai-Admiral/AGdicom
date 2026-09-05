@@ -5,7 +5,8 @@
  * - 压缩传输语法（JPEG 等）、Big Endian、其他位深/彩色采样 → 抛 DicomPixelUnsupportedError，
  *   由上层走“仅元数据”降级（其余元数据仍展示，应用不崩溃）；
  * - 灰度值 = 原始采样 × RescaleSlope + RescaleIntercept（缺省 1/0）；
- * - min-max 归一化到 0..255（恒定图像输出中间灰度 128）；
+ * - 默认 min-max 归一化到 0..255（恒定图像输出中间灰度 128）；显式 wc/ww 时按
+ *   DICOM PS3.3 C.11.2.1.2.1 线性窗宽窗位映射（ww=1 为阈值，不除零）；
  * - MONOCHROME1 按 PhotometricInterpretation 反转（MONOCHROME2 / 缺省不反转）。
  */
 import type { DataSet } from 'dicom-parser'
@@ -29,6 +30,14 @@ export class DicomPixelDecodeError extends Error {
     super(message, options)
     this.name = 'DicomPixelDecodeError'
   }
+}
+
+/** 显式窗宽窗位选项（CR-003 T-003 / R-003 修改）；缺省字段或非法值 → 自动 min-max */
+export interface DecodeWindowLevelOptions {
+  /** 窗位 Center（Rescale 后值域）；非有限值视为未提供 */
+  wc?: number
+  /** 窗宽 Width；非有限值或 < 1 视为未提供 */
+  ww?: number
 }
 
 /** 传输语法是否为浏览器内可解码的无压缩 Little Endian */
@@ -64,13 +73,18 @@ function createImageData(data: Uint8ClampedArray<ArrayBuffer>, width: number, he
 }
 
 /**
- * 解码指定帧为灰度 ImageData（min-max 归一化）。
+ * 解码指定帧为灰度 ImageData（默认 min-max 归一化；显式 wc/ww 时按线性窗映射）。
  * @param dataset parseDicomFile 产出的 dicom-parser 数据集
  * @param frameIndex 帧序号（0 起，多帧文件用；默认 0）
+ * @param opts 显式窗宽窗位（R-003 修改）；wc/ww 缺省或非法 → 自动 min-max（与原行为等价）
  * @throws DicomPixelUnsupportedError 压缩/不支持的传输语法或像素编码（“仅元数据”降级）
  * @throws DicomPixelDecodeError 像素数据缺失、长度不足或帧序号越界
  */
-export function decodeDicomFrame(dataset: DataSet, frameIndex = 0): ImageData {
+export function decodeDicomFrame(
+  dataset: DataSet,
+  frameIndex = 0,
+  opts?: DecodeWindowLevelOptions,
+): ImageData {
   const transferSyntax = dataset.string('x00020010')
   if (!isUncompressedLittleEndian(transferSyntax)) {
     throw new DicomPixelUnsupportedError(
@@ -139,7 +153,40 @@ export function decodeDicomFrame(dataset: DataSet, frameIndex = 0): ImageData {
   const slope = rescaleSlopeOf(dataset)
   const intercept = dataset.floatString('x00281052') ?? 0
 
-  // 第一遍：Rescale 后计算 min/max
+  // 显式 WC/WW 合法性：非法（缺省 / 非有限 / ww<1）→ 回退自动 min-max
+  const rawWc = opts?.wc
+  const rawWw = opts?.ww
+  const windowed =
+    rawWc !== undefined &&
+    rawWw !== undefined &&
+    Number.isFinite(rawWc) &&
+    Number.isFinite(rawWw) &&
+    rawWw >= 1
+
+  if (windowed) {
+    // DICOM PS3.3 C.11.2.1.2.1 线性窗宽窗位：
+    //   x ≤ c-0.5-(w-1)/2 → 0；x > c-0.5+(w-1)/2 → 255；
+    //   否则 ((x-(c-0.5))/(w-1)+0.5)×255。ww=1 时第三分支不可达（不除零）。
+    const wc = rawWc as number
+    const ww = rawWw as number
+    const lower = wc - 0.5 - (ww - 1) / 2
+    const upper = wc - 0.5 + (ww - 1) / 2
+    const rgba = new Uint8ClampedArray(sampleCount * 4)
+    for (let i = 0; i < sampleCount; i += 1) {
+      const value = readSample(frameView, i, bitsAllocated, signed) * slope + intercept
+      const normalized =
+        value <= lower ? 0 : value > upper ? 255 : Math.round(((value - (wc - 0.5)) / (ww - 1) + 0.5) * 255)
+      const gray = invert ? 255 - normalized : normalized
+      const offset = i * 4
+      rgba[offset] = gray
+      rgba[offset + 1] = gray
+      rgba[offset + 2] = gray
+      rgba[offset + 3] = 255
+    }
+    return createImageData(rgba, columns, rows)
+  }
+
+  // 自动 min-max：第一遍 Rescale 后计算 min/max
   let min = Infinity
   let max = -Infinity
   for (let i = 0; i < sampleCount; i += 1) {

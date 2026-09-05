@@ -15,9 +15,13 @@ import {
   JPEG_BASELINE_TRANSFER_SYNTAX_UID,
 } from './__fixtures__/buildDicomFile.ts'
 
-function decodeFixture(options: Parameters<typeof buildDicomFile>[0], frameIndex?: number) {
+function decodeFixture(
+  options: Parameters<typeof buildDicomFile>[0],
+  frameIndex?: number,
+  windowLevel?: Parameters<typeof decodeDicomFrame>[2],
+) {
   const { dataset } = parseDicomFile(buildDicomFile(options))
-  return decodeDicomFrame(dataset, frameIndex)
+  return decodeDicomFrame(dataset, frameIndex, windowLevel)
 }
 
 /** 取 ImageData 中第 index 个像素的灰度值（R 通道） */
@@ -124,6 +128,79 @@ describe('decodeDicomFrame: 16-bit 与 Rescale', () => {
     )
     expect(grayAt(image, 0)).toBe(128) // 单帧内恒定 → 中间灰度
     expect(grayAt(image, 15)).toBe(128)
+  })
+})
+
+describe('decodeDicomFrame: 显式窗宽窗位（CR-003 T-003 / R-003 修改）', () => {
+  // 4×4 渐变 0..255：像素 i 的原始值 = 17×i（0,17,34,…,255）
+  const GRADIENT_OPTIONS = { pixelData: gradientPixels8(4, 4, 0, 255), rows: 4, columns: 4 }
+
+  it('maps pixels through the linear WC/WW window (DICOM C.11.2.1.2.1)', () => {
+    const image = decodeFixture(GRADIENT_OPTIONS, undefined, { wc: 128, ww: 128 })
+    // 窗口下界 64、上界 191：x=34 ≤ 64 → 0
+    expect(grayAt(image, 2)).toBe(0)
+    // x=68：((68-127.5)/127 + 0.5)×255 = 8.03 → 8
+    expect(grayAt(image, 4)).toBe(8)
+    // x=187：((187-127.5)/127 + 0.5)×255 = 246.97 → 247
+    expect(grayAt(image, 11)).toBe(247)
+    // x=255 > 191 → 255
+    expect(grayAt(image, 15)).toBe(255)
+  })
+
+  it('handles the ww=1 boundary as a threshold without dividing by zero', () => {
+    const image = decodeFixture(GRADIENT_OPTIONS, undefined, { wc: 136, ww: 1 })
+    // 下界 = 上界 = 135.5：x=119 ≤ 135.5 → 0；x=136 > 135.5 → 255
+    expect(grayAt(image, 7)).toBe(0)
+    expect(grayAt(image, 8)).toBe(255)
+  })
+
+  it('windows a constant image deterministically at ww=1', () => {
+    const at = (wc: number) =>
+      decodeFixture(
+        { pixelData: new Uint8Array(16).fill(99), rows: 4, columns: 4 },
+        undefined,
+        { wc, ww: 1 },
+      )
+    expect(grayAt(at(99), 0)).toBe(255) // 99 > 98.5
+    expect(grayAt(at(100), 0)).toBe(0) // 99 ≤ 99.5
+  })
+
+  it('falls back to auto min-max for invalid wc/ww (non-finite or ww < 1)', () => {
+    const nanImage = decodeFixture(GRADIENT_OPTIONS, undefined, { wc: Number.NaN, ww: 400 })
+    expect(grayAt(nanImage, 0)).toBe(0) // 自动 min-max 等价行为
+    expect(grayAt(nanImage, 15)).toBe(255)
+    const narrowImage = decodeFixture(GRADIENT_OPTIONS, undefined, { wc: 128, ww: 0 })
+    expect(grayAt(narrowImage, 0)).toBe(0)
+    expect(grayAt(narrowImage, 15)).toBe(255)
+  })
+
+  it('defaults to auto min-max when opts are omitted (no regression)', () => {
+    const auto = decodeFixture(GRADIENT_OPTIONS)
+    const explicitAuto = decodeFixture(GRADIENT_OPTIONS, undefined, {})
+    expect(Array.from(auto.data)).toEqual(Array.from(explicitAuto.data))
+    expect(grayAt(auto, 0)).toBe(0)
+    expect(grayAt(auto, 15)).toBe(255)
+  })
+
+  it('applies MONOCHROME1 inversion after windowing', () => {
+    const image = decodeFixture(
+      { ...GRADIENT_OPTIONS, photometricInterpretation: 'MONOCHROME1' },
+      undefined,
+      { wc: 128, ww: 128 },
+    )
+    expect(grayAt(image, 2)).toBe(255) // 窗映射 0 → 反转 255
+    expect(grayAt(image, 15)).toBe(0)
+  })
+
+  it('windows the second frame of a multi-frame file', () => {
+    const frame0 = new Uint8Array(16).fill(10)
+    const frame1 = new Uint8Array(16).fill(200)
+    const image = decodeFixture(
+      { pixelData: new Uint8Array([...frame0, ...frame1]), rows: 4, columns: 4, numberOfFrames: '2' },
+      1,
+      { wc: 200, ww: 1 },
+    )
+    expect(grayAt(image, 0)).toBe(255) // 200 > 199.5
   })
 })
 
