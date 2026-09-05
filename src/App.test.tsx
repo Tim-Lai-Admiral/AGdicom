@@ -156,6 +156,8 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '查看“scan.dcm”的 DICOM 详情' }))
     const dialog = screen.getByRole('dialog', { name: 'DICOM 详情' })
+    // CR-003 T-004：查看器嵌入中央查看区，不再声明 aria-modal（非模态语义）
+    expect(dialog.getAttribute('aria-modal')).toBeNull()
     await waitFor(() => {
       expect(within(dialog).getByText('CT')).toBeTruthy()
     })
@@ -223,6 +225,8 @@ describe('App', () => {
     // 选中第二张：自动进入比较，双图并排可见
     fireEvent.click(screen.getByRole('button', { name: '选择“lung.png”加入比较' }))
     const dialog = screen.getByRole('dialog', { name: '图片比较' })
+    // CR-003 T-004：比较视图嵌入中央查看区，不再声明 aria-modal（非模态语义）
+    expect(dialog.getAttribute('aria-modal')).toBeNull()
     expect(within(dialog).getByText('heart.png')).toBeTruthy()
     expect(within(dialog).getByText('lung.png')).toBeTruthy()
 
@@ -287,6 +291,8 @@ describe('App', () => {
       // jsdom 无 WebGL → 降级提示而非崩溃
       fireEvent.click(screen.getByRole('button', { name: '查看“aorta.stl”的 3D 模型' }))
       const dialog = await screen.findByRole('dialog', { name: '3D 模型预览' })
+      // CR-003 T-004：查看器嵌入中央查看区，不再声明 aria-modal（非模态语义）
+      expect(dialog.getAttribute('aria-modal')).toBeNull()
       await waitFor(() => {
         expect(within(dialog).getByText(/不支持 WebGL/)).toBeTruthy()
       })

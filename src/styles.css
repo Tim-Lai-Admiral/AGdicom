@@ -25,21 +25,6 @@ body {
   color-scheme: dark;
 }
 
-.app {
-  min-height: 100vh;
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 3rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.app__title {
-  margin: 0;
-  font-size: 1.5rem;
-}
-
 .app__storage-warning {
   margin: 0;
   padding: 0.5rem 0.75rem;
@@ -185,45 +170,7 @@ body {
   font-size: 0.875rem;
 }
 
-/* --- 素材库（筛选 + 网格 + 比较，CR-001 T-004） --- */
-.library {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.library__header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.library__title {
-  margin: 0;
-  font-size: 1.125rem;
-}
-
-.library__compare {
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-sm);
-  background: var(--color-primary);
-  color: #fff;
-  padding: 0.35rem 1rem;
-  font-size: 0.875rem;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.library__compare:hover:not(:disabled) {
-  background: var(--color-primary-strong);
-}
-
-.library__compare:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
+/* --- 素材库残留类：左栏空态/选择提示仍复用（CR-003 T-002 起容器与头部由 workbench__* 承担） --- */
 .library__select-hint {
   margin: 0;
   font-size: 0.8125rem;
@@ -920,29 +867,7 @@ button.asset-card__main:hover .asset-card__name {
   }
 }
 
-/* --- 内置样本加载（CR-001 T-006）：素材库头部的次级按钮 --- */
-.library__samples {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
-  padding: 0.35rem 1rem;
-  font-size: 0.875rem;
-  font-family: inherit;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.library__samples:hover:not(:disabled) {
-  background: var(--color-bg);
-  border-color: var(--color-primary);
-}
-
-.library__samples:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
+/* --- 内置样本加载错误提示（CR-001 T-006；按钮入口 CR-003 T-002 起由顶栏 workbench__tool 承担） --- */
 .library__samples-error {
   margin: 0;
   padding: 0.5rem 0.75rem;
@@ -2239,7 +2164,6 @@ button.asset-card__main:hover .asset-card__name {
 .workbench .import-zone__button,
 .workbench .export-import__export,
 .workbench .export-import__import,
-.workbench .library__compare,
 .workbench .review-panel__save {
   color: #06242a;
   font-weight: 600;

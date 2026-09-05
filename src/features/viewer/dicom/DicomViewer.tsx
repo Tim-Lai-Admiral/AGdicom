@@ -387,7 +387,6 @@ export default function DicomViewer({
         ref={dialogRef}
         className="dicom-viewer"
         role="dialog"
-        aria-modal="true"
         aria-label="DICOM 详情"
       >
         <header className="dicom-viewer__header">

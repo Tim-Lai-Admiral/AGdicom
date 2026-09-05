@@ -1,15 +1,17 @@
 /**
- * 工作台布局测试（CR-003 T-002 / UI-001）。
+ * 工作台布局测试（CR-003 T-002 / UI-001；T-004 补充功能入口链路）。
  *
  * 覆盖任务卡 Test requirements：
  * - 布局切换：四区（顶栏/左栏/中央/右栏）齐全；左/右栏面板开关（折叠后不溢出）；
  *   中央查看区按状态切换（导入视图 / 图片预览 / DICOM 查看器）；
  * - 左栏 DICOM 展开：series + 切片缩略图（复用 seriesUtils 数据），点击切片切换；
- * - 折叠交互：右栏信息面板与顶栏开关联动。
+ * - 折叠交互：右栏信息面板与顶栏开关联动；
+ * - T-004：右栏评审全链路（状态/标签/备注/历史/AI 建议）与顶栏导出/导入入口回环。
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
+import { loadState } from './store/repository.ts'
 import {
   buildDicomFile,
   buildDicomSeriesBuffers,
@@ -212,5 +214,131 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
     // 自动按钮：回到自动 min-max
     fireEvent.click(within(right).getByRole('button', { name: '自动 min-max' }))
     expect(within(right).getByText('当前：自动（min-max），拖动滑杆或选择预设切换手动')).toBeTruthy()
+  })
+
+  it('supports the full review chain (status/tag/note/history/AI) in the right column (CR-003 T-004)', async () => {
+    const { container } = render(<App />)
+    dropFiles(container, [makeFile('heart.png', 64, 'image/png')])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
+    })
+
+    // 选中图片：右栏评审面板打开，AI 建议（Mock）区可达
+    fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
+    const right = screen.getByRole('complementary', { name: '信息面板' })
+    expect(within(right).getByRole('heading', { name: '评审面板' })).toBeTruthy()
+    const aiSection = within(right).getByLabelText('AI 建议')
+    expect(within(aiSection).getByText('Mock 生成')).toBeTruthy()
+    expect(within(aiSection).getByText('命名建议')).toBeTruthy()
+
+    // 提交评审（通过 + 意见）：反馈 + 历史留痕 + 持久化
+    fireEvent.click(within(right).getByRole('radio', { name: '通过' }))
+    fireEvent.change(within(right).getByLabelText('评审意见'), { target: { value: '初版可用' } })
+    fireEvent.click(within(right).getByRole('button', { name: '保存评审' }))
+    expect(within(right).getByText('评审已保存：通过（已计入评审历史）')).toBeTruthy()
+    expect(within(right).getByText('评审历史（1）')).toBeTruthy()
+    expect(within(right).getByText('初版可用')).toBeTruthy()
+    const storedReview = Object.values(loadState().state.reviews)[0]?.[0]
+    expect(storedReview).toMatchObject({ status: 'passed', comment: '初版可用' })
+
+    // 新建标签：素材标签与全局标签库同步并持久化
+    fireEvent.change(within(right).getByLabelText('新建标签名'), { target: { value: '心脏' } })
+    fireEvent.click(within(right).getByRole('button', { name: '添加标签' }))
+    expect(within(right).getByText('已添加标签“心脏”')).toBeTruthy()
+    expect(within(right).getByText('心脏', { selector: '.review-panel__tag' })).toBeTruthy()
+    expect(Object.keys(loadState().state.tags)).toContain('心脏')
+
+    // 备注独立保存：不追加评审历史
+    fireEvent.change(within(right).getByLabelText('备注内容'), { target: { value: '用于周会演示' } })
+    fireEvent.click(within(right).getByRole('button', { name: '保存备注' }))
+    expect(within(right).getByText('备注已保存')).toBeTruthy()
+    expect(within(right).getByText('评审历史（1）')).toBeTruthy()
+    expect(Object.values(loadState().state.assets)[0]?.note).toBe('用于周会演示')
+
+    // 采纳 AI 命名建议：仅用户点击后重命名并持久化（Mock 规则对图片给“图片-序号”）
+    fireEvent.click(within(aiSection).getByRole('button', { name: '采纳命名（填入名称）' }))
+    expect(within(aiSection).getByText('已采纳命名建议（可在需要时手动再改）')).toBeTruthy()
+    const renamed = Object.values(loadState().state.assets)[0]
+    expect(renamed?.name).toMatch(/^图片-/)
+    expect(renamed?.name).not.toBe('heart.png')
+  })
+
+  it('round-trips a backup through the toolbar export/import entry (CR-003 T-004)', async () => {
+    // 下载桩：捕获导出 Blob 与锚点（jsdom 无下载能力），用例结束后还原
+    const blobs: Blob[] = []
+    const anchors: HTMLAnchorElement[] = []
+    const originalCreate = Object.getOwnPropertyDescriptor(URL, 'createObjectURL')
+    const originalRevoke = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL')
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      writable: true,
+      value: (blob: Blob): string => {
+        blobs.push(blob)
+        return `blob:mock-${blobs.length}`
+      },
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      writable: true,
+      value: () => undefined,
+    })
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function mockClick(
+      this: HTMLAnchorElement,
+    ) {
+      anchors.push(this)
+    })
+    try {
+      const { container } = render(<App />)
+      dropFiles(container, [makeFile('heart.png', 64, 'image/png')])
+      await waitFor(() => {
+        expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
+      })
+
+      // 顶栏“导出”按钮：展开 ExportImport 弹出面板
+      fireEvent.click(screen.getByRole('button', { name: '导出' }))
+      const exportSection = screen.getByLabelText('导出与导入')
+      expect(within(exportSection).getByRole('button', { name: '导出 JSON' })).toBeTruthy()
+
+      // 导出：触发下载（文件名 + schema v1 内容）+ 成功反馈
+      fireEvent.click(within(exportSection).getByRole('button', { name: '导出 JSON' }))
+      expect(anchors).toHaveLength(1)
+      expect(anchors[0]?.download).toMatch(/^review-export-\d{8}-\d{6}\.json$/)
+      expect(within(exportSection).getByRole('status').textContent).toContain(
+        '已导出评审数据（1 个素材）',
+      )
+      const blob = blobs[blobs.length - 1] // 导入素材的会话 objectUrl 也走 createObjectURL：导出 Blob 是最后一个
+      if (blob === undefined) throw new Error('export blob missing')
+      const content = await blob.text()
+      expect((JSON.parse(content) as { schemaVersion: number }).schemaVersion).toBe(1)
+
+      // 导入同名备份：深度校验通过 → 名称冲突确认 → 整体替换并持久化
+      const input = within(exportSection).getByLabelText('选择备份 JSON 文件') as HTMLInputElement
+      fireEvent.change(input, {
+        target: { files: [new File([content], 'backup.json', { type: 'application/json' })] },
+      })
+      await waitFor(() => {
+        expect(within(exportSection).getByRole('alert').textContent).toContain(
+          '1 个名称与现有素材冲突',
+        )
+      })
+      fireEvent.click(within(exportSection).getByRole('button', { name: '仍然导入' }))
+      await waitFor(() => {
+        expect(within(exportSection).getByRole('status').textContent).toContain(
+          '已导入并还原 1 个素材',
+        )
+      })
+      expect(Object.keys(loadState().state.assets)).toHaveLength(1)
+    } finally {
+      if (originalCreate === undefined) {
+        delete (URL as { createObjectURL?: unknown }).createObjectURL
+      } else {
+        Object.defineProperty(URL, 'createObjectURL', originalCreate)
+      }
+      if (originalRevoke === undefined) {
+        delete (URL as { revokeObjectURL?: unknown }).revokeObjectURL
+      } else {
+        Object.defineProperty(URL, 'revokeObjectURL', originalRevoke)
+      }
+    }
   })
 })

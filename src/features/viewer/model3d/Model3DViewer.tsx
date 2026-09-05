@@ -1,9 +1,9 @@
 /**
  * 3D 模型查看器（CR-001 T-006 / R-004）。
  *
- * 应用内弹层（role="dialog"，与 DICOM 查看器同构）：three.js WebGLRenderer 渲染
- * STLLoader 解析出的几何体；OrbitControls 提供旋转（左键拖拽）/ 缩放（滚轮）/
- * 平移（右键拖拽），全部使用默认映射不加改，操作提示文案常驻可见。
+ * 应用内查看区（role="dialog"，与 DICOM 查看器同构；CR-003 T-002 起嵌入中央查看区）：
+ * three.js WebGLRenderer 渲染 STLLoader 解析出的几何体；OrbitControls 提供旋转
+ * （左键拖拽）/ 缩放（滚轮）/ 平移（右键拖拽），全部使用默认映射不加改，操作提示文案常驻可见。
  *
  * 数据流：useModelLoader 负责 objectUrl → 字节（分块进度）→ 几何体
  * （loading/success/error 状态机 + geometry dispose）；本组件负责场景生命周期——
@@ -180,7 +180,7 @@ export default function Model3DViewer({ asset, onClose }: Model3DViewerProps) {
 
   return (
     <div className="model3d-overlay">
-      <section className="model3d-viewer" role="dialog" aria-modal="true" aria-label="3D 模型预览">
+      <section className="model3d-viewer" role="dialog" aria-label="3D 模型预览">
         <header className="model3d-viewer__header">
           <h2 className="model3d-viewer__title">3D 模型预览</h2>
           <p className="model3d-viewer__file" title={asset.file.fileName}>
