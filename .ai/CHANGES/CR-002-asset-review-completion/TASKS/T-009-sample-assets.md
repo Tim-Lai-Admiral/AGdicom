@@ -63,7 +63,7 @@ branch: feature/CR-002-T-009-samples
   - 应用解析栈自动验证（临时 vitest + 应用自身 `parseDicomFile`/`decodeDicomFrame`/`sliceCountByAsset`，验证后已删除）：18 文件 → 3 series × 6 切片、InstanceNumber 递增、去标识化证据三项齐全、首帧像素解码成功（128×128）；
   - `scripts\verify.ps1` 全绿（233 tests passed + build 成功）；
   - 环境：Python 3.11.9 + `pip install pydicom`（3.0.2）。
-- **commit / PR**：实现 commit `fe6a9f5`；分支 `feature/CR-002-T-009-samples`；PR 见 Reviewer 记录。
+- **commit / PR**：实现 commit `fe6a9f5`（产物/脚本/README）、`d2833d9`（任务卡）；分支 `feature/CR-002-T-009-samples`；PR #10：https://github.com/Tim-Lai-Admiral/AGdicom/pull/10
 - **已知限制**：
   - 验收第 2 条以应用自身解析栈自动验证替代浏览器手动 E2E（dicom-parser 与 UI 共用同一解析/解码层）；建议 Reviewer 按测试要求做一次手动 E2E（`npm run dev` → 导入 `public/samples/dicom/`）复核切片切换 UI。
   - `python -m pip install pydicom` 为本机一次性环境依赖，未进入 package.json（脚本注释与 README 已写明）。
