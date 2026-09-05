@@ -53,6 +53,30 @@ Then 按 BLOCKED-信息不足 报告所需清单（缺什么、影响什么）�
 
 - [ ] builder.md / builder-flash.md 提示词含此兜底条款。
 
+## P-004: Git 规则（Human 2026-09-04）
+
+**Status**: approved
+
+**Behavior**
+
+```text
+Given 任何 Agent 进行 Git 操作
+When 涉及提交、分支、PR、合并
+Then 遵守 15 条规则（全文见 .ai/AGENTS.md §6）：
+     1 main 代表可接受状态；2 Agent 禁止直接 push main；3 每 Task 独立分支；
+     4 分支名含 CR+Task ID；5 Builder 可多 commit；6 Builder 完成后建 PR；
+     7 Reviewer 审 PR 而非 working tree；8 CI 自动 test/lint/build；
+     9 Reviewer 独立验证；10 Human 拥有最终 Merge 权；11 Merge 后删分支；
+     12 重大版本用 Tag；13 需求/架构历史归 CR、代码历史归 Git；
+     14 禁止为让代码能跑而改 Requirement；15 Conflict 显式解决
+```
+
+**Acceptance criteria**
+
+- [ ] `.ai/AGENTS.md` §6 含 15 条全文（T-011 验收）
+- [ ] `.github/workflows/ci.yml` 存在（test/lint/build）
+- [ ] Builder/Reviewer 提示词含 PR 工作流
+
 ## Carried requirements（承接 CR-001）
 
 | ID | 内容 | 验收要点（正文见 CR-001 REQUIREMENTS.md） |

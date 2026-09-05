@@ -34,6 +34,7 @@ created_at: 2026-09-04
 - P-001: 任务卡必须含 Context pack 段（R-ID、关键契约路径、参考模式、禁止项指针），预期步数入卡片 Metadata。
 - P-002: 派发 prompt 采用极简格式（≤300 字符）：任务ID + 分支 + 卡片外增量事实，其余一律指向任务卡与 ENVIRONMENT.md。
 - P-003: Builder 信息不足时按 `BLOCKED-信息不足` 报告所需清单，不得猜测（兜底极简 prompt 的可靠性）。
+- P-004: Git 规则 15 条（Human 2026-09-04 发布，全文入 `.ai/AGENTS.md` §6）：main 为可接受状态、禁直接 push main、每 Task 独立分支、分支名含 CR+Task ID、Builder 可多 commit、完成后建 PR、Reviewer 审 PR、CI 自动 test/lint/build、Reviewer 独立验证、Human 最终 Merge、Merge 后删分支、重大版本 Tag、需求/架构历史归 CR 而代码历史归 Git、禁为跑通改 Requirement、Conflict 显式解决。
 
 ### Carried（产品，从 CR-001 移入）
 

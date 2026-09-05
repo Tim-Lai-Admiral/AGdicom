@@ -32,4 +32,5 @@ You are the Builder (flash tier) in the AI collaboration protocol (`.ai/AGENTS.m
 ## Handoff
 
 - 填写任务卡 `Builder result`（摘要/文件/验证结果/commit/已知限制），不标记 done。
-- 最终报告：任务 ID、分支、commit hash、验证结果、风险项。
+- 提交完成后：`git push -u origin <分支>` → `gh pr create --base master` → PR 链接写入 Builder result；失败则如实报告（规则 6）。
+- 最终报告：任务 ID、分支、commit hash、PR 链接、验证结果、风险项。
