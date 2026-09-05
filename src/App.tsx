@@ -3,7 +3,7 @@ import { useState } from 'react'
 import type { Asset, AssetStatus, AppState, DicomMeta } from './domain/types.ts'
 import { collectTagNames, DEFAULT_ASSET_FILTER, filterAssets } from './domain/filter.ts'
 import type { AssetFilter } from './domain/filter.ts'
-import { setAssetStatus } from './domain/review.ts'
+import { addAssetTag, applyReview, removeAssetTag, setAssetStatus, updateAssetNote } from './domain/review.ts'
 import { loadState, saveState } from './store/repository.ts'
 import type { LoadIssue } from './store/repository.ts'
 import ImportZone from './features/library/ImportZone.tsx'
@@ -13,6 +13,8 @@ import AssetGrid from './features/library/AssetGrid.tsx'
 import CompareView from './features/library/CompareView.tsx'
 import DicomViewer from './features/viewer/dicom/DicomViewer.tsx'
 import Model3DViewer from './features/viewer/model3d/Model3DViewer.tsx'
+import ReviewPanel from './features/review/ReviewPanel.tsx'
+import ExportImport from './features/review/ExportImport.tsx'
 
 /** 读取异常的可提示文案（T-002 仓储契约的 UI 呈现） */
 const LOAD_ISSUE_MESSAGES: Readonly<Record<LoadIssue, string>> = {
@@ -34,6 +36,7 @@ function App() {
   const [compareOpen, setCompareOpen] = useState(false)
   const [dicomViewerAssetId, setDicomViewerAssetId] = useState<string | null>(null)
   const [modelViewerAssetId, setModelViewerAssetId] = useState<string | null>(null)
+  const [reviewAssetId, setReviewAssetId] = useState<string | null>(null)
   const [samplesLoading, setSamplesLoading] = useState(false)
   const [samplesError, setSamplesError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -51,23 +54,32 @@ function App() {
     dicomViewerAssetId !== null ? state.assets[dicomViewerAssetId] : undefined
   const modelViewerAsset =
     modelViewerAssetId !== null ? state.assets[modelViewerAssetId] : undefined
+  const reviewAsset = reviewAssetId !== null ? state.assets[reviewAssetId] : undefined
   // 比较素材：按选中先后顺序（先选的在左）
   const compareAssets = selectedIds
     .map((id) => state.assets[id])
     .filter((asset): asset is Asset => asset !== undefined)
 
-  /** 设置状态：领域纯函数计算 + 立即持久化（R-002：刷新后仍保留） */
-  const handleSetStatus = (assetId: string, status: AssetStatus): void => {
-    const next = setAssetStatus(state, assetId, status)
-    if (next === state) return
+  /**
+   * 领域函数结果落库：立即更新会话状态并持久化（R-002/R-005：刷新后仍保留）。
+   * 保存失败时提示（本会话内变更仍有效，刷新后可能丢失）。
+   */
+  const commit = (next: AppState, failPrefix: string): void => {
     setState(next)
     try {
       saveState(next)
       setSaveError(null)
     } catch (error) {
       const reason = error instanceof Error && error.message !== '' ? error.message : String(error)
-      setSaveError(`状态已在本会话更新，但保存失败（${reason}）。刷新后该状态可能无法保留。`)
+      setSaveError(`${failPrefix}（${reason}）。刷新后可能无法保留。`)
     }
+  }
+
+  /** 设置状态：领域纯函数计算 + 立即持久化（R-002：刷新后仍保留） */
+  const handleSetStatus = (assetId: string, status: AssetStatus): void => {
+    const next = setAssetStatus(state, assetId, status)
+    if (next === state) return
+    commit(next, '状态已在本会话更新，但保存失败')
   }
 
   /** 打开/关闭 DICOM 查看器（T-005）：点击 dicom 素材卡片触发 */
@@ -84,6 +96,47 @@ function App() {
   }
   const handleCloseModel = (): void => {
     setModelViewerAssetId(null)
+  }
+
+  /** 打开/关闭评审面板（T-007）：点击卡片“评审”按钮触发；查看器打开时覆盖面板（并存） */
+  const handleOpenReview = (assetId: string): void => {
+    setReviewAssetId(assetId)
+  }
+  const handleCloseReview = (): void => {
+    setReviewAssetId(null)
+  }
+
+  /** 评审面板：添加标签（含自建，注册表合并由 addAssetTag 完成）并持久化 */
+  const handleAddTag = (assetId: string, tagName: string): void => {
+    const next = addAssetTag(state, assetId, tagName)
+    if (next === state) return
+    commit(next, '标签已在本会话更新，但保存失败')
+  }
+
+  /** 评审面板：移除标签并持久化 */
+  const handleRemoveTag = (assetId: string, tagName: string): void => {
+    const next = removeAssetTag(state, assetId, tagName)
+    if (next === state) return
+    commit(next, '标签已在本会话更新，但保存失败')
+  }
+
+  /** 评审面板：提交一次评审（更新状态 + 追加历史留痕）并持久化 */
+  const handleSubmitReview = (assetId: string, status: AssetStatus, comment: string): void => {
+    const next = applyReview(state, assetId, { status, comment })
+    if (next === state) return
+    commit(next, '评审已在本会话保存，但持久化失败')
+  }
+
+  /** 评审面板：保存备注（不追加评审历史）并持久化 */
+  const handleSaveNote = (assetId: string, note: string): void => {
+    const next = updateAssetNote(state, assetId, note)
+    if (next === state) return
+    commit(next, '备注已在本会话保存，但持久化失败')
+  }
+
+  /** 导入备份：以备份数据整体替换当前状态（导入前已经过 io.ts 深度校验与冲突确认） */
+  const handleImportState = (incoming: AppState): void => {
+    commit(incoming, '导入已在本会话生效，但保存失败')
   }
 
   /**
@@ -132,14 +185,7 @@ function App() {
     }
     if (changed === 0) return
     const next: AppState = { assets, tags: state.tags, reviews: state.reviews }
-    setState(next)
-    try {
-      saveState(next)
-      setSaveError(null)
-    } catch (error) {
-      const reason = error instanceof Error && error.message !== '' ? error.message : String(error)
-      setSaveError(`DICOM 元数据已在本会话更新，但保存失败（${reason}）。刷新后可能无法保留。`)
-    }
+    commit(next, 'DICOM 元数据已在本会话更新，但保存失败')
   }
 
   /** 切换比较选中：仅 image；最多两张；选中第二张时自动进入比较 */
@@ -180,6 +226,7 @@ function App() {
         onImportFiles={importFiles}
         onClearFeedback={clearFeedback}
       />
+      <ExportImport state={state} onImport={handleImportState} />
       <section className="library" aria-label="素材库">
         <header className="library__header">
           <h2 className="library__title">素材库（{assets.length}）</h2>
@@ -230,6 +277,7 @@ function App() {
                 onSetStatus={handleSetStatus}
                 onOpenDicom={handleOpenDicom}
                 onOpenModel={handleOpenModel}
+                onOpenReview={handleOpenReview}
               />
             ) : (
               <p className="library__empty">没有符合当前筛选条件的素材：可调整上方筛选条件</p>
@@ -250,6 +298,18 @@ function App() {
       ) : null}
       {modelViewerAsset !== undefined && modelViewerAsset.kind === 'model' ? (
         <Model3DViewer asset={modelViewerAsset} onClose={handleCloseModel} />
+      ) : null}
+      {reviewAsset !== undefined ? (
+        <ReviewPanel
+          asset={reviewAsset}
+          history={state.reviews[reviewAsset.id]}
+          tagNames={tagNames}
+          onAddTag={(tagName) => handleAddTag(reviewAsset.id, tagName)}
+          onRemoveTag={(tagName) => handleRemoveTag(reviewAsset.id, tagName)}
+          onSubmitReview={(status, comment) => handleSubmitReview(reviewAsset.id, status, comment)}
+          onSaveNote={(note) => handleSaveNote(reviewAsset.id, note)}
+          onClose={handleCloseReview}
+        />
       ) : null}
     </main>
   )

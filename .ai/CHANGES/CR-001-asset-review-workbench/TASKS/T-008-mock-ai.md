@@ -1,5 +1,7 @@
 # Task T-008: Mock AI 能力
 
+> **MOVED to CR-002**（2026-09-04，Human 决定）：本卡已迁移至 `.ai/CHANGES/CR-002-asset-review-completion/TASKS/T-008-mock-ai.md`（新格式：Context pack + expected_steps），以新卡为准。
+
 ## Metadata
 
 ```yaml

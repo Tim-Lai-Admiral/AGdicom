@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Asset, AppState, ReviewHistory, ReviewRecord, Tag } from './types.ts'
-import { addAssetTag, applyReview, removeAssetTag, setAssetStatus } from './review.ts'
+import { addAssetTag, applyReview, removeAssetTag, setAssetStatus, updateAssetNote } from './review.ts'
 
 const NOW = '2026-09-03T08:00:00.000Z'
 
@@ -128,6 +128,27 @@ describe('removeAssetTag', () => {
   })
 })
 
+describe('updateAssetNote', () => {
+  it('updates the note and updatedAt without appending a review record', () => {
+    const state = makeState(
+      [makeAsset()],
+      {},
+      { 'asset-1': [{ status: 'pending', comment: '', createdAt: NOW }] },
+    )
+    const next = updateAssetNote(state, 'asset-1', '结构清晰', NOW)
+    expect(next.assets['asset-1']?.note).toBe('结构清晰')
+    expect(next.assets['asset-1']?.updatedAt).toBe(NOW)
+    // 备注不进评审历史（历史仅记录评审结论）
+    expect(next.reviews['asset-1']).toEqual(state.reviews['asset-1'])
+  })
+
+  it('is a no-op when the note is unchanged or the asset is missing', () => {
+    const state = makeState([makeAsset({ note: '原备注' })])
+    expect(updateAssetNote(state, 'asset-1', '原备注', NOW)).toBe(state)
+    expect(updateAssetNote(state, 'missing', '新备注', NOW)).toBe(state)
+  })
+})
+
 describe('purity', () => {
   it('never mutates the input state', () => {
     const state = makeState(
@@ -140,6 +161,7 @@ describe('purity', () => {
     setAssetStatus(state, 'a2', 'rejected', NOW)
     addAssetTag(state, 'a2', '新标签', NOW)
     removeAssetTag(state, 'a2', '已有', NOW)
+    updateAssetNote(state, 'a2', '新备注', NOW)
     expect(state).toEqual(snapshot)
   })
 })

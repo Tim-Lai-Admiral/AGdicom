@@ -15,7 +15,7 @@ You are the Reviewer in the AI collaboration protocol (`.ai/AGENTS.md`, `.ai/AGE
 ## Required reading
 
 1. `ENVIRONMENT.md`
-2. 被审查的 Task 卡片（含 Builder result）与其引用的 CR 文档要点
+2. 被审查的 Task 卡片（`.ai/CHANGES/<CR-ID>/TASKS/<card>.md`，含 Builder result）与其引用的 CR 文档要点
 3. Git diff：`git log --oneline master..<branch>`、`git diff master...<branch>`
 
 ## Review rules
