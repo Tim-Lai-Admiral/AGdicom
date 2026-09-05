@@ -138,6 +138,26 @@ function validateDicomMeta(value: unknown, path: string, issues: Issues): void {
     reportString(value.patientName, `${path}.patientName`, issues)
   }
   if (value.patientID !== undefined) reportString(value.patientID, `${path}.patientID`, issues)
+  // T-005 新增可选字段：instanceNumber / deidentifiedEvidence
+  if (value.instanceNumber !== undefined) {
+    reportNumber(value.instanceNumber, `${path}.instanceNumber`, issues)
+  }
+  if (value.deidentifiedEvidence !== undefined) {
+    if (!Array.isArray(value.deidentifiedEvidence)) {
+      issues.push(`${path}.deidentifiedEvidence 应为数组`)
+    } else if (
+      value.deidentifiedEvidence.some(
+        (item) =>
+          item !== 'patient-identity-removed' &&
+          item !== 'deidentification-method' &&
+          item !== 'empty-patient-fields',
+      )
+    ) {
+      issues.push(
+        `${path}.deidentifiedEvidence 的每个元素应为 patient-identity-removed/deidentification-method/empty-patient-fields`,
+      )
+    }
+  }
   // sliceCount 与 deidentified 为必填核验字段
   reportNumber(value.sliceCount, `${path}.sliceCount`, issues, { min: 0 })
   if (typeof value.deidentified !== 'boolean') {

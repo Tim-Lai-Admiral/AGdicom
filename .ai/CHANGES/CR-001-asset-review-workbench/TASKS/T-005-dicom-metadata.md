@@ -88,6 +88,19 @@ Allowed changes:
 
 > Builder fills this before requesting review.
 
+- Implementation summary: T-005 实现主体由外部执行者（Codex，GPT-5.6-terra）在独立 worktree 完成并复制进本分支（9 个 DICOM 模块文件 + App/types/io/styles 接线）；协调者修复遗留问题后提交：
+  - 修复 4 个 TS 类型错误（TS6 泛型 typed arrays）：`buildDicomFile.ts:197`（sopClassUID null 未防护）、`buildDicomFile.ts:243`（`.buffer` 返回 ArrayBufferLike 需断言）、`decodePixel.ts:62`（ImageData 构造要求 `Uint8ClampedArray<ArrayBuffer>`）、`seriesUtils.ts:59/65`（readonly slices 不可 push/赋值，改为不可变重建）
+  - 修复 `DicomViewer.test.tsx:249` 时序竞态：降级文案在 previewPending 时 role='status'，断言改为 waitFor 等待 role='alert'
+- Files changed: `src/features/viewer/dicom/`（parseDicom/decodePixel/seriesUtils/DicomViewer + 测试 + `__fixtures__/buildDicomFile.ts` 手工构造 DICOM Part 10 fixture）；`src/App.tsx`、`src/domain/types.ts`（DicomMeta 扩展）、`src/store/io.ts`、`src/features/library/AssetGrid.tsx`、`src/styles.css`
+- Tests run and result: `npm test` 167/167 全绿（16 文件）；`npm run build` 通过（tsc -b 无错误）
+- Commit / PR: `407c7e7` feat: dicom metadata parsing and slice preview（分支 feature/CR-001-T-005-dicom）
+- Known limitations / follow-ups:
+  1. fixture 为代码构造的最小 Part 10 文件（buildDicomFile.ts），仅测试使用
+  2. 像素解码仅支持无压缩 Little Endian 8/16-bit 单采样灰度（压缩/其他 → 仅元数据降级，符合 R-003）
+  3. 真实样本验证依赖 T-009 合成 DICOM（pydicom）
+  4. 本任务实现含外部执行者代码，建议 Reviewer 重点审查（规范一致性、可维护性）
+- 需 Reviewer 关注: parseDicom 的 partial 抢救逻辑、decodePixel 的 min-max 归一化（恒定图像输出 128）、seriesUtils 分组语义（无 UID 单独成组）、DicomViewer 降级路径与可访问性角色
+
 ## Reviewer result
 
 > Reviewer fills this using the Review template.

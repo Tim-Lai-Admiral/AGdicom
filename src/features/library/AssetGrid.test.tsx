@@ -115,6 +115,35 @@ describe('AssetGrid', () => {
     expect(screen.queryByText('已选中')).toBeNull()
   })
 
+  it('opens the DICOM viewer when a dicom card is clicked and onOpenDicom is provided', () => {
+    const onOpenDicom = vi.fn()
+    render(
+      <AssetGrid
+        assets={[
+          makeAsset({ id: 'a1', name: 'scan.dcm', kind: 'dicom' }),
+          makeAsset({ id: 'a2', name: 'aorta.stl', kind: 'model' }),
+          makeAsset({ id: 'a3', name: 'heart.png' }),
+        ]}
+        selectedIds={[]}
+        onToggleSelect={vi.fn()}
+        onSetStatus={vi.fn()}
+        onOpenDicom={onOpenDicom}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '查看“scan.dcm”的 DICOM 详情' }))
+    expect(onOpenDicom).toHaveBeenCalledWith('a1')
+
+    // image 卡片点击仍走比较选中；model 卡片保持不可交互（T-006 前不变）
+    fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
+    expect(onOpenDicom).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: /aorta\.stl/ })).toBeNull()
+  })
+
+  it('keeps dicom cards non-interactive when no onOpenDicom handler is provided', () => {
+    setup([makeAsset({ id: 'a1', name: 'scan.dcm', kind: 'dicom' })])
+    expect(screen.queryByRole('button', { name: /DICOM 详情/ })).toBeNull()
+  })
+
   it('requests the next status via the status badge', () => {
     const { onSetStatus } = setup([makeAsset({ id: 'a1', status: 'pending' })])
     fireEvent.click(screen.getByRole('button', { name: /当前状态：待评审/ }))
