@@ -1,5 +1,6 @@
 import './styles.css'
 import { lazy, Suspense, useState } from 'react'
+import type { ReactNode } from 'react'
 import type { Asset, AssetStatus, AppState, DicomMeta } from './domain/types.ts'
 import { collectTagNames, DEFAULT_ASSET_FILTER, filterAssets } from './domain/filter.ts'
 import type { AssetFilter } from './domain/filter.ts'
@@ -8,7 +9,6 @@ import { loadState, saveState } from './store/repository.ts'
 import type { LoadIssue } from './store/repository.ts'
 import ImportZone from './features/library/ImportZone.tsx'
 import { useImport } from './features/library/useImport.ts'
-import Filters from './features/library/Filters.tsx'
 import AssetGrid from './features/library/AssetGrid.tsx'
 import CompareView from './features/library/CompareView.tsx'
 import DicomViewer from './features/viewer/dicom/DicomViewer.tsx'
@@ -16,6 +16,10 @@ import DicomViewer from './features/viewer/dicom/DicomViewer.tsx'
 const Model3DViewer = lazy(() => import('./features/viewer/model3d/Model3DViewer.tsx'))
 import ReviewPanel from './features/review/ReviewPanel.tsx'
 import ExportImport from './features/review/ExportImport.tsx'
+import TopToolbar from './features/workbench/TopToolbar.tsx'
+import MetadataPanel from './features/workbench/MetadataPanel.tsx'
+import DicomSeriesExpansion from './features/workbench/DicomSeriesExpansion.tsx'
+import ImageStage from './features/workbench/ImageStage.tsx'
 
 /** 读取异常的可提示文案（T-002 仓储契约的 UI 呈现） */
 const LOAD_ISSUE_MESSAGES: Readonly<Record<LoadIssue, string>> = {
@@ -29,15 +33,23 @@ const COMPARE_SELECTION_LIMIT = 2
 /** 内置 STL 样本（public/samples/stl/，T-009 复制的 4 个心脏 STL）：可从素材库一键加载 */
 const SAMPLE_STL_NAMES: readonly string[] = ['aorta.stl', 'CB.stl', 'LA.stl', 'LVOT.stl']
 
+/** 右栏信息面板页签：DICOM 默认元数据分组，其余素材评审（R：右栏自动切换） */
+type RightTab = 'meta' | 'review'
+
 function App() {
   const [initialLoad] = useState(() => loadState())
   const [state, setState] = useState<AppState>(initialLoad.state)
   const [filter, setFilter] = useState<AssetFilter>(DEFAULT_ASSET_FILTER)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [compareOpen, setCompareOpen] = useState(false)
-  const [dicomViewerAssetId, setDicomViewerAssetId] = useState<string | null>(null)
-  const [modelViewerAssetId, setModelViewerAssetId] = useState<string | null>(null)
-  const [reviewAssetId, setReviewAssetId] = useState<string | null>(null)
+  /** 工作台当前素材（中央查看区 + 右栏联动）；null = 导入视图（T-002 布局壳） */
+  const [activeAssetId, setActiveAssetId] = useState<string | null>(null)
+  const [rightTab, setRightTab] = useState<RightTab>('review')
+  const [leftOpen, setLeftOpen] = useState(true)
+  const [rightOpen, setRightOpen] = useState(true)
+  const [exportOpen, setExportOpen] = useState(false)
+  /** 左栏展开切片列表的 DICOM 素材（同一时间至多一个） */
+  const [expandedDicomId, setExpandedDicomId] = useState<string | null>(null)
   const [samplesLoading, setSamplesLoading] = useState(false)
   const [samplesError, setSamplesError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -51,11 +63,7 @@ function App() {
   const tagNames = collectTagNames(state)
   const hasImages = assets.some((asset) => asset.kind === 'image')
   const dicomAssets = assets.filter((asset) => asset.kind === 'dicom')
-  const dicomViewerAsset =
-    dicomViewerAssetId !== null ? state.assets[dicomViewerAssetId] : undefined
-  const modelViewerAsset =
-    modelViewerAssetId !== null ? state.assets[modelViewerAssetId] : undefined
-  const reviewAsset = reviewAssetId !== null ? state.assets[reviewAssetId] : undefined
+  const activeAsset = activeAssetId !== null ? state.assets[activeAssetId] : undefined
   // 比较素材：按选中先后顺序（先选的在左）
   const compareAssets = selectedIds
     .map((id) => state.assets[id])
@@ -76,35 +84,24 @@ function App() {
     }
   }
 
+  /** 选中素材（工作台）：中央查看区 + 右栏面板联动（DICOM → 元数据分组，其余 → 评审） */
+  const selectAsset = (assetId: string): void => {
+    setActiveAssetId(assetId)
+    setRightOpen(true)
+    const asset = state.assets[assetId]
+    setRightTab(asset !== undefined && asset.kind === 'dicom' ? 'meta' : 'review')
+  }
+
+  /** 关闭中央查看区：回到导入视图（查看器“关闭”/Esc 与评审面板“关闭”/Esc 共用） */
+  const closeActiveAsset = (): void => {
+    setActiveAssetId(null)
+  }
+
   /** 设置状态：领域纯函数计算 + 立即持久化（R-002：刷新后仍保留） */
   const handleSetStatus = (assetId: string, status: AssetStatus): void => {
     const next = setAssetStatus(state, assetId, status)
     if (next === state) return
     commit(next, '状态已在本会话更新，但保存失败')
-  }
-
-  /** 打开/关闭 DICOM 查看器（T-005）：点击 dicom 素材卡片触发 */
-  const handleOpenDicom = (assetId: string): void => {
-    setDicomViewerAssetId(assetId)
-  }
-  const handleCloseDicom = (): void => {
-    setDicomViewerAssetId(null)
-  }
-
-  /** 打开/关闭 3D 模型查看器（T-006）：点击 model 素材卡片触发 */
-  const handleOpenModel = (assetId: string): void => {
-    setModelViewerAssetId(assetId)
-  }
-  const handleCloseModel = (): void => {
-    setModelViewerAssetId(null)
-  }
-
-  /** 打开/关闭评审面板（T-007）：点击卡片“评审”按钮触发；查看器打开时覆盖面板（并存） */
-  const handleOpenReview = (assetId: string): void => {
-    setReviewAssetId(assetId)
-  }
-  const handleCloseReview = (): void => {
-    setReviewAssetId(null)
   }
 
   /** 评审面板：添加标签（含自建，注册表合并由 addAssetTag 完成）并持久化 */
@@ -196,10 +193,12 @@ function App() {
     commit(next, 'DICOM 元数据已在本会话更新，但保存失败')
   }
 
-  /** 切换比较选中：仅 image；最多两张；选中第二张时自动进入比较 */
+  /** 切换比较选中：仅 image；最多两张；选中第二张时自动进入比较。
+   *  工作台布局下点击图片卡片同时作为“在中央查看该图片”（T-002 布局壳） */
   const handleToggleSelect = (assetId: string): void => {
     const asset = state.assets[assetId]
     if (asset === undefined || asset.kind !== 'image') return
+    selectAsset(assetId)
     if (selectedIds.includes(assetId)) {
       setSelectedIds(selectedIds.filter((id) => id !== assetId))
       return
@@ -214,121 +213,208 @@ function App() {
   const closeCompare = (): void => setCompareOpen(false) // 退出比较但保留选中，便于再次进入
   const showCompare = compareOpen && compareAssets.length === COMPARE_SELECTION_LIMIT
 
-  return (
-    <main className="app">
-      <h1 className="app__title">素材评审工作台</h1>
-      {initialLoad.issue !== null ? (
-        <p className="app__storage-warning" role="alert">
-          {LOAD_ISSUE_MESSAGES[initialLoad.issue]}
-        </p>
-      ) : null}
-      {saveError !== null ? (
-        <p className="app__save-warning" role="alert">
-          {saveError}
-        </p>
-      ) : null}
-      <ImportZone
-        importing={importing}
-        importingLarge={importingLarge}
-        feedback={feedback}
-        onImportFiles={importFiles}
-        onClearFeedback={clearFeedback}
+  /** 中央查看区（统一容器）：比较 > 查看器（DICOM/3D）> 图片预览 > 导入视图 */
+  let centerView: ReactNode
+  if (showCompare) {
+    centerView = <CompareView left={compareAssets[0]} right={compareAssets[1]} onExit={closeCompare} />
+  } else if (activeAsset !== undefined && activeAsset.kind === 'dicom') {
+    centerView = (
+      <DicomViewer
+        key={activeAsset.id}
+        asset={activeAsset}
+        dicomAssets={dicomAssets}
+        onMetasParsed={handleDicomMetasParsed}
+        onClose={closeActiveAsset}
       />
-      <ExportImport state={state} onImport={handleImportState} />
-      <section className="library" aria-label="素材库">
-        <header className="library__header">
-          <h2 className="library__title">素材库（{assets.length}）</h2>
-          <button
-            type="button"
-            className="library__samples"
-            disabled={importing || samplesLoading}
-            onClick={handleLoadSamples}
-          >
-            {samplesLoading ? '样本加载中…' : '加载内置样本（STL）'}
-          </button>
-          <button
-            type="button"
-            className="library__compare"
-            disabled={selectedIds.length !== COMPARE_SELECTION_LIMIT}
-            onClick={openCompare}
-            title={
-              selectedIds.length === COMPARE_SELECTION_LIMIT
-                ? '并排比较所选的两张图片'
-                : '先选中两张图片'
-            }
-          >
-            比较
-          </button>
-        </header>
-        {samplesError !== null ? (
-          <p className="library__samples-error" role="alert">
-            {samplesError}
-          </p>
+    )
+  } else if (activeAsset !== undefined && activeAsset.kind === 'model') {
+    centerView = (
+      <Suspense
+        fallback={
+          <div className="model3d-lazy-loading" role="status">
+            正在加载 3D 模型查看器…
+          </div>
+        }
+      >
+        <Model3DViewer asset={activeAsset} onClose={closeActiveAsset} />
+      </Suspense>
+    )
+  } else if (activeAsset !== undefined && activeAsset.kind === 'image') {
+    centerView = <ImageStage asset={activeAsset} />
+  } else {
+    centerView = (
+      <div className="workbench__viewport-empty">
+        <ImportZone
+          importing={importing}
+          importingLarge={importingLarge}
+          feedback={feedback}
+          onImportFiles={importFiles}
+          onClearFeedback={clearFeedback}
+        />
+      </div>
+    )
+  }
+
+  /** 左栏卡片附加内容：DICOM 素材的 series/切片展开区（T-002 验收 ②） */
+  const renderCardExtras = (asset: Asset): ReactNode => {
+    if (asset.kind !== 'dicom') return null
+    return (
+      <DicomSeriesExpansion
+        asset={asset}
+        dicomAssets={dicomAssets}
+        open={expandedDicomId === asset.id}
+        activeSliceAssetId={
+          activeAsset !== undefined && activeAsset.kind === 'dicom' ? activeAsset.id : null
+        }
+        onToggle={() => {
+          setExpandedDicomId(expandedDicomId === asset.id ? null : asset.id)
+        }}
+        onOpenSlice={(sliceAssetId) => {
+          selectAsset(sliceAssetId)
+        }}
+      />
+    )
+  }
+
+  const showReviewPanel = activeAsset !== undefined && activeAsset.kind !== 'dicom'
+  const showMetaPanel =
+    activeAsset !== undefined && activeAsset.kind === 'dicom' && rightTab === 'meta'
+  const showDicomReview =
+    activeAsset !== undefined && activeAsset.kind === 'dicom' && rightTab === 'review'
+
+  return (
+    <div className="workbench">
+      <TopToolbar
+        filter={filter}
+        tagNames={tagNames}
+        onFilterChange={setFilter}
+        importing={importing}
+        samplesLoading={samplesLoading}
+        onLoadSamples={handleLoadSamples}
+        compareReady={selectedIds.length === COMPARE_SELECTION_LIMIT}
+        onOpenCompare={openCompare}
+        importActive={activeAssetId === null}
+        onOpenImport={closeActiveAsset}
+        exportOpen={exportOpen}
+        onToggleExport={() => setExportOpen(!exportOpen)}
+        leftOpen={leftOpen}
+        rightOpen={rightOpen}
+        onToggleLeft={() => setLeftOpen(!leftOpen)}
+        onToggleRight={() => setRightOpen(!rightOpen)}
+      />
+      {exportOpen ? (
+        <div className="workbench__export-pop">
+          <ExportImport state={state} onImport={handleImportState} />
+        </div>
+      ) : null}
+
+      {initialLoad.issue !== null || saveError !== null || samplesError !== null ? (
+        <div className="workbench__warnings">
+          {initialLoad.issue !== null ? (
+            <p className="app__storage-warning" role="alert">
+              {LOAD_ISSUE_MESSAGES[initialLoad.issue]}
+            </p>
+          ) : null}
+          {saveError !== null ? (
+            <p className="app__save-warning" role="alert">
+              {saveError}
+            </p>
+          ) : null}
+          {samplesError !== null ? (
+            <p className="library__samples-error" role="alert">
+              {samplesError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="workbench__body">
+        {leftOpen ? (
+          <aside className="workbench__left" aria-label="素材列表">
+            <header className="workbench__left-head">
+              <h2 className="workbench__library-title">素材库（{assets.length}）</h2>
+            </header>
+            {assets.length === 0 ? (
+              <p className="library__empty">
+                尚无素材：点击顶栏“导入”选择文件，或将文件拖到中央导入区，导入后素材保存在本地浏览器中
+              </p>
+            ) : (
+              <div className="workbench__left-body">
+                {hasImages ? (
+                  <p className="library__select-hint">
+                    {`点击图片卡片可选择两张图片进行并排比较（已选 ${selectedIds.length}/${COMPARE_SELECTION_LIMIT}）`}
+                  </p>
+                ) : null}
+                {filteredAssets.length > 0 ? (
+                  <AssetGrid
+                    assets={filteredAssets}
+                    selectedIds={selectedIds}
+                    onToggleSelect={handleToggleSelect}
+                    onSetStatus={handleSetStatus}
+                    onOpenDicom={selectAsset}
+                    onOpenModel={selectAsset}
+                    onOpenReview={selectAsset}
+                    renderExtras={renderCardExtras}
+                  />
+                ) : (
+                  <p className="library__empty">没有符合当前筛选条件的素材：可调整上方筛选条件</p>
+                )}
+              </div>
+            )}
+          </aside>
         ) : null}
-        {assets.length === 0 ? (
-          <p className="library__empty">
-            尚无素材：拖拽或选择文件导入，导入后素材保存在本地浏览器中
-          </p>
-        ) : (
-          <>
-            <Filters filter={filter} tagNames={tagNames} onChange={setFilter} />
-            {hasImages ? (
-              <p className="library__select-hint">
-                {`点击图片卡片可选择两张图片进行并排比较（已选 ${selectedIds.length}/${COMPARE_SELECTION_LIMIT}）`}
+
+        <main className="workbench__viewport" aria-label="查看区">
+          {centerView}
+        </main>
+
+        {rightOpen ? (
+          <aside className="workbench__right" aria-label="信息面板">
+            {activeAsset === undefined ? (
+              <p className="workbench__right-empty">
+                在左栏选择素材：DICOM 显示元数据分组，其余素材显示评审面板；顶栏按钮可折叠本面板。
               </p>
             ) : null}
-            {filteredAssets.length > 0 ? (
-              <AssetGrid
-                assets={filteredAssets}
-                selectedIds={selectedIds}
-                onToggleSelect={handleToggleSelect}
-                onSetStatus={handleSetStatus}
-                onOpenDicom={handleOpenDicom}
-                onOpenModel={handleOpenModel}
-                onOpenReview={handleOpenReview}
+            {activeAsset !== undefined && activeAsset.kind === 'dicom' ? (
+              <div className="workbench__right-tabs">
+                <button
+                  type="button"
+                  className={rightTab === 'meta' ? 'workbench__tab is-active' : 'workbench__tab'}
+                  aria-pressed={rightTab === 'meta'}
+                  onClick={() => setRightTab('meta')}
+                >
+                  元数据
+                </button>
+                <button
+                  type="button"
+                  className={rightTab === 'review' ? 'workbench__tab is-active' : 'workbench__tab'}
+                  aria-pressed={rightTab === 'review'}
+                  onClick={() => setRightTab('review')}
+                >
+                  评审
+                </button>
+              </div>
+            ) : null}
+            {showMetaPanel && activeAsset !== undefined ? <MetadataPanel asset={activeAsset} /> : null}
+            {(showReviewPanel || showDicomReview) && activeAsset !== undefined ? (
+              <ReviewPanel
+                asset={activeAsset}
+                history={state.reviews[activeAsset.id]}
+                tagNames={tagNames}
+                onAddTag={(tagName) => handleAddTag(activeAsset.id, tagName)}
+                onRemoveTag={(tagName) => handleRemoveTag(activeAsset.id, tagName)}
+                onSubmitReview={(status, comment) =>
+                  handleSubmitReview(activeAsset.id, status, comment)
+                }
+                onSaveNote={(note) => handleSaveNote(activeAsset.id, note)}
+                onAcceptAiName={(name) => handleRenameAsset(activeAsset.id, name)}
+                onClose={closeActiveAsset}
               />
-            ) : (
-              <p className="library__empty">没有符合当前筛选条件的素材：可调整上方筛选条件</p>
-            )}
-          </>
-        )}
-      </section>
-      {showCompare ? (
-        <CompareView left={compareAssets[0]} right={compareAssets[1]} onExit={closeCompare} />
-      ) : null}
-      {dicomViewerAsset !== undefined && dicomViewerAsset.kind === 'dicom' ? (
-        <DicomViewer
-          asset={dicomViewerAsset}
-          dicomAssets={dicomAssets}
-          onMetasParsed={handleDicomMetasParsed}
-          onClose={handleCloseDicom}
-        />
-      ) : null}
-      {modelViewerAsset !== undefined && modelViewerAsset.kind === 'model' ? (
-        <Suspense
-          fallback={
-            <div className="model3d-lazy-loading" role="status">
-              正在加载 3D 模型查看器…
-            </div>
-          }
-        >
-          <Model3DViewer asset={modelViewerAsset} onClose={handleCloseModel} />
-        </Suspense>
-      ) : null}
-      {reviewAsset !== undefined ? (
-        <ReviewPanel
-          asset={reviewAsset}
-          history={state.reviews[reviewAsset.id]}
-          tagNames={tagNames}
-          onAddTag={(tagName) => handleAddTag(reviewAsset.id, tagName)}
-          onRemoveTag={(tagName) => handleRemoveTag(reviewAsset.id, tagName)}
-          onSubmitReview={(status, comment) => handleSubmitReview(reviewAsset.id, status, comment)}
-          onSaveNote={(note) => handleSaveNote(reviewAsset.id, note)}
-          onAcceptAiName={(name) => handleRenameAsset(reviewAsset.id, name)}
-          onClose={handleCloseReview}
-        />
-      ) : null}
-    </main>
+            ) : null}
+          </aside>
+        ) : null}
+      </div>
+    </div>
   )
 }
 

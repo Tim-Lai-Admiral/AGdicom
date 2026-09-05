@@ -19,9 +19,10 @@
 
 body {
   margin: 0;
-  font-family: var(--font-family);
-  background: var(--color-bg);
-  color: var(--color-text);
+  font-family: var(--font-sans-data, var(--font-family));
+  background: var(--bg, var(--color-bg));
+  color: var(--text-primary, var(--color-text));
+  color-scheme: dark;
 }
 
 .app {
@@ -460,16 +461,16 @@ button.asset-card__main:hover .asset-card__name {
   color: var(--color-text-muted);
 }
 
-/* --- 图片比较视图（应用内弹层，非路由） --- */
+/* --- 图片比较视图（CR-003 T-002：嵌入中央查看区，position 锚定最近定位祖先） --- */
 .compare-overlay {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 50;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: rgba(15, 23, 32, 0.62);
+  background: rgba(3, 5, 9, 0.72);
 }
 
 .compare {
@@ -477,12 +478,12 @@ button.asset-card__main:hover .asset-card__name {
   flex-direction: column;
   gap: 0.75rem;
   width: min(68rem, 100%);
-  max-height: calc(100vh - 2rem);
+  max-height: 100%;
   overflow: auto;
   padding: 1rem;
   border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: 0 12px 40px rgba(15, 23, 32, 0.25);
+  background: var(--panel, var(--color-surface));
+  border: 1px solid var(--border-strong, var(--color-border));
 }
 
 .compare__header {
@@ -576,16 +577,16 @@ button.asset-card__main:hover .asset-card__name {
   }
 }
 
-/* --- DICOM 查看器（CR-001 T-005 / R-003）：元数据表格 + 切片预览 --- */
+/* --- DICOM 查看器（CR-001 T-005 / R-003）：CR-003 T-002 起嵌入中央查看区 --- */
 .dicom-viewer-overlay {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 50;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: rgba(15, 23, 32, 0.62);
+  background: rgba(3, 5, 9, 0.72);
 }
 
 .dicom-viewer {
@@ -593,12 +594,12 @@ button.asset-card__main:hover .asset-card__name {
   flex-direction: column;
   gap: 0.75rem;
   width: min(72rem, 100%);
-  max-height: calc(100vh - 2rem);
+  max-height: 100%;
   overflow: auto;
   padding: 1rem;
   border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: 0 12px 40px rgba(15, 23, 32, 0.25);
+  background: var(--panel, var(--color-surface));
+  border: 1px solid var(--border-strong, var(--color-border));
 }
 
 .dicom-viewer__header {
@@ -873,16 +874,16 @@ button.asset-card__main:hover .asset-card__name {
   font-size: 0.875rem;
 }
 
-/* --- 3D 模型查看器（CR-001 T-006 / R-004）：three.js 网格预览 --- */
+/* --- 3D 模型查看器（CR-001 T-006 / R-004）：CR-003 T-002 起嵌入中央查看区 --- */
 .model3d-overlay {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 50;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: rgba(15, 23, 32, 0.62);
+  background: rgba(3, 5, 9, 0.72);
 }
 
 .model3d-viewer {
@@ -890,11 +891,11 @@ button.asset-card__main:hover .asset-card__name {
   flex-direction: column;
   gap: 0.75rem;
   width: min(72rem, 100%);
-  max-height: calc(100vh - 2rem);
+  max-height: 100%;
   padding: 1rem;
   border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: 0 12px 40px rgba(15, 23, 32, 0.25);
+  background: var(--panel, var(--color-surface));
+  border: 1px solid var(--border-strong, var(--color-border));
 }
 
 .model3d-viewer__header {
@@ -1043,19 +1044,15 @@ button.asset-card__main:hover .asset-card__name {
   }
 }
 
-/* --- 评审面板（CR-001 T-007 / R-005）：右侧抽屉（与查看器并存，查看器 z-index 更高） --- */
+/* --- 评审面板（CR-001 T-007 / R-005）：CR-003 T-002 起嵌入右栏信息面板 --- */
 .review-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 40;
-  width: min(24rem, 100vw);
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--color-surface);
-  border-left: 1px solid var(--color-border);
-  box-shadow: -8px 0 24px rgba(15, 23, 32, 0.18);
+  background: var(--panel, var(--color-surface));
 }
 
 .review-panel__header {
@@ -1596,9 +1593,565 @@ button.asset-card__main:hover .asset-card__name {
 }
 
 @media (max-width: 40rem) {
-  /* 窄屏：评审面板折叠为全宽抽屉（仍可通过“收起/展开”折叠内容） */
+  /* 窄屏：评审面板占满右栏宽度（右栏本身可经顶栏开关折叠） */
   .review-panel {
-    width: 100vw;
+    width: 100%;
     border-left: none;
   }
+}
+
+/* ================================================================== */
+/* 工作台布局（CR-003 T-002 / UI-001）：顶栏 + 左栏 + 中央查看区 + 右栏 */
+/* ================================================================== */
+
+.workbench {
+  /* 旧组件浅色令牌在工作台作用域内映射到深色令牌（T-004 组件替换前的过渡处理，
+     preflight 启用 + 深色主题下的视觉回归修复） */
+  --color-bg: #0d1119;
+  --color-surface: var(--surface, #10141e);
+  --color-border: var(--border-strong, rgba(255, 255, 255, 0.13));
+  --color-text: var(--text-primary, #e2e6f0);
+  --color-text-muted: var(--text-secondary, #8a94a8);
+  --color-primary: var(--accent, #00c4d8);
+  --color-primary-strong: #3bd7e8;
+  --color-primary-soft: var(--accent-dim, rgba(0, 196, 216, 0.15));
+  --color-success: var(--success, #3dd68c);
+  --color-warning: var(--warn, #f5a623);
+  --color-danger: var(--danger, #ff5252);
+
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg, #060810);
+  color: var(--text-primary, #e2e6f0);
+}
+
+/* --- 顶栏 --- */
+.workbench__toolbar {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.75rem;
+  background: var(--panel, #0b0e16);
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+}
+
+.workbench__title {
+  margin: 0 0.5rem 0 0;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--accent, #00c4d8);
+}
+
+.workbench__tool {
+  flex: 0 0 auto;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary, #8a94a8);
+  padding: 0.32rem 0.7rem;
+  font-size: 0.8125rem;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.workbench__tool:hover:not(:disabled) {
+  color: var(--text-primary, #e2e6f0);
+  border-color: var(--border-strong, rgba(255, 255, 255, 0.13));
+  background: var(--surface, #10141e);
+}
+
+.workbench__tool:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.workbench__tool.is-active {
+  color: var(--accent, #00c4d8);
+  border-color: var(--accent, #00c4d8);
+  background: var(--accent-dim, rgba(0, 196, 216, 0.15));
+}
+
+/* 顶栏内的筛选控件组：占据弹性宽度，窄屏换行后自适应 */
+.workbench__toolbar .filters {
+  flex: 1 1 20rem;
+  min-width: 0;
+  padding: 0.25rem 0.5rem;
+  background: transparent;
+  border-color: var(--border, rgba(255, 255, 255, 0.07));
+}
+
+.workbench__spacer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 导出 / 导入弹出面板（顶栏下方右对齐） */
+.workbench__export-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0.5rem;
+  z-index: 60;
+  width: min(24rem, calc(100vw - 1rem));
+  background: var(--panel, #0b0e16);
+  border: 1px solid var(--border-strong, rgba(255, 255, 255, 0.13));
+  border-radius: 8px;
+  padding: 0.25rem;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+.workbench__export-pop .export-import {
+  border: none;
+  background: transparent;
+}
+
+/* --- 警告条（存储异常 / 保存失败 / 样本加载失败） --- */
+.workbench__warnings {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.375rem 0.75rem;
+  background: var(--panel, #0b0e16);
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+}
+
+.workbench .app__storage-warning,
+.workbench .app__save-warning,
+.workbench .library__samples-error {
+  border: 1px solid transparent;
+}
+
+.workbench .app__storage-warning {
+  background: rgba(245, 166, 35, 0.12);
+  color: var(--warn, #f5a623);
+  border-color: rgba(245, 166, 35, 0.35);
+}
+
+.workbench .app__save-warning,
+.workbench .library__samples-error {
+  background: rgba(255, 82, 82, 0.12);
+  color: var(--danger, #ff5252);
+  border-color: rgba(255, 82, 82, 0.35);
+}
+
+/* --- 主体三栏 --- */
+.workbench__body {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+/* 左栏：素材列表 */
+.workbench__left {
+  flex: 0 0 auto;
+  width: 17.5rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--panel, #0b0e16);
+  border-right: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+}
+
+.workbench__left-head {
+  flex: 0 0 auto;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+}
+
+.workbench__library-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.workbench__left-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0.625rem 0.875rem;
+}
+
+.workbench__left .asset-grid {
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+
+/* 中央查看区：统一容器（比较 / DICOM / 3D / 图片 / 导入） */
+.workbench__viewport {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #030507;
+}
+
+.workbench__viewport-empty {
+  flex: 1 1 auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 1.25rem;
+  overflow-y: auto;
+}
+
+.workbench__viewport-empty .import-zone {
+  width: min(30rem, 100%);
+}
+
+.model3d-lazy-loading {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary, #8a94a8);
+  font-size: 0.875rem;
+}
+
+/* 右栏：信息面板（元数据分组 / 评审） */
+.workbench__right {
+  flex: 0 0 auto;
+  width: 20rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--panel, #0b0e16);
+  border-left: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+}
+
+.workbench__right-empty {
+  margin: 0;
+  padding: 0.875rem;
+  color: var(--text-muted, #434c60);
+  font-size: 0.8125rem;
+}
+
+.workbench__right-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.375rem 0.625rem;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+}
+
+.workbench__tab {
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary, #8a94a8);
+  padding: 0.22rem 0.7rem;
+  font-size: 0.8125rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.workbench__tab.is-active {
+  color: var(--accent, #00c4d8);
+  border-color: var(--accent, #00c4d8);
+  background: var(--accent-dim, rgba(0, 196, 216, 0.15));
+}
+
+/* 窄屏：侧栏收窄；折叠（顶栏开关）后宽度归零不溢出 */
+@media (max-width: 64rem) {
+  .workbench__left {
+    width: 14rem;
+  }
+
+  .workbench__right {
+    width: 17rem;
+  }
+}
+
+/* --- 中央图片预览 --- */
+.image-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.image-stage__canvas {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.image-stage__img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.image-stage__placeholder {
+  margin: 0 1rem;
+  color: var(--text-secondary, #8a94a8);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.image-stage__name {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+  color: var(--text-secondary, #8a94a8);
+  font-size: 0.8125rem;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* --- 右栏 DICOM 元数据分组面板 --- */
+.meta-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.meta-panel__title {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent, #00c4d8);
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+}
+
+.meta-panel__empty {
+  margin: 0;
+  padding: 0.75rem;
+  color: var(--text-secondary, #8a94a8);
+  font-size: 0.8125rem;
+}
+
+.meta-panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.meta-panel__section-header {
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  border: none;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+  background: transparent;
+}
+
+.meta-panel__chevron {
+  color: var(--text-muted, #434c60);
+}
+
+.meta-panel__rows {
+  padding: 2px 0.75rem 6px;
+}
+
+.meta-value.is-plain {
+  font-family: var(--font-sans-data, system-ui, sans-serif);
+}
+
+.meta-panel__evidence {
+  margin: 0.25rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--text-secondary, #8a94a8);
+  font-size: 0.75rem;
+}
+
+.meta-panel__evidence li {
+  margin: 0.15rem 0;
+  overflow-wrap: anywhere;
+}
+
+/* --- 左栏 DICOM series / 切片展开区 --- */
+.dicom-expand {
+  width: 100%;
+  border-top: 1px dashed var(--border-strong, rgba(255, 255, 255, 0.13));
+  padding-top: 0.375rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.dicom-expand__toggle {
+  align-self: flex-start;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary, #8a94a8);
+  padding: 0.15rem 0.55rem;
+  font-size: 0.75rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.dicom-expand__toggle:hover {
+  color: var(--accent, #00c4d8);
+  border-color: var(--accent, #00c4d8);
+}
+
+.dicom-expand__series-head {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  min-width: 0;
+  font-size: 0.6875rem;
+}
+
+.dicom-expand__series-title {
+  flex: 0 0 auto;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted, #434c60);
+}
+
+.dicom-expand__series-uid {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono-data, monospace);
+  color: var(--text-muted, #434c60);
+}
+
+.dicom-expand__series-count {
+  flex: 0 0 auto;
+  color: var(--text-secondary, #8a94a8);
+}
+
+.dicom-expand__thumbs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.dicom-expand__thumb {
+  position: relative;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+  border-radius: 2px;
+  background: #050808;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+
+.dicom-expand__thumb:hover {
+  border-color: var(--border-strong, rgba(255, 255, 255, 0.13));
+}
+
+.dicom-expand__thumb.is-active {
+  border-color: var(--accent, #00c4d8);
+}
+
+.dicom-expand__thumb svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.dicom-expand__thumb-index {
+  position: absolute;
+  bottom: 1px;
+  right: 3px;
+  font-size: 8px;
+  line-height: 1.2;
+  font-family: var(--font-mono-data, monospace);
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.dicom-expand__thumb.is-active .dicom-expand__thumb-index {
+  color: var(--accent, #00c4d8);
+}
+
+.dicom-expand__empty {
+  margin: 0;
+  color: var(--text-muted, #434c60);
+  font-size: 0.75rem;
+}
+
+/* --- 工作台内旧组件的可读性修正（深色底上的对比度） --- */
+.workbench .import-zone__button,
+.workbench .export-import__export,
+.workbench .export-import__import,
+.workbench .library__compare,
+.workbench .review-panel__save {
+  color: #06242a;
+  font-weight: 600;
+}
+
+.workbench .export-import__confirm {
+  background: rgba(245, 166, 35, 0.1);
+  border-color: rgba(245, 166, 35, 0.35);
+}
+
+.workbench .export-import__confirm-title {
+  color: var(--warn, #f5a623);
+}
+
+.workbench .review-panel__feedback {
+  background: rgba(61, 214, 140, 0.12);
+  color: var(--success, #3dd68c);
+}
+
+.workbench .review-panel__tag-remove:hover {
+  background: rgba(255, 82, 82, 0.14);
+}
+
+.workbench .dicom-viewer__meta-missing,
+.workbench .model3d-viewer__notice {
+  background: rgba(245, 166, 35, 0.12);
+  color: var(--warn, #f5a623);
+}
+
+.workbench .dicom-viewer__partial-hint {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary, #8a94a8);
+}
+
+.workbench .status-badge--pending {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary, #8a94a8);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.workbench .status-badge--passed {
+  background: rgba(61, 214, 140, 0.14);
+  color: var(--success, #3dd68c);
+  border-color: rgba(61, 214, 140, 0.35);
+}
+
+.workbench .status-badge--rejected {
+  background: rgba(255, 82, 82, 0.14);
+  color: var(--danger, #ff5252);
+  border-color: rgba(255, 82, 82, 0.35);
+}
+
+.workbench .review-panel__fieldset {
+  border-color: var(--border, rgba(255, 255, 255, 0.07));
+}
+
+.workbench .review-history__item {
+  background: rgba(255, 255, 255, 0.04);
 }
