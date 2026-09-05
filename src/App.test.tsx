@@ -283,9 +283,10 @@ describe('App', () => {
       })
       expect(screen.getByText('aorta.stl')).toBeTruthy()
 
-      // 点击 model 卡片打开 3D 查看器；jsdom 无 WebGL → 降级提示而非崩溃
+      // 点击 model 卡片打开 3D 查看器（React.lazy 按需加载 chunk，需等待挂载）；
+      // jsdom 无 WebGL → 降级提示而非崩溃
       fireEvent.click(screen.getByRole('button', { name: '查看“aorta.stl”的 3D 模型' }))
-      const dialog = screen.getByRole('dialog', { name: '3D 模型预览' })
+      const dialog = await screen.findByRole('dialog', { name: '3D 模型预览' })
       await waitFor(() => {
         expect(within(dialog).getByText(/不支持 WebGL/)).toBeTruthy()
       })

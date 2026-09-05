@@ -2,10 +2,27 @@
 
 纯前端素材评审工作台（Vite + React + TypeScript）：支持图片 / DICOM / 3D 模型素材的导入、查看、评审与 AI 建议占位。
 
+## 项目定位
+
+面向素材整理与评审场景的**本地单机工作台**：导入素材 → 浏览筛选 → 查看（图片并排比较 / DICOM 元数据与切片 / 3D 模型）→ 打标与状态评审 → 导出 JSON 备份。全部数据保存在浏览器本地（localStorage），**无后端、无账号、不上传任何素材**；可用内置样本离线走通全流程。
+
+## 功能一览
+
+- **导入**：拖拽或选择文件；支持图片（png/jpg/jpeg/gif/webp/bmp）、DICOM（dcm）、3D 模型（stl/obj/glb/gltf）；按文件名 + 大小 + 类型去重；未知类型明确提示；大文件导入有进度提示。
+- **素材库**：卡片网格（名称 / 类型 / 大小 / 状态）；类型筛选 + 关键字搜索组合；标签（内置 + 自建）。
+- **图片比较**：勾选两张图片并排比较（R-002，上限两张，先选在左）。
+- **DICOM 查看器**：元数据表格（模态 / SOP Class / 传输语法 / 行列 / 像素间距 / 患者字段等中文标签）；按 SeriesInstanceUID 聚合并按 InstanceNumber 排序的多切片切换；Canvas 灰度预览（min-max 归一化）；去标识化证据展示；压缩语法 / 损坏文件 / 刷新后等多种降级路径不崩溃；弹层焦点圈定与关闭后焦点还原。
+- **3D 模型查看器**：STL 解析（分块读取 + 进度）；three.js 渲染（相机自动 fit 包围盒）；OrbitControls 默认映射（左键旋转 / 滚轮缩放 / 右键平移）；WebGL 不可用与损坏文件降级；查看器代码按需加载（React.lazy，TD-002）。
+- **评审**：状态流转（待评审 → 通过 / 驳回）+ 评审历史留痕 + 备注；标签标注；全部持久化（刷新后保留）。
+- **导出 / 导入备份**：JSON 全量备份导出下载；导入前深度校验与冲突确认，损坏 / 不兼容备份拒绝并提示。
+- **AI 建议（占位）**：本地 mock 生成命名建议等，仅用户点击"采纳"才生效，绝不自动修改。
+- **内置样本**：一键加载 4 个 STL 心脏模型；合成 DICOM 样本见下方素材章节。
+
 ## 环境要求
 
 - Node.js LTS（>= 20）
 - npm（随 Node.js 附带）
+- （可选）Python 3 + pydicom：仅重新生成合成 DICOM 样本时需要
 
 ## 安装与启动
 
@@ -17,14 +34,22 @@ npm run preview # 本地预览构建产物
 npm test        # 运行单元测试 (vitest)
 ```
 
-> 说明：以上为脚手架阶段占位命令，详细使用说明将在功能任务完成后补充。
+- 纯前端离线可用：构建 / 预览不依赖任何外部网络资源。
+- 全量验证（测试 + 构建）一键执行：
+
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
+  ```
+
+- 端到端验收清单见根目录 [E2E-CHECKLIST.md](./E2E-CHECKLIST.md)。
 
 ## 技术栈
 
-- Vite + React 19 + TypeScript（strict 模式）
-- three.js（3D 模型查看，后续任务接入）
-- dicom-parser（DICOM 元数据解析，后续任务接入）
-- vitest + jsdom + @testing-library/react（单元测试）
+- Vite 8 + React 19 + TypeScript 6（strict 模式）
+- three.js（3D 模型查看；经 React.lazy + dynamic import 拆分为独立 chunk，按需加载）
+- dicom-parser（DICOM 元数据解析）
+- vitest 5（jsdom）+ @testing-library/react（单元 / 集成测试）
+- 持久化：localStorage（素材记录 / 标签 / 评审历史；文件字节不落库）
 
 ## 素材样本（public/samples/）
 
@@ -58,3 +83,20 @@ npm test        # 运行单元测试 (vitest)
 - 遵守各数据集附带的许可条款（多数为 TCIA License / CC BY 类）；
 - TCIA 数据已做去标识化处理，但使用时仍不应尝试再识别个人；
 - 本工作台为纯前端本地评审工具，导入的素材仅存在于浏览器本地（localStorage），不会上传；真实样本同样只应用于评审流程演示，不得用于临床用途。
+
+## 已知问题
+
+如实记录当前实现的限制（截至 CR-002 T-010）：
+
+1. **文件字节不持久化**（objectUrl 为会话级，TD-001 未实现 IndexedDB）：刷新后需重新导入才能预览图片 / 模型 / DICOM 像素；DICOM 元数据已持久化，刷新后仍可查看表格（预览提示需重新导入）。
+2. **DICOM 压缩传输语法不解码像素**：JPEG / JPEG 2000 / RLE Lossless / Explicit VR Big Endian 等仅展示元数据并提示"仅元数据"；无压缩（Explicit / Implicit VR Little Endian）可正常预览。
+3. **3D 预览仅支持 STL**：obj / glb / gltf 可导入并归为 3D 模型类素材，但查看器解析会失败并显示可读错误（重试无济于事，属预期降级）。
+4. **localStorage 容量有限**（通常约 5MB）：素材记录 / 评审历史过多时保存可能失败，界面会提示"刷新后可能无法保留"；文件字节不落库以缓解但不消除该限制。
+5. **AI 建议为 mock 占位**：本地规则生成，无真实模型调用；仅命名建议可用。
+6. **焦点圈定仅 DICOM 查看器实现**：其余弹层（3D 查看器 / 图片比较 / 评审面板）为"打开时聚焦 + Esc 关闭"，尚无 Tab 循环圈定。
+7. **WebGL 交互未自动化**：3D 查看器的旋转 / 缩放 / 平移交互依赖真机 WebGL，自动化测试仅覆盖降级路径（见 E2E-CHECKLIST.md 中的人工项）。
+
+## 项目文档
+
+- 协作协议与架构决策：`.ai/`（CURRENT 为项目文档事实源）
+- 需求 / 变更记录：`.ai/CHANGES/`（CR-001 / CR-002）

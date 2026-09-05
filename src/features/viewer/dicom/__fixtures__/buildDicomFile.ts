@@ -221,6 +221,7 @@ export function buildDicomFile(options: DicomFixtureOptions = {}): ArrayBuffer {
   if (instanceNumber !== null) dataset.push(el('00200013', 'IS', dicomString(instanceNumber)))
   dataset.push(el('00280002', 'US', u16(samplesPerPixel)))
   dataset.push(el('00280004', 'CS', dicomString(photometricInterpretation)))
+  if (numberOfFrames !== null) dataset.push(el('00280008', 'IS', dicomString(numberOfFrames)))
   dataset.push(el('00280010', 'US', u16(rows)))
   dataset.push(el('00280011', 'US', u16(columns)))
   if (pixelSpacing !== null) dataset.push(el('00280030', 'DS', dicomString(pixelSpacing)))
@@ -228,7 +229,6 @@ export function buildDicomFile(options: DicomFixtureOptions = {}): ArrayBuffer {
   dataset.push(el('00280101', 'US', u16(bitsAllocated)))
   dataset.push(el('00280102', 'US', u16(bitsAllocated - 1)))
   dataset.push(el('00280103', 'US', u16(pixelRepresentation)))
-  if (numberOfFrames !== null) dataset.push(el('00280008', 'IS', dicomString(numberOfFrames)))
   dataset.push(el('00281052', 'DS', dicomString(rescaleIntercept)))
   dataset.push(el('00281053', 'DS', dicomString(rescaleSlope)))
 
