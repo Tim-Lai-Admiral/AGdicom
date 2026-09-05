@@ -89,4 +89,4 @@ branch: feature/CR-003-T-004-integration
   （WebGL 交互、W/L 滑杆手感、导出下载）需 Reviewer 按 E2E-CHECKLIST 人工确认。
 - DICOM 查看器 + 右栏评审页签并存时，一次 Esc 会同时关闭两者（T-002 既有行为，
   两 handler 均注册 window keydown；未在本任务改动，如需分层退出记 TODO）。
-- PR：<见下方链接>
+- Commit：d407e84　PR：https://github.com/Tim-Lai-Admiral/AGdicom/pull/16
