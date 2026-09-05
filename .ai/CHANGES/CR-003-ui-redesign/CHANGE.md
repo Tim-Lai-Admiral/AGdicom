@@ -6,7 +6,7 @@
 id: CR-003
 title: "UI 重构：Figma Make 工作台布局对接、窗宽窗位调节、测量 Mock 模式"
 change_level: L4
-status: approved
+status: completed
 parent: null
 created_by: Planner
 created_at: 2026-09-05
@@ -55,11 +55,11 @@ Human 反馈现有 UI 的布局与信息架构、交互流程不合理。素材 
 
 ## Tasks
 
-- [ ] T-001: 设计系统接入（Tailwind v4 + 深色令牌 + 字体本地化）
-- [ ] T-002: 工作台布局重构（顶栏/左栏/中央/右栏）
-- [ ] T-003: DICOM 增强（W/L 调节 + 测量 Mock）
-- [ ] T-004: 功能集成迁移与回归（评审/AI/比较/导出）
-- [ ] T-005: 走查与文档收尾（对照 rec/ 参考 + DESIGN/CURRENT/README 更新）
+- [x] T-001: 设计系统接入（Tailwind v4 + 深色令牌 + 字体本地化）
+- [x] T-002: 工作台布局重构（顶栏/左栏/中央/右栏）
+- [x] T-003: DICOM 增强（W/L 调节 + 测量 Mock）
+- [x] T-004: 功能集成迁移与回归（评审/AI/比较/导出）
+- [x] T-005: 走查与文档收尾（对照 rec/ 参考 + DESIGN/CURRENT/README 更新）
 
 ## Dependencies
 

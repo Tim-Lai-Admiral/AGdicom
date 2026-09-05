@@ -33,7 +33,10 @@
 - 3D 查看器：three.js STLLoader + OrbitControls（旋转/缩放/平移）、加载进度/错误重试/WebGL 降级、内置样本加载（4 个心脏 STL，lazy 加载按需拆包）
 - 评审面板：状态/评审意见（追加式历史）、标签（自建+复用）、备注；JSON 导出/导入（schema v1，非法拒绝）
 - Mock AI：AIProvider 接口 + 确定性规则建议 + AI_USAGE.md
+- 窗宽窗位：DICOM 切片预览 W/L 滑杆 + 6 预设（默认自动 min-max）
+- 测量工具（Mock）：拖拽绘制 + PixelSpacing 确定性距离，明示非临床
 - 内置样本：4 个心脏 STL（DEMO SET）+ pydicom 合成 DICOM 3 series×6 切片（去标识化）
+- UI：全屏工作台布局（顶栏/左栏/中央/右栏）+ 深色主题（Tailwind v4 + 本地字体）
 - 协作与工程：CI（test/lint/build）、oxlint、Git 15 条规则、PR 工作流
 
 ## Last updated
