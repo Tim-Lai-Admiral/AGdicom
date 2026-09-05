@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import type { Asset, AssetStatus, AppState, DicomMeta } from './domain/types.ts'
 import { collectTagNames, DEFAULT_ASSET_FILTER, filterAssets } from './domain/filter.ts'
 import type { AssetFilter } from './domain/filter.ts'
-import { addAssetTag, applyReview, removeAssetTag, setAssetStatus, updateAssetName, updateAssetNote } from './domain/review.ts'
+import { addAssetTag, applyReview, removeAssetTag, updateAssetName, updateAssetNote } from './domain/review.ts'
 import { loadState, saveState } from './store/repository.ts'
 import type { LoadIssue } from './store/repository.ts'
 import ImportZone from './features/library/ImportZone.tsx'
@@ -105,13 +105,6 @@ function App() {
   /** 关闭中央查看区：回到导入视图（查看器“关闭”/Esc 与评审面板“关闭”/Esc 共用） */
   const closeActiveAsset = (): void => {
     setActiveAssetId(null)
-  }
-
-  /** 设置状态：领域纯函数计算 + 立即持久化（R-002：刷新后仍保留） */
-  const handleSetStatus = (assetId: string, status: AssetStatus): void => {
-    const next = setAssetStatus(state, assetId, status)
-    if (next === state) return
-    commit(next, '状态已在本会话更新，但保存失败')
   }
 
   /** 评审面板：添加标签（含自建，注册表合并由 addAssetTag 完成）并持久化 */
@@ -353,7 +346,7 @@ function App() {
               <div className="workbench__left-body">
                 {hasImages ? (
                   <p className="library__select-hint">
-                    {`点击图片卡片可选择两张图片进行并排比较（已选 ${selectedIds.length}/${COMPARE_SELECTION_LIMIT}）`}
+                    {`点击图片行可选择两张图片进行并排比较（已选 ${selectedIds.length}/${COMPARE_SELECTION_LIMIT}）`}
                   </p>
                 ) : null}
                 {filteredAssets.length > 0 ? (
@@ -361,10 +354,8 @@ function App() {
                     assets={filteredAssets}
                     selectedIds={selectedIds}
                     onToggleSelect={handleToggleSelect}
-                    onSetStatus={handleSetStatus}
                     onOpenDicom={selectAsset}
                     onOpenModel={selectAsset}
-                    onOpenReview={selectAsset}
                     renderExtras={renderCardExtras}
                   />
                 ) : (

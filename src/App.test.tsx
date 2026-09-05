@@ -54,7 +54,7 @@ describe('App', () => {
     })
     expect(screen.getByText('素材库（3）')).toBeTruthy()
     expect(screen.getByText('heart.png')).toBeTruthy()
-    expect(screen.getByText('图片', { selector: '.asset-card__kind' })).toBeTruthy()
+    expect(screen.getByText('图片', { selector: '.asset-row__kind' })).toBeTruthy()
     expect(Object.keys(loadState().state.assets)).toHaveLength(3)
 
     // 重复导入同一文件：提示已存在，不重复注册
@@ -108,19 +108,27 @@ describe('App', () => {
     expect(screen.getByText('aorta.stl')).toBeTruthy()
   })
 
-  it('updates the status via the badge and persists it (refresh-safe)', async () => {
+  it('updates the status via the review panel (select → right column) and persists it (refresh-safe)', async () => {
     const { container } = render(<App />)
     dropFiles(container, [makeFile('heart.png', 64, 'image/png')])
     await waitFor(() => {
       expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
     })
 
-    // 徽标展示当前状态（颜色 + 文字双通道）
-    expect(screen.getByText('待评审', { selector: '.status-badge' })).toBeTruthy()
+    // 左栏行内状态点仅展示当前状态（圆点 + 文字双通道，无状态按钮）
+    expect(screen.getByText('待评审', { selector: '.status-dot' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /当前状态：待评审/ })).toBeNull()
 
-    // 点击徽标：待评审 → 通过
-    fireEvent.click(screen.getByRole('button', { name: /当前状态：待评审/ }))
-    expect(screen.getByText('通过', { selector: '.status-badge' })).toBeTruthy()
+    // 状态修改入口：选中素材 → 右栏评审面板（CR-004 T-001）
+    fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
+    const right = screen.getByRole('complementary', { name: '信息面板' })
+    fireEvent.click(within(right).getByRole('radio', { name: '通过' }))
+    fireEvent.click(within(right).getByRole('button', { name: '保存评审' }))
+    expect(within(right).getByText('评审已保存：通过（已计入评审历史）')).toBeTruthy()
+
+    // 左栏行状态点同步为通过（右栏素材信息区还有一份展示）
+    const left = screen.getByRole('complementary', { name: '素材列表' })
+    expect(within(left).getByText('通过', { selector: '.status-dot' })).toBeTruthy()
 
     // 状态刷新后保留（localStorage 持久化 + 评审历史留痕）
     const stored = loadState()

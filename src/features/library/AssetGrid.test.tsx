@@ -21,16 +21,10 @@ function makeAsset(overrides: Partial<Asset> = {}): Asset {
 
 function setup(assets: Asset[], selectedIds: readonly string[] = []) {
   const onToggleSelect = vi.fn()
-  const onSetStatus = vi.fn()
   const utils = render(
-    <AssetGrid
-      assets={assets}
-      selectedIds={selectedIds}
-      onToggleSelect={onToggleSelect}
-      onSetStatus={onSetStatus}
-    />,
+    <AssetGrid assets={assets} selectedIds={selectedIds} onToggleSelect={onToggleSelect} />,
   )
-  return { ...utils, onToggleSelect, onSetStatus }
+  return { ...utils, onToggleSelect }
 }
 
 describe('AssetGrid', () => {
@@ -38,7 +32,7 @@ describe('AssetGrid', () => {
     cleanup() // vitest 未启用 globals，RTL 自动清理不生效，需手动卸载
   })
 
-  it('renders one card per asset with name, kind label and status badge', () => {
+  it('renders one row per asset with name, kind label and status dot', () => {
     setup([
       makeAsset({ id: 'a1', name: 'heart.png' }),
       makeAsset({ id: 'a2', name: 'scan.dcm', kind: 'dicom' }),
@@ -47,11 +41,11 @@ describe('AssetGrid', () => {
     expect(screen.getByText('heart.png')).toBeTruthy()
     expect(screen.getByText('scan.dcm')).toBeTruthy()
     expect(screen.getByText('aorta.stl')).toBeTruthy()
-    expect(screen.getByText('图片', { selector: '.asset-card__kind' })).toBeTruthy()
-    expect(screen.getByText('DICOM', { selector: '.asset-card__kind' })).toBeTruthy()
-    expect(screen.getByText('3D 模型', { selector: '.asset-card__kind' })).toBeTruthy()
-    expect(screen.getAllByText('待评审')).toHaveLength(2)
-    expect(screen.getByText('通过', { selector: '.status-badge' })).toBeTruthy()
+    expect(screen.getByText('图片', { selector: '.asset-row__kind' })).toBeTruthy()
+    expect(screen.getByText('DICOM', { selector: '.asset-row__kind' })).toBeTruthy()
+    expect(screen.getByText('3D 模型', { selector: '.asset-row__kind' })).toBeTruthy()
+    expect(screen.getAllByText('待评审', { selector: '.status-dot' })).toHaveLength(2)
+    expect(screen.getByText('通过', { selector: '.status-dot' })).toBeTruthy()
   })
 
   it('renders the image thumbnail from the session objectUrl', () => {
@@ -66,56 +60,54 @@ describe('AssetGrid', () => {
     expect(screen.queryByRole('img')).toBeNull()
   })
 
-  it('shows a placeholder on image load error without breaking other cards', () => {
+  it('shows a placeholder on image load error without breaking other rows', () => {
     const { container } = setup([
       makeAsset({ id: 'a1', objectUrl: 'blob:broken' }),
       makeAsset({ id: 'a2', name: 'scan.dcm', kind: 'dicom' }),
     ])
     fireEvent.error(screen.getByRole('img'))
     expect(screen.getByText('图片加载失败')).toBeTruthy()
-    expect(screen.getByText('scan.dcm')).toBeTruthy() // 其余卡片不受影响
-    expect(container.querySelectorAll('.asset-card')).toHaveLength(2)
+    expect(screen.getByText('scan.dcm')).toBeTruthy() // 其余行不受影响
+    expect(container.querySelectorAll('.asset-row')).toHaveLength(2)
   })
 
-  it('shows the type glyph placeholder for dicom and model cards', () => {
+  it('shows the type glyph placeholder for dicom and model rows', () => {
     const { container } = setup([
       makeAsset({ id: 'a1', name: 'scan.dcm', kind: 'dicom' }),
       makeAsset({ id: 'a2', name: 'aorta.stl', kind: 'model' }),
     ])
     expect(screen.queryByRole('img')).toBeNull()
-    expect(container.querySelectorAll('.asset-card__glyph')).toHaveLength(2)
+    expect(container.querySelectorAll('.asset-row__glyph')).toHaveLength(2)
   })
 
-  it('toggles compare selection on image card click and marks selected cards', () => {
+  it('toggles compare selection on image row click and marks the selected row', () => {
     const { onToggleSelect } = setup(
       [makeAsset({ id: 'a1' }), makeAsset({ id: 'a2', name: 'lung.png' })],
       ['a1'],
     )
-    const selectedCard = screen.getByRole('button', { name: '取消选择“heart.png”' })
-    expect(selectedCard.getAttribute('aria-pressed')).toBe('true')
-    expect(screen.getByText('已选中')).toBeTruthy()
+    const selectedRow = screen.getByRole('button', { name: '取消选择“heart.png”' })
+    expect(selectedRow.getAttribute('aria-pressed')).toBe('true')
     expect(
-      containerOf(selectedCard).className, // li.asset-card.is-selected
+      containerOf(selectedRow).className, // li.asset-row.is-selected
     ).toContain('is-selected')
-    fireEvent.click(selectedCard)
+    fireEvent.click(selectedRow)
     expect(onToggleSelect).toHaveBeenCalledWith('a1')
 
-    const otherCard = screen.getByRole('button', { name: '选择“lung.png”加入比较' })
-    expect(otherCard.getAttribute('aria-pressed')).toBe('false')
-    fireEvent.click(otherCard)
+    const otherRow = screen.getByRole('button', { name: '选择“lung.png”加入比较' })
+    expect(otherRow.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(otherRow)
     expect(onToggleSelect).toHaveBeenCalledWith('a2')
   })
 
-  it('ignores clicks on non-image cards for compare selection', () => {
+  it('ignores clicks on non-image rows for compare selection', () => {
     const { onToggleSelect } = setup([
       makeAsset({ id: 'a1', name: 'scan.dcm', kind: 'dicom' }),
     ])
     fireEvent.click(screen.getByText('scan.dcm'))
     expect(onToggleSelect).not.toHaveBeenCalled()
-    expect(screen.queryByText('已选中')).toBeNull()
   })
 
-  it('opens the DICOM viewer when a dicom card is clicked and onOpenDicom is provided', () => {
+  it('opens the DICOM viewer when a dicom row is clicked and onOpenDicom is provided', () => {
     const onOpenDicom = vi.fn()
     render(
       <AssetGrid
@@ -126,34 +118,36 @@ describe('AssetGrid', () => {
         ]}
         selectedIds={[]}
         onToggleSelect={vi.fn()}
-        onSetStatus={vi.fn()}
         onOpenDicom={onOpenDicom}
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: '查看“scan.dcm”的 DICOM 详情' }))
     expect(onOpenDicom).toHaveBeenCalledWith('a1')
 
-    // image 卡片点击仍走比较选中；model 卡片保持不可交互（T-006 前不变）
+    // image 行点击仍走比较选中；model 行保持不可交互（T-006 前不变）
     fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
     expect(onOpenDicom).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('button', { name: /aorta\.stl/ })).toBeNull()
   })
 
-  it('keeps dicom cards non-interactive when no onOpenDicom handler is provided', () => {
+  it('keeps dicom rows non-interactive when no onOpenDicom handler is provided', () => {
     setup([makeAsset({ id: 'a1', name: 'scan.dcm', kind: 'dicom' })])
     expect(screen.queryByRole('button', { name: /DICOM 详情/ })).toBeNull()
   })
 
-  it('requests the next status via the status badge', () => {
-    const { onSetStatus } = setup([makeAsset({ id: 'a1', status: 'pending' })])
-    fireEvent.click(screen.getByRole('button', { name: /当前状态：待评审/ }))
-    expect(onSetStatus).toHaveBeenCalledWith('a1', 'passed')
+  it('renders status as display-only: no inline status button and no review button (CR-004 T-001)', () => {
+    setup([makeAsset({ id: 'a1', status: 'pending' })])
+    // 状态点仅展示；状态修改入口移到右栏评审面板（选中素材后）
+    expect(screen.getByText('待评审', { selector: '.status-dot' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /当前状态：待评审/ })).toBeNull()
+    // 行内无“评审”按钮（评审经选中 → 右栏）
+    expect(screen.queryByRole('button', { name: /评审/ })).toBeNull()
   })
 })
 
-/** 从卡片主体按钮向上取所属 li，用于断言选中态类名 */
+/** 从行主体按钮向上取所属 li，用于断言选中态类名 */
 function containerOf(element: Element): Element {
-  const card = element.closest('.asset-card')
-  if (card === null) throw new Error('card not found')
-  return card
+  const row = element.closest('.asset-row')
+  if (row === null) throw new Error('row not found')
+  return row
 }

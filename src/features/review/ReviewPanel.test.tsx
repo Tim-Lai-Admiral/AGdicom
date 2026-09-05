@@ -56,8 +56,8 @@ describe('ReviewPanel', () => {
     expect(screen.getByText('评审面板')).toBeTruthy()
     expect(screen.getByText('heart.png')).toBeTruthy()
     expect(screen.getByText('图片', { selector: '.review-panel__asset-kind' })).toBeTruthy()
-    // 当前状态徽标（限定素材信息区，历史记录里也会有同文案徽标）
-    expect(screen.getByText('待评审', { selector: '.review-panel__asset .status-badge' })).toBeTruthy()
+    // 当前状态指示（限定素材信息区，历史记录里也会有同文案）
+    expect(screen.getByText('待评审', { selector: '.review-panel__asset .status-dot' })).toBeTruthy()
     expect(screen.getByLabelText('移除标签“心脏”')).toBeTruthy()
     expect(screen.getByText('评审历史（2）')).toBeTruthy()
   })
