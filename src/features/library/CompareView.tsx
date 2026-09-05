@@ -1,9 +1,10 @@
 /**
  * 图片并排比较视图（CR-001 T-004 / R-002）。
  *
- * 应用内视图状态（非路由）：由上层在选中两张图片时渲染为覆盖弹层；
- * 两张图片等尺寸并排（等分栅格 + object-fit: contain）；“退出比较”按钮与
- * Esc 键均可退出。objectUrl 缺失或加载失败时显示占位与提示，不影响另一侧。
+ * 应用内视图状态（非路由）：由上层在选中两张图片时渲染于工作台中央查看区
+ * （CR-003 T-002 布局壳 / T-004 归位）；两张图片等尺寸并排（等分栅格 +
+ * object-fit: contain）；“退出比较”按钮与 Esc 键均可退出。
+ * objectUrl 缺失或加载失败时显示占位与提示，不影响另一侧。
  */
 import { useEffect, useRef, useState } from 'react'
 import type { Asset } from '../../domain/types.ts'
@@ -68,7 +69,7 @@ export default function CompareView({ left, right, onExit }: CompareViewProps) {
 
   return (
     <div className="compare-overlay">
-      <section className="compare" role="dialog" aria-modal="true" aria-label="图片比较">
+      <section className="compare" role="dialog" aria-label="图片比较">
         <header className="compare__header">
           <h2 className="compare__title">图片比较</h2>
           <p className="compare__esc-hint">两张图片等尺寸并排显示，按 Esc 也可退出</p>
