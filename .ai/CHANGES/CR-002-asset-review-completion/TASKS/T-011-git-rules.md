@@ -58,3 +58,18 @@ branch: feature/CR-002-T-011-git-rules
 ## Definition of done
 
 - [ ] 验收通过；填 Builder result；PR 创建成功，等待 Reviewer 按 PR 审查
+
+## Builder result
+
+- Implementation summary: 协调者直接实现（纯文档/配置变更，无产品代码）：
+  - `.ai/AGENTS.md` §6 重写为 15 条规则全文（"main"= 默认分支，本仓库为 master）
+  - `ENVIRONMENT.md` Git 节：分支命名、push+PR、Reviewer 按 PR 审查、冲突显式解决、合并后删分支、Tag
+  - CR-002 新增 P-004（REQUIREMENTS.md + CHANGE.md 登记）
+  - `.gitattributes`（`* text=auto` + stl/dcm binary）；`.github/workflows/ci.yml`（npm ci → lint → test → build，push/PR 触发）
+  - `oxlint` devDep + `npm run lint`（本地 0 error 1 warning，不阻塞）
+  - builder/builder-flash/reviewer 提示词加入 PR 工作流（Builder push+建 PR；Reviewer `gh pr checkout` 审查 PR diff）
+- Files changed: 11 个（2 docs 提交：fdd9c1d 任务卡、090bf2e 落地实现）
+- Tests run and result: `scripts\verify.ps1` 全绿（233 测试不回归）；`npm run lint` 通过（0 error）
+- Commit / PR: 分支 feature/CR-002-T-011-git-rules；PR 由协调者按规则 6 创建
+- Known limitations: 仓库默认分支为 master（规则中的"main"为同一概念）；既有 T-001~T-008 分支将按规则补建 PR（协调者处理）
+- 待 Reviewer 关注: 规则 7 要求审 PR；本次审查对象为本 PR 及补建的既有 PR
