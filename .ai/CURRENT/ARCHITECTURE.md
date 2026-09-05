@@ -6,16 +6,19 @@
 
 ```text
 浏览器（无后端）
-Vite + React 19 + TypeScript 6（strict）
+Vite + React 19 + TypeScript 6（strict）+ Tailwind CSS v4（@tailwindcss/vite）
 ├── src/domain/     领域类型与纯函数：types（Asset/DicomMeta/ReviewRecord/AppState）、
 │                   review（评审/标签/备注）、filter（筛选）
 ├── src/store/      localStorage 仓储（单 key ag-review-workbench:v1）+ JSON 导入导出（schema v1）
 ├── src/features/
-│   ├── library/    导入（拖拽/文件选择、分类、去重）、素材库网格、筛选、状态徽标、双图比较
-│   ├── viewer/     dicom/（dicom-parser 元数据 + Canvas 切片预览 + 降级）｜
+│   ├── library/    导入（拖拽/文件选择、分类、去重）、素材列表、筛选、状态徽标、双图比较
+│   ├── viewer/     dicom/（dicom-parser 元数据 + Canvas 切片预览(W/L) + 测量 Mock + 降级）｜
 │   │               model3d/（three.js STLLoader+OrbitControls，React.lazy 按需拆包）
 │   ├── review/     评审面板（状态/意见/标签/备注）、历史、导出导入
-│   └── ai/         AIProvider 接口 + Mock 确定性实现 + AiPanel
+│   ├── ai/         AIProvider 接口 + Mock 确定性实现 + AiPanel
+│   └── workbench/  MetaLabels、WindowLevelPanel、DicomSeriesExpansion（工作台组件）
+├── src/App.tsx     工作台布局壳：TopToolbar + 左栏(AssetGrid+series 展开) + 中央查看区 + 右栏(Metadata/Review)
+├── src/index.css   Tailwind v4 入口 + 深色令牌 + 组件类 + @font-face（本地字体）
 └── public/samples/ stl/（4 个心脏模型）+ dicom/（pydicom 合成 3 series×6 切片）
 ```
 
@@ -55,6 +58,7 @@ Vite + React 19 + TypeScript 6（strict）
 | ADR-004 | AI 用 AIProvider 接口 + Mock 确定性实现；未来真实接入同接口 | accepted |
 | ADR-005 | 协作流程：任务卡 Context pack + 极简派发 prompt + 软步数检查点 + Spike 门禁（P-001~P-003） | accepted |
 | ADR-006 | Git 15 条规则（P-004，全文 .ai/AGENTS.md §6）：PR 工作流、CI、Human 合并权 | accepted |
+| ADR-007 | UI 重构：全屏工作台布局 + Tailwind v4 + 深色令牌（源自 Figma 原型 rec/）；W/L 调节与测量 Mock 纳入产品范围 | accepted |
 
 ## Last updated
 

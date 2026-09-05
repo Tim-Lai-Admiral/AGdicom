@@ -19,6 +19,10 @@
 | P-002 | 极简派发 prompt（≤300 字符，只载增量） | active | CR-002 |
 | P-003 | Builder 信息不足时 BLOCKED-信息不足 上报 | active | CR-002 |
 | P-004 | Git 规则 15 条（全文见 .ai/AGENTS.md §6） | active | CR-002 |
+| R-003a | DICOM 切片预览支持窗宽窗位调节（R-003 扩展） | active | CR-003 |
+| R-010 | 测量工具（Mock 模式，明示非临床） | active | CR-003 |
+| UI-001 | 全屏工作台布局（顶栏/左栏/中央/右栏） | active | CR-003 |
+| UI-002 | Tailwind v4 与深色设计令牌（字体本地化） | active | CR-003 |
 
 ## Requirements
 
@@ -73,6 +77,22 @@
 ### P-004: Git 规则（15 条）
 
 **Behavior**: 全文见 `.ai/AGENTS.md` §6：main 为可接受状态；禁直接 push main；每 Task 独立分支；分支名含 CR+Task ID；Builder 可多 commit；完成后建 PR（body 含概要）；Reviewer 审 PR；CI 自动 test/lint/build；Reviewer 独立验证；Human 最终 Merge；合并后删分支；重大版本 Tag；需求/架构历史归 CR 而代码历史归 Git；禁为跑通改 Requirement；Conflict 显式解决。
+
+### R-003a: DICOM 切片预览窗宽窗位调节（R-003 扩展）
+
+**Behavior**: `decodeDicomFrame(dataset, frameIndex, opts?: {wc?, ww?})` 支持显式窗宽窗位（DICOM C.11.2.1.2.1 线性映射，ww=1 阈值不除零）；缺省/非法回退自动 min-max（与原行为等价）；右栏双滑杆（C:-1000..1000 / W:1..4000）+ 6 预设（Lung/Mediastinum/Bone/Brain/Liver/S.Tissue）+ 自动按钮；切换素材复位自动。
+
+### R-010: 测量工具（Mock 模式）
+
+**Behavior**: 视口工具态 + 拖拽绘制测量线（端点+距离标注）；PixelSpacing 可用时按行/列间距确定性计算 mm，否则 `≈ N px（模拟）`；全程明示"模拟测量，非临床"；切换切片清空、切换素材重挂载清空、不持久化；降级路径（仅元数据）下测量按钮禁用。
+
+### UI-001: 全屏工作台布局
+
+**Behavior**: 顶栏（类型/状态筛选、搜索、导入、加载样本、导出、面板开关）+ 左栏（素材列表；DICOM 展开 series+切片缩略图）+ 中央统一查看区（图片/比较、DICOM 切片、3D）+ 右栏（DICOM 元数据分组折叠 + W/L；其余素材评审面板含 AI）；窄屏折叠；现有功能全部可访问。
+
+### UI-002: Tailwind v4 与深色设计令牌
+
+**Behavior**: `tailwindcss@4` + `@tailwindcss/vite`；深色令牌与组件类（tool-btn/range-input/preset-btn/sidebar-thumb/meta-row 等）沿用 Figma 原型（rec/ 素材）；字体 Inter/JetBrains Mono 本地化（public/fonts/ + @font-face），零外部 CDN。
 
 **Source**: CR-001 / CR-002  
 **Last updated**: 2026-09-05
