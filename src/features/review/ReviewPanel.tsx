@@ -7,6 +7,7 @@
  * - 标签：当前标签可移除；输入框可新建自建标签（由领域层自动并入全局标签库）；
  *   全局标签库（注册表 ∪ 实际使用）一键复用；
  * - 备注：独立保存（不追加评审历史）；
+ * - AI 建议：内嵌 AiPanel（CR-002 T-008 / R-006，Mock 生成，采纳命名/标签或忽略）；
  * - 评审历史：ReviewHistory 只读列表（最新在前）。
  *
  * 交互与可访问性：Esc 关闭；可折叠为仅标题栏（aria-expanded）；
@@ -16,6 +17,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Asset, AssetStatus, ReviewHistory as ReviewHistoryData } from '../../domain/types.ts'
 import { ASSET_KIND_LABELS, ASSET_STATUS_LABELS } from '../../domain/types.ts'
+import AiPanel from '../ai/AiPanel.tsx'
 import StatusBadge from '../library/StatusBadge.tsx'
 import ReviewHistory from './ReviewHistory.tsx'
 
@@ -40,6 +42,8 @@ export interface ReviewPanelProps {
   onSubmitReview: (status: AssetStatus, comment: string) => void
   /** 保存备注（不追加评审历史，持久化由上层完成） */
   onSaveNote: (note: string) => void
+  /** 采纳 AI 命名建议：重命名素材（持久化由上层完成；缺省时命名建议仅展示） */
+  onAcceptAiName?: (name: string) => void
   /** 关闭面板（“关闭”按钮与 Esc 键均触发） */
   onClose: () => void
 }
@@ -52,6 +56,7 @@ export default function ReviewPanel({
   onRemoveTag,
   onSubmitReview,
   onSaveNote,
+  onAcceptAiName,
   onClose,
 }: ReviewPanelProps) {
   const [collapsed, setCollapsed] = useState(false)
@@ -286,6 +291,8 @@ export default function ReviewPanel({
               </div>
             ) : null}
           </section>
+
+          <AiPanel asset={asset} onAddTag={onAddTag} onAcceptName={onAcceptAiName} />
 
           <section className="review-panel__note" aria-label="备注">
             <h3 className="review-panel__section-title">备注</h3>

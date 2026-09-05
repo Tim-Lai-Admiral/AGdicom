@@ -123,6 +123,29 @@ export function updateAssetNote(
 }
 
 /**
+ * 重命名素材：名称去除首尾空白后更新并刷新 updatedAt
+ * （AI 建议面板"采纳命名"（CR-002 T-008）与后续手动重命名共用此链路）。
+ * 名称为空白、与原名称相同或素材不存在时为 no-op（返回原状态引用）。
+ */
+export function updateAssetName(
+  state: AppState,
+  assetId: string,
+  rawName: string,
+  now?: string | Date,
+): AppState {
+  const asset: Asset | undefined = state.assets[assetId]
+  if (asset === undefined) return state
+  const name = rawName.trim()
+  if (name === '' || asset.name === name) return state
+  const at = toTimestamp(now)
+  return {
+    assets: { ...state.assets, [assetId]: { ...asset, name, updatedAt: at } },
+    tags: state.tags,
+    reviews: state.reviews,
+  }
+}
+
+/**
  * 移除素材标签：计数按实际使用情况重算，注册表保留条目（计数可为 0）便于复用。
  * 标签不存在或名称为空白时为 no-op（返回原状态引用）。
  */

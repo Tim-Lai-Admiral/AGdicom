@@ -1323,6 +1323,85 @@ button.asset-card__main:hover .asset-card__name {
   color: var(--color-primary);
 }
 
+/* --- AI 建议区（CR-002 T-008 / R-006）：嵌入评审面板，明示 Mock 生成 --- */
+.ai-panel__mock-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  padding: 0.05rem 0.55rem;
+  font-size: 0.6875rem;
+  font-weight: 400;
+  vertical-align: middle;
+}
+
+.ai-panel__hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.ai-panel__block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.625rem 0.75rem;
+}
+
+.ai-panel__block-label {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.ai-panel__name {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ai-panel__tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ai-panel__tag {
+  border: 1px dashed var(--color-border);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.8125rem;
+}
+
+.ai-panel__tag-note {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.ai-panel__summary {
+  margin: 0;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.ai-panel__empty {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.ai-panel__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 /* --- 评审历史（CR-001 T-007） --- */
 .review-history {
   border-top: 1px solid var(--color-border);

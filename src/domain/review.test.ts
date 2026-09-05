@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Asset, AppState, ReviewHistory, ReviewRecord, Tag } from './types.ts'
-import { addAssetTag, applyReview, removeAssetTag, setAssetStatus, updateAssetNote } from './review.ts'
+import { addAssetTag, applyReview, removeAssetTag, setAssetStatus, updateAssetName, updateAssetNote } from './review.ts'
 
 const NOW = '2026-09-03T08:00:00.000Z'
 
@@ -149,6 +149,25 @@ describe('updateAssetNote', () => {
   })
 })
 
+describe('updateAssetName', () => {
+  it('renames the asset, trims the name and refreshes updatedAt', () => {
+    const state = makeState([makeAsset({ name: 'aorta.stl' })])
+    const next = updateAssetName(state, 'asset-1', '  主动脉模型  ', NOW)
+    expect(next.assets['asset-1']?.name).toBe('主动脉模型')
+    expect(next.assets['asset-1']?.updatedAt).toBe(NOW)
+    // 其余字段不变
+    expect(next.assets['asset-1']?.tags).toEqual(state.assets['asset-1']?.tags)
+    expect(next.tags).toBe(state.tags)
+  })
+
+  it('is a no-op when the name is blank, unchanged or the asset is missing', () => {
+    const state = makeState([makeAsset({ name: 'aorta.stl' })])
+    expect(updateAssetName(state, 'asset-1', '   ', NOW)).toBe(state)
+    expect(updateAssetName(state, 'asset-1', 'aorta.stl', NOW)).toBe(state)
+    expect(updateAssetName(state, 'missing', '新名称', NOW)).toBe(state)
+  })
+})
+
 describe('purity', () => {
   it('never mutates the input state', () => {
     const state = makeState(
@@ -162,6 +181,7 @@ describe('purity', () => {
     addAssetTag(state, 'a2', '新标签', NOW)
     removeAssetTag(state, 'a2', '已有', NOW)
     updateAssetNote(state, 'a2', '新备注', NOW)
+    updateAssetName(state, 'a2', '新名称', NOW)
     expect(state).toEqual(snapshot)
   })
 })
