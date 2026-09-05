@@ -11,3 +11,9 @@ Desktop.ini
 
 # Logs
 *.log
+
+# Node / build
+node_modules/
+dist/
+dist-ssr/
+*.local
