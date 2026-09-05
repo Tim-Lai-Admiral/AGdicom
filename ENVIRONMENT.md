@@ -31,11 +31,16 @@ powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 
 `scripts/verify.ps1` 一次完成：刷新 PATH → `npm.cmd test` → `npm.cmd run build`。局部修改时可用 `npm.cmd test -- <文件或目录>` 只跑受影响测试。
 
-## Git 工作流
+## Git 工作流（15 条规则见 `.ai/AGENTS.md` §6，CR-002 P-004）
 
-- 每个 Task 在独立分支：`feature/CR-001-T-XXX-short-title`（见任务卡 Metadata.branch）
-- 禁止直接提交到 master；禁止提交 node_modules/、dist/
+- 每个 Task 在独立分支：`feature/<CR-ID>-T-XXX-short-title`（名称含 CR 与 Task ID，见任务卡 Metadata.branch）
+- Agent 禁止直接提交 main；禁止提交 node_modules/、dist/
 - commit message 简洁中文，可带类型前缀（如 `feat: 3D 查看器基础实现`、`docs: 填写任务卡结果`、`fix: 修复切片解码类型错误`）
+- Builder 完成 Task 后：push 分支到 origin → `gh pr create --base master` → PR 链接写入 Builder result
+- Reviewer 按 PR 审查：`gh pr checkout <num>` → 独立验证（verify.ps1）→ 结论写入 REVIEW 文档
+- Conflict 必须显式解决，禁止静默覆盖其他 Agent 的修改；合并权属 Human，合并后删除 Task 分支
+- 重大版本用 Tag（`git tag vX.Y.Z`）
+- 行尾规范：`.gitattributes`（`* text=auto`），不要手改行尾
 
 ## 素材与外部目录
 

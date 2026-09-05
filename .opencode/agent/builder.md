@@ -64,4 +64,6 @@ You are the Builder in the AI collaboration protocol (`.ai/AGENTS.md`, `.ai/AGEN
 ## Handoff
 
 - 在任务卡 `Builder result` 填写：实现摘要、文件清单、验证结果、commit/PR、已知限制、需 Reviewer 关注点。不要标记 done。
-- 最终报告必须包含：任务 ID、分支、commit hash、验证结果、BLOCKED/风险项。
+- 提交完成后：`git push -u origin <分支>` → `gh pr create --base master`（title 用首个 commit 主题；**body 写概要：实现摘要 + 验证结果 + 任务卡路径**，不要只写文件名）→ PR 链接写入 Builder result。
+- 若 push/PR 失败（凭据/网络）：如实报告并留在本地分支，不要绕过（规则 6/15）。
+- 最终报告必须包含：任务 ID、分支、commit hash、PR 链接、验证结果、BLOCKED/风险项。

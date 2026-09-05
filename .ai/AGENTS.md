@@ -57,12 +57,23 @@ CR 是产品意义上的变化，不等于 Git commit；Task 是最小可执行�
 
 多个 Agent 可以并行规划、实现和 review，但每个修改型 Agent 必须使用独立 Git branch/worktree。禁止多个 Agent 同时写同一个 working tree。
 
-```text
-main
-├── worktree/task-001   → Builder A
-├── worktree/task-002   → Builder B
-└── worktree/review-001 → Reviewer
-```
+Git 规则（Human 批准，2026-09-04，见 CR-002 P-004；"main"指默认分支，本仓库当前为 `master`）：
+
+1. main 永远代表可接受的项目状态。
+2. Agent 禁止直接向 main push。
+3. 每个 Task 默认拥有独立 branch。
+4. Branch 名称包含 CR 和 Task ID（如 `feature/CR-002-T-011-git-rules`）。
+5. Builder 可以创建多个 commit。
+6. Builder 完成 Task 后创建 PR（push 分支 + `gh pr create --base master`）。
+7. Reviewer 审查 PR，而不是直接审查 working tree（`gh pr checkout <num>` 后验证，diff 以 PR 为准）。
+8. CI 自动执行测试 / lint / build（`.github/workflows/ci.yml`）。
+9. Reviewer 负责独立验证（复跑测试与构建，不以 Builder 声明为准）。
+10. Human 拥有最终 Merge 权限。
+11. Merge 后删除 Task branch。
+12. 重大版本使用 Tag。
+13. Requirement / Architecture 的历史由 CR 保存；代码历史由 Git 保存。
+14. 不允许为了"让代码能跑"而修改 Requirement。
+15. Conflict 必须显式解决，不允许 Agent 静默覆盖其他 Agent 的修改。
 
 新任务若依赖未合并工作，必须在 Task 中写明 `depends_on`；不能假设代码已经存在。Review 只检查明确提交的 commit/PR，而不是另一个 Agent 正在变化的目录。
 
