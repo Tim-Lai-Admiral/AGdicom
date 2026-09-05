@@ -6,7 +6,7 @@
 id: CR-001
 title: "AI 图片、DICOM 与 3D 素材评审工作台 Lite"
 change_level: L4
-status: approved
+status: completed
 parent: null
 created_by: Planner
 created_at: 2026-09-03
@@ -92,4 +92,7 @@ created_at: 2026-09-03
 
 ## Result
 
-<!-- 合并后：结果、关联 PR/commit、CURRENT 更新。 -->
+- 2026-09-05 完成。T-001~T-007 合并至 master（PR #1~#7，Human 授权按序合并，分支已删）。
+- T-008~T-010 迁移至 CR-002（Human 决定：任务卡/提示手段变更提升至 CR 级）。
+- 里程碑审查 PASS（REVIEW.md T-001~T-004、REVIEW-T005.md、REVIEW-T006-008.md）。
+- CURRENT 已更新（PRODUCT/REQUIREMENTS/ARCHITECTURE/DESIGN），来源 CR-001 + CR-002。

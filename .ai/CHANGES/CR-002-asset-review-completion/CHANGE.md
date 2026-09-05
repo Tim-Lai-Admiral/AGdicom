@@ -6,7 +6,7 @@
 id: CR-002
 title: "收尾交付与协作流程变更（任务卡 Context pack / 极简派发 prompt）"
 change_level: L2
-status: approved
+status: completed
 parent: CR-001
 created_by: Planner
 created_at: 2026-09-04
@@ -72,4 +72,7 @@ created_at: 2026-09-04
 
 ## Result
 
-<!-- 合并后填写 -->
+- 2026-09-05 完成。T-008（PR #8）、T-011 Git 规则落地（PR #9）、T-009 样本（PR #10）、T-010 收尾（PR #11）全部合并至 master，分支已删。
+- 终审 PASS（REVIEW-T009-010.md）；里程碑审查 PASS（REVIEW-T006-008.md）。
+- 流程变更生效：Context pack 卡片、极简派发 prompt（T-008/T-009/T-010 实测）、BLOCKED-信息不足兜底、Git 15 条规则 + CI + oxlint。
+- CURRENT 已更新，来源 CR-001 + CR-002。
