@@ -6,14 +6,14 @@
  * 离线约束（R-009）：字体通过 @font-face 指向 public/fonts/ 本地 woff2，
  *   全链路禁止 fonts.googleapis / fonts.gstatic CDN 请求。
  *
- * Tailwind 层说明：本任务只引入 theme + utilities，不启用 preflight ——
- *   现有手写组件样式（src/styles.css，浅色主题）在 T-004 组件替换前保持原行为，
- *   T-002 布局重构时如需 preflight，补一行
- *   `@import 'tailwindcss/preflight.css' layer(base);` 即可。
+ * Tailwind 层说明：T-002 布局重构起启用 preflight（统一盒模型与元素基线，
+ *   工作台布局以 Tailwind 令牌 + CSS 变量为基础）。preflight 带来的现有组件
+ *   视觉回归由 styles.css 的工作台作用域令牌映射处理（T-004 组件替换前过渡）。
  */
 
 @layer theme, base, components, utilities;
 @import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/preflight.css' layer(base);
 @import 'tailwindcss/utilities.css' layer(utilities);
 
 /* ------------------------------------------------------------------ */

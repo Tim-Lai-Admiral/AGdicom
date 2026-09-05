@@ -15,6 +15,7 @@
  * 因此刷新后图片卡片显示占位与提示；重新导入同一文件可恢复预览。
  */
 import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import type { Asset, AssetKind, AssetStatus } from '../../domain/types.ts'
 import { ASSET_KIND_LABELS } from '../../domain/types.ts'
 import StatusBadge from './StatusBadge.tsx'
@@ -33,6 +34,11 @@ export interface AssetGridProps {
   onOpenModel?: (assetId: string) => void
   /** 点击卡片“评审”按钮：打开评审面板（T-007）；未提供时不渲染该按钮 */
   onOpenReview?: (assetId: string) => void
+  /**
+   * 卡片附加内容插槽（CR-003 T-002 工作台布局）：渲染在卡片元信息区之后
+   * （如左栏 DICOM series/切片展开区）；未提供时不渲染，行为与原网格一致。
+   */
+  renderExtras?: (asset: Asset) => ReactNode
 }
 
 /** 图片预览缺失时的占位提示（objectUrl 为会话字段，刷新后需重新导入该图片） */
@@ -129,6 +135,7 @@ function AssetCard({
   onOpenDicom,
   onOpenModel,
   onOpenReview,
+  renderExtras,
 }: {
   asset: Asset
   selected: boolean
@@ -137,6 +144,7 @@ function AssetCard({
   onOpenDicom?: (assetId: string) => void
   onOpenModel?: (assetId: string) => void
   onOpenReview?: (assetId: string) => void
+  renderExtras?: (asset: Asset) => ReactNode
 }) {
   const isImage = asset.kind === 'image'
   const isDicomOpenable = asset.kind === 'dicom' && onOpenDicom !== undefined
@@ -206,6 +214,7 @@ function AssetCard({
           </button>
         ) : null}
       </div>
+      {renderExtras !== undefined ? renderExtras(asset) : null}
     </li>
   )
 }
@@ -218,6 +227,7 @@ export default function AssetGrid({
   onOpenDicom,
   onOpenModel,
   onOpenReview,
+  renderExtras,
 }: AssetGridProps) {
   return (
     <ul className="asset-grid">
@@ -231,6 +241,7 @@ export default function AssetGrid({
           onOpenDicom={onOpenDicom}
           onOpenModel={onOpenModel}
           onOpenReview={onOpenReview}
+          renderExtras={renderExtras}
         />
       ))}
     </ul>
