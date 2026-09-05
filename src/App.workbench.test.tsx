@@ -10,7 +10,11 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
-import { buildDicomSeriesBuffers, gradientPixels8 } from './features/viewer/dicom/__fixtures__/buildDicomFile.ts'
+import {
+  buildDicomFile,
+  buildDicomSeriesBuffers,
+  gradientPixels8,
+} from './features/viewer/dicom/__fixtures__/buildDicomFile.ts'
 
 function makeFile(name: string, size = 64, type = ''): File {
   return new File([new Uint8Array(size)], name, { type })
@@ -153,5 +157,60 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
     await waitFor(() => {
       expect(within(sliceDialog).getByText('切片 1 / 3（按 InstanceNumber 排序）')).toBeTruthy()
     })
+  })
+
+  it('shows the W/L panel in the right column for a DICOM asset (CR-003 T-003 / R-003 修改)', async () => {
+    // 单切片 DICOM：打开查看器后右栏“元数据”页签显示 W/L 区块（元数据分组上方）
+    const buffer = buildDicomFile({
+      patientName: '',
+      patientID: '',
+      patientIdentityRemoved: 'YES',
+      pixelData: gradientPixels8(8, 8, 30, 200),
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => new Uint8Array(buffer).slice().buffer,
+      })),
+    )
+    // jsdom 无 2D Canvas：走“环境不支持”降级分支（W/L 面板不依赖画布）
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+
+    const { container } = render(<App />)
+    dropFiles(container, [
+      new File([new Uint8Array(buffer)], 's1.dcm', { type: 'application/dicom' }),
+    ])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('button', { name: '查看“s1.dcm”的 DICOM 详情' }))
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: 'DICOM 详情' })).toBeTruthy()
+    })
+
+    const right = screen.getByRole('complementary', { name: '信息面板' })
+    expect(within(right).getByText('窗宽窗位（W/L）')).toBeTruthy()
+    expect(
+      within(right).getByRole('button', { name: '自动 min-max' }).getAttribute('aria-pressed'),
+    ).toBe('true')
+    expect(within(right).getByText('当前：自动（min-max），拖动滑杆或选择预设切换手动')).toBeTruthy()
+
+    // 六档预设可达；点击 Lung → 手动模式 + C/W 数值生效
+    for (const name of ['Lung', 'Mediastinum', 'Bone', 'Brain', 'Liver', 'S. Tissue']) {
+      expect(within(right).getByRole('button', { name })).toBeTruthy()
+    }
+    fireEvent.click(within(right).getByRole('button', { name: 'Lung' }))
+    expect(within(right).getByText('当前：手动窗宽窗位')).toBeTruthy()
+    expect(
+      within(right).getByRole('button', { name: '自动 min-max' }).getAttribute('aria-pressed'),
+    ).toBe('false')
+    expect((within(right).getByLabelText('窗位 C') as HTMLInputElement).value).toBe('-600')
+    expect((within(right).getByLabelText('窗宽 W') as HTMLInputElement).value).toBe('1500')
+
+    // 自动按钮：回到自动 min-max
+    fireEvent.click(within(right).getByRole('button', { name: '自动 min-max' }))
+    expect(within(right).getByText('当前：自动（min-max），拖动滑杆或选择预设切换手动')).toBeTruthy()
   })
 })
