@@ -1,0 +1,279 @@
+/*
+ * 设计系统入口（CR-003 T-001 / UI-002）：
+ *   Tailwind v4 + 深色主题令牌 + 基础组件类 + 字体本地化。
+ *   令牌与组件类自参考素材 rec/src/index.css 直接迁移（素材只读、不提交）。
+ *
+ * 离线约束（R-009）：字体通过 @font-face 指向 public/fonts/ 本地 woff2，
+ *   全链路禁止 fonts.googleapis / fonts.gstatic CDN 请求。
+ *
+ * Tailwind 层说明：本任务只引入 theme + utilities，不启用 preflight ——
+ *   现有手写组件样式（src/styles.css，浅色主题）在 T-004 组件替换前保持原行为，
+ *   T-002 布局重构时如需 preflight，补一行
+ *   `@import 'tailwindcss/preflight.css' layer(base);` 即可。
+ */
+
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+/* ------------------------------------------------------------------ */
+/* 本地字体（Google Fonts woff2 下载入 public/fonts/，latin/latin-ext） */
+/* ------------------------------------------------------------------ */
+
+/* Inter 可变字体：覆盖 300–600（Light/Regular/Medium/SemiBold） */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 300 600;
+  font-display: swap;
+  src: url('/fonts/inter-latin-wght.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 300 600;
+  font-display: swap;
+  src: url('/fonts/inter-latin-ext-wght.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* JetBrains Mono 可变字体：覆盖 400–500（Regular/Medium） */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-latin-wght.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-latin-ext-wght.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ------------------------------------------------------------------ */
+/* 深色主题令牌（rec/src/index.css 直接迁移）                          */
+/* ------------------------------------------------------------------ */
+
+:root {
+  --bg: #060810;
+  --panel: #0b0e16;
+  --surface: #10141e;
+  --surface-raised: #161b28;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.13);
+  --accent: #00c4d8;
+  --accent-dim: rgba(0, 196, 216, 0.15);
+  --accent-glow: rgba(0, 196, 216, 0.3);
+  --text-primary: #e2e6f0;
+  --text-secondary: #8a94a8;
+  --text-muted: #434c60;
+  --text-mono: #a0f0f8;
+  --warn: #f5a623;
+  --danger: #ff5252;
+  --success: #3dd68c;
+
+  /* 字体栈（配合上方本地 @font-face；供 T-002+ 组件使用） */
+  --font-sans-data: 'Inter', system-ui, sans-serif;
+  --font-mono-data: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.font-mono-data {
+  font-family: var(--font-mono-data);
+}
+
+/* 细滚动条：悬停前隐藏 */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ------------------------------------------------------------------ */
+/* 基础组件类（rec/src/index.css 直接迁移，供 T-002+ 布局/组件使用）    */
+/* ------------------------------------------------------------------ */
+
+.viewport-overlay {
+  position: absolute;
+  pointer-events: none;
+  font-family: var(--font-mono-data);
+  font-size: 11px;
+  color: rgba(220, 230, 255, 0.75);
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.9), 0 1px 2px rgba(0, 0, 0, 0.8);
+  line-height: 1.6;
+  user-select: none;
+}
+
+.tool-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  background: transparent;
+}
+
+.tool-btn:hover {
+  color: var(--text-primary);
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+
+.tool-btn.active {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.sidebar-thumb {
+  aspect-ratio: 1;
+  background: #050808;
+  border-radius: 2px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  transition: border-color 0.12s;
+  position: relative;
+}
+
+.sidebar-thumb:hover {
+  border-color: var(--border-strong);
+}
+.sidebar-thumb.selected {
+  border-color: var(--accent);
+}
+
+.meta-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.meta-label {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  padding-right: 4px;
+}
+
+.meta-value {
+  color: var(--text-primary);
+  font-family: var(--font-mono-data);
+  font-size: 10.5px;
+  word-break: break-all;
+}
+
+.section-header {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 8px 12px 4px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-header:hover {
+  color: var(--text-secondary);
+}
+
+.range-input {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface-raised);
+  outline: none;
+  width: 100%;
+}
+
+.range-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  box-shadow: 0 0 4px var(--accent-glow);
+}
+
+.preset-btn {
+  font-family: var(--font-mono-data);
+  font-size: 10px;
+  padding: 3px 7px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.1s;
+  white-space: nowrap;
+}
+
+.preset-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.preset-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+@keyframes pulse-ring {
+  0% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+}
+
+.measuring-line {
+  animation: pulse-ring 2s ease-in-out infinite;
+}
