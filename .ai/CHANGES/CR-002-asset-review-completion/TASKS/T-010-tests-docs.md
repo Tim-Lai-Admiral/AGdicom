@@ -54,3 +54,24 @@ branch: feature/CR-002-T-010-finish
 ## Definition of done
 
 - [ ] 验收通过；填 Builder result；Reviewer 终审
+
+## Builder result
+
+- **实现摘要**：
+  - **TD-002**：`App.tsx` 中 Model3DViewer 改 `React.lazy(() => import(...))` + `<Suspense>`（fallback「正在加载 3D 模型查看器…」），three.js 拆为独立 chunk：主入口 278.67 kB（gzip 84.94 kB）+ `Model3DViewer-*.js` 553.30 kB（gzip 139.63 kB），首屏不再加载 three 主包；`App.test.tsx` 3D 用例改为 `findByRole` 等待 lazy 挂载（不回归）。
+  - **T-005 Minor ①**：`buildDicomFile.ts` 将 NumberOfFrames（0028,0008）移到 0028,0002/0028,0004 之后、0028,0010 之前，数据集严格 tag 升序；新增 `__fixtures__/buildDicomFile.test.ts` 按字节遍历数据集断言升序（explicit/implicit 双编码，含可选元素缺席场景）。
+  - **T-005 Minor ②**：`DicomViewer.tsx` 传输语法映射补 JPEG 2000（1.2.840.10008.1.2.4.90「JPEG 2000 无损压缩」/.91「JPEG 2000 压缩」），未知 UID 按家族前缀 `.9` 精确区分，不再笼统显示「JPEG 压缩」；含测试。
+  - **T-005 Minor ③**：`DicomViewer.tsx` 弹层无障碍：打开时聚焦关闭按钮 + Tab/Shift+Tab 在弹层可聚焦元素间循环圈定 + 关闭（卸载）后焦点还原到打开前触发元素；含 2 个测试（圈定循环、焦点还原）。
+  - **README.md**：补全项目定位、功能一览、环境要求、安装与启动（含 verify.ps1）、技术栈、已知问题（7 项如实记录：文件字节不持久化/TD-001、压缩语法不解码、3D 仅 STL、localStorage 容量、AI mock、焦点圈定范围、WebGL 未自动化）；T-009 素材章节原样保留。
+  - **E2E-CHECKLIST.md**（仓库根，新建）：导入→浏览→DICOM→3D→标注→评审→导出→AI 建议 全链路清单，逐项标注验证方式（自动化测试/构建/预览冒烟）；仅「真机 WebGL 交互」一项留人工复核并显式标注。
+- **文件清单**：`src/App.tsx`、`src/App.test.tsx`、`src/features/viewer/dicom/DicomViewer.tsx`、`DicomViewer.test.tsx`、`__fixtures__/buildDicomFile.ts`、`__fixtures__/buildDicomFile.test.ts`（新增）、`README.md`、`E2E-CHECKLIST.md`（新增）、本任务卡。
+- **验证结果**：
+  - `scripts\verify.ps1` 全绿：24 test files / **238 tests passed** + `tsc -b && vite build` 成功；
+  - `npm run preview` 冒烟：`/`、`/samples/stl/aorta.stl`（3.9MB）、`/samples/dicom/phantom-ct-01.dcm` 均 HTTP 200；
+  - headless Edge（--headless=new --dump-dom）确认构建产物在真实浏览器启动渲染（导入区/素材库空态正常）；
+  - 构建产物检查：`dist/assets/Model3DViewer-0n2LTUYd.js` 独立 chunk，主入口不含 three（TD-002 达成；chunk >500 kB 有 vite 警告，属 three 本身体量，已在 E2E-CHECKLIST 备注）。
+- **commit / PR**：实现 `6e28a1b`（Minor+TD-002）、`a8e94a6`（README+E2E 清单）、本卡回填；分支 `feature/CR-002-T-010-finish`；PR #11：https://github.com/Tim-Lai-Admiral/AGdicom/pull/11
+- **已知限制**：
+  - E2E 清单的「真机 WebGL 交互」（旋转/缩放/平移、多次开关不泄漏）自动化不可覆盖（jsdom 无 WebGL），已标注为人工项，建议 Reviewer 浏览器复核一次；
+  - 焦点圈定仅覆盖 DICOM 查看器（卡片范围）；3D 查看器/评审面板等其余弹层未实现 focus trap，已记入 README 已知问题第 6 条。
+- **需 Reviewer 关注点**：① TD-002 后 App 引用与测试等待方式是否可接受（Suspense fallback 文案）；② focus trap 实现选择 window 级 keydown + querySelector 圈定（无依赖），边界（弹层内无可聚焦元素）已处理；③ 已知问题记录是否与实现一致。
