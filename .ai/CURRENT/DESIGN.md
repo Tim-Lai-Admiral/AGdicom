@@ -22,6 +22,7 @@
 - 中文界面；**Tailwind v4**（`@tailwindcss/vite`）+ 深色设计令牌（`--bg #060810 / --panel / --surface / --accent #00c4d8 / --text-*`，源自 Figma Make 原型 rec/）；手写 CSS 变量层（index.css）。
 - 字体本地化：Inter + JetBrains Mono woff2（public/fonts/，@font-face），零外部 CDN（离线可用）；CJK 回退系统字体。
 - 布局：顶部工具栏 + 左侧素材/序列栏（可折叠）+ 中央查看区 + 右侧面板（可折叠）；窄屏 64rem 收窄，顶栏开关折叠。
+- **视觉对齐 rec/（CR-004）**：左栏为紧凑行式列表（38px 方形缩略图 + 名称行 + `类型 · 状态点` mono 元信息行，选中 accent 左边框+底色）；**无卡片容器、无卡片评审按钮、无徽标式状态按钮**；顶栏 44px + tool-btn 16px 线性图标 + 分隔线 + mono 读数；状态经"选中 → 右栏评审面板"修改（StatusDot 仅展示）。
 - 组件类：.tool-btn / .range-input / .preset-btn / .sidebar-thumb / .meta-row / .viewport-overlay 等；4px 细滚动条。
 - 可访问性：状态徽标颜色+文字双通道；反馈 role="status"、错误/降级 role="alert"；DICOM 面板焦点圈定；Esc 关闭查看/比较；查看器为内嵌视图（非模态，已去除 aria-modal）。
 - 大文件（≥10MB）异步并提示；3D 加载进度条。
