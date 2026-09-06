@@ -1,42 +1,39 @@
 /**
- * 素材网格（CR-001 T-004 / R-002）。
+ * 素材行列表（CR-004 T-001：UI 全面对齐 rec/ 设计，取代旧卡片网格）。
  *
- * 卡片：缩略图（image 用会话级 objectUrl 渲染，缺失或加载失败时显示占位与提示，
- * 不破坏网格；dicom/model 显示类型图标占位）、名称、类型中文标签、状态徽标。
- * 交互：image 卡片主体可点击切换“比较选中”（最多两张，选中集合与上限由上层管理）；
- * dicom 卡片主体可点击打开 DICOM 查看器（onOpenDicom，T-005 接入；未提供时保持
- * 不可交互，兼容无查看器的使用场景）；model 卡片主体可点击打开 3D 模型查看器
- * （onOpenModel，T-006 接入；未提供时保持不可交互）；
- * 卡片元信息区提供“评审”按钮打开评审面板（onOpenReview，T-007 接入；未提供时不渲染）；
- * 状态徽标可点击切换状态（setAssetStatus 计算与 saveState 持久化由上层完成）。
+ * 行（rec SeriesSidebar 行风格）：38px 方形缩略图 + 名称行 + 元信息行
+ * （类型 · 状态点，mono 字体）；选中行 accent 左边框 + 底色。
+ * 无独立卡片容器、无行内“评审”按钮、无状态徽标按钮——状态与评审统一经
+ * “选中素材 → 右栏评审面板”完成（数据持久化契约不变）。
+ *
+ * 交互：image 行主体可点击切换“比较选中”（最多两张，选中集合与上限由上层
+ * 管理，同时作为“在中央查看该图片”）；dicom 行主体可点击打开 DICOM 查看器
+ * （onOpenDicom，T-005 接入；未提供时保持不可交互）；model 行主体可点击打开
+ * 3D 模型查看器（onOpenModel，T-006 接入；未提供时保持不可交互）。
  *
  * objectUrl 说明：T-003 导入时为 image 素材创建会话级 objectUrl（URL.createObjectURL），
  * 该字段不持久化——刷新后无法从 fileName 重建（原始 File 引用不在持久化数据中），
- * 因此刷新后图片卡片显示占位与提示；重新导入同一文件可恢复预览。
+ * 因此刷新后图片行显示占位与提示；重新导入同一文件可恢复预览。
  */
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Asset, AssetKind, AssetStatus } from '../../domain/types.ts'
+import type { Asset, AssetKind } from '../../domain/types.ts'
 import { ASSET_KIND_LABELS } from '../../domain/types.ts'
-import StatusBadge from './StatusBadge.tsx'
+import StatusDot from './StatusDot.tsx'
 
 export interface AssetGridProps {
   assets: readonly Asset[]
   /** 当前选中的素材 ID（用于图片比较，最多两张） */
   selectedIds: readonly string[]
-  /** 点击 image 卡片主体：切换比较选中 */
+  /** 点击 image 行主体：切换比较选中 */
   onToggleSelect: (assetId: string) => void
-  /** 点击状态徽标：设置新状态（持久化由上层完成） */
-  onSetStatus: (assetId: string, status: AssetStatus) => void
-  /** 点击 dicom 卡片主体：打开 DICOM 查看器（T-005）；未提供时 dicom 卡片不可交互 */
+  /** 点击 dicom 行主体：打开 DICOM 查看器（T-005）；未提供时 dicom 行不可交互 */
   onOpenDicom?: (assetId: string) => void
-  /** 点击 model 卡片主体：打开 3D 模型查看器（T-006）；未提供时 model 卡片不可交互 */
+  /** 点击 model 行主体：打开 3D 模型查看器（T-006）；未提供时 model 行不可交互 */
   onOpenModel?: (assetId: string) => void
-  /** 点击卡片“评审”按钮：打开评审面板（T-007）；未提供时不渲染该按钮 */
-  onOpenReview?: (assetId: string) => void
   /**
-   * 卡片附加内容插槽（CR-003 T-002 工作台布局）：渲染在卡片元信息区之后
-   * （如左栏 DICOM series/切片展开区）；未提供时不渲染，行为与原网格一致。
+   * 行附加内容插槽（CR-003 T-002 工作台布局）：渲染在行主体之后
+   * （如左栏 DICOM series/切片展开区）；未提供时不渲染。
    */
   renderExtras?: (asset: Asset) => ReactNode
 }
@@ -46,11 +43,11 @@ const IMAGE_PREVIEW_UNAVAILABLE = '预览不可用：刷新后需重新导入该
 const IMAGE_LOAD_FAILED = '图片加载失败'
 
 /** 类型图标（纯装饰）：image=图片、dicom=扫描框、model=立方体 */
-function KindGlyph({ kind }: { kind: AssetKind }) {
+function RowGlyph({ kind }: { kind: AssetKind }) {
   if (kind === 'image') {
     return (
       <svg
-        className="asset-card__glyph"
+        className="asset-row__glyph"
         viewBox="0 0 24 24"
         aria-hidden="true"
         fill="none"
@@ -66,7 +63,7 @@ function KindGlyph({ kind }: { kind: AssetKind }) {
   if (kind === 'dicom') {
     return (
       <svg
-        className="asset-card__glyph"
+        className="asset-row__glyph"
         viewBox="0 0 24 24"
         aria-hidden="true"
         fill="none"
@@ -80,7 +77,7 @@ function KindGlyph({ kind }: { kind: AssetKind }) {
   }
   return (
     <svg
-      className="asset-card__glyph"
+      className="asset-row__glyph"
       viewBox="0 0 24 24"
       aria-hidden="true"
       fill="none"
@@ -94,126 +91,128 @@ function KindGlyph({ kind }: { kind: AssetKind }) {
   )
 }
 
-/** 卡片缩略图：image 渲染 objectUrl，缺失 / 加载失败 / 其他类型显示占位 */
-function CardThumb({ asset }: { asset: Asset }) {
-  const [failed, setFailed] = useState(false)
-  const objectUrl = asset.objectUrl
-  // objectUrl 变化（如重新导入后）时复位加载失败状态
-  useEffect(() => {
-    setFailed(false)
-  }, [objectUrl])
-
-  if (asset.kind !== 'image' || objectUrl === undefined || failed) {
+/** 行缩略图：image 渲染 objectUrl，缺失 / 加载失败 / 其他类型显示类型占位（title 附提示） */
+function RowThumb({
+  asset,
+  broken,
+  hint,
+  onImageError,
+}: {
+  asset: Asset
+  broken: boolean
+  hint: string | null
+  onImageError: () => void
+}) {
+  const title = hint ?? undefined
+  if (asset.kind === 'image' && asset.objectUrl !== undefined && !broken) {
     return (
-      <div className="asset-card__thumb">
-        <KindGlyph kind={asset.kind} />
-        {asset.kind === 'image' ? (
-          <p className="asset-card__thumb-hint">
-            {failed ? IMAGE_LOAD_FAILED : IMAGE_PREVIEW_UNAVAILABLE}
-          </p>
-        ) : null}
+      <div className="sidebar-thumb asset-row__thumb" title={title}>
+        <img
+          className="asset-row__img"
+          src={asset.objectUrl}
+          alt={`素材“${asset.name}”的图片预览`}
+          onError={onImageError}
+        />
       </div>
     )
   }
   return (
-    <div className="asset-card__thumb">
-      <img
-        className="asset-card__img"
-        src={objectUrl}
-        alt={`素材“${asset.name}”的图片预览`}
-        onError={() => setFailed(true)}
-      />
+    <div className="sidebar-thumb asset-row__thumb" title={title}>
+      <RowGlyph kind={asset.kind} />
     </div>
   )
 }
 
-function AssetCard({
+function AssetRow({
   asset,
   selected,
   onToggleSelect,
-  onSetStatus,
   onOpenDicom,
   onOpenModel,
-  onOpenReview,
   renderExtras,
 }: {
   asset: Asset
   selected: boolean
   onToggleSelect: (assetId: string) => void
-  onSetStatus: (assetId: string, status: AssetStatus) => void
   onOpenDicom?: (assetId: string) => void
   onOpenModel?: (assetId: string) => void
-  onOpenReview?: (assetId: string) => void
   renderExtras?: (asset: Asset) => ReactNode
 }) {
   const isImage = asset.kind === 'image'
   const isDicomOpenable = asset.kind === 'dicom' && onOpenDicom !== undefined
   const isModelOpenable = asset.kind === 'model' && onOpenModel !== undefined
-  const mainContent = (
+  const [imgFailed, setImgFailed] = useState(false)
+  const objectUrl = asset.objectUrl
+  // objectUrl 变化（如重新导入后）时复位加载失败状态
+  useEffect(() => {
+    setImgFailed(false)
+  }, [objectUrl])
+  const previewBroken = asset.kind === 'image' && (objectUrl === undefined || imgFailed)
+  const previewHint = previewBroken
+    ? imgFailed
+      ? IMAGE_LOAD_FAILED
+      : IMAGE_PREVIEW_UNAVAILABLE
+    : null
+  const rowContent = (
     <>
-      <CardThumb asset={asset} />
-      <p className="asset-card__name" title={asset.name}>
-        {asset.name}
-      </p>
+      <RowThumb
+        asset={asset}
+        broken={previewBroken}
+        hint={previewHint}
+        onImageError={() => setImgFailed(true)}
+      />
+      <span className="asset-row__text">
+        <span className="asset-row__name" title={asset.name}>
+          {asset.name}
+        </span>
+        <span className="asset-row__meta">
+          <span className="asset-row__kind">{ASSET_KIND_LABELS[asset.kind]}</span>
+          <span className="asset-row__meta-sep" aria-hidden="true">
+            ·
+          </span>
+          <StatusDot status={asset.status} />
+        </span>
+        {previewHint !== null ? (
+          <span className="asset-row__hint">{previewHint}</span>
+        ) : null}
+      </span>
     </>
   )
   return (
-    <li className={selected ? 'asset-card is-selected' : 'asset-card'}>
+    <li className={selected ? 'asset-row is-selected' : 'asset-row'}>
       {isImage ? (
         <button
           type="button"
-          className="asset-card__main"
+          className="asset-row__main"
           aria-pressed={selected}
           aria-label={
             selected ? `取消选择“${asset.name}”` : `选择“${asset.name}”加入比较`
           }
           onClick={() => onToggleSelect(asset.id)}
         >
-          {mainContent}
+          {rowContent}
         </button>
       ) : isDicomOpenable ? (
         <button
           type="button"
-          className="asset-card__main"
+          className="asset-row__main"
           aria-label={`查看“${asset.name}”的 DICOM 详情`}
           onClick={() => onOpenDicom?.(asset.id)}
         >
-          {mainContent}
+          {rowContent}
         </button>
       ) : isModelOpenable ? (
         <button
           type="button"
-          className="asset-card__main"
+          className="asset-row__main"
           aria-label={`查看“${asset.name}”的 3D 模型`}
           onClick={() => onOpenModel?.(asset.id)}
         >
-          {mainContent}
+          {rowContent}
         </button>
       ) : (
-        <div className="asset-card__main">{mainContent}</div>
+        <div className="asset-row__main">{rowContent}</div>
       )}
-      {selected ? (
-        <span className="asset-card__selected-mark" aria-hidden="true">
-          已选中
-        </span>
-      ) : null}
-      <div className="asset-card__meta">
-        <span className="asset-card__kind">{ASSET_KIND_LABELS[asset.kind]}</span>
-        <StatusBadge
-          status={asset.status}
-          onSetStatus={(status) => onSetStatus(asset.id, status)}
-        />
-        {onOpenReview !== undefined ? (
-          <button
-            type="button"
-            className="asset-card__review"
-            aria-label={`评审“${asset.name}”`}
-            onClick={() => onOpenReview(asset.id)}
-          >
-            评审
-          </button>
-        ) : null}
-      </div>
       {renderExtras !== undefined ? renderExtras(asset) : null}
     </li>
   )
@@ -223,24 +222,20 @@ export default function AssetGrid({
   assets,
   selectedIds,
   onToggleSelect,
-  onSetStatus,
   onOpenDicom,
   onOpenModel,
-  onOpenReview,
   renderExtras,
 }: AssetGridProps) {
   return (
-    <ul className="asset-grid">
+    <ul className="asset-list">
       {assets.map((asset) => (
-        <AssetCard
+        <AssetRow
           key={asset.id}
           asset={asset}
           selected={selectedIds.includes(asset.id)}
           onToggleSelect={onToggleSelect}
-          onSetStatus={onSetStatus}
           onOpenDicom={onOpenDicom}
           onOpenModel={onOpenModel}
-          onOpenReview={onOpenReview}
           renderExtras={renderExtras}
         />
       ))}

@@ -2,12 +2,12 @@
  * 评审历史列表（CR-001 T-007 / R-005）。
  *
  * 追加式评审历史（append-only）的只读展示：每条记录显示时间戳（本地时间）、
- * 结论状态（颜色 + 文字双通道徽标）与评审意见；展示顺序为“最新在前”，
+ * 结论状态（颜色 + 文字双通道状态点）与评审意见；展示顺序为“最新在前”，
  * 便于先看到最近一次评审结论。历史记录本身由领域层（applyReview）追加，
  * 本组件不做任何改写。
  */
 import type { ReviewHistory as ReviewHistoryData } from '../../domain/types.ts'
-import StatusBadge from '../library/StatusBadge.tsx'
+import StatusDot from '../library/StatusDot.tsx'
 
 export interface ReviewHistoryProps {
   /** 追加式评审历史（时间正序存储）；undefined 视为空历史 */
@@ -45,7 +45,7 @@ export default function ReviewHistory({ history }: ReviewHistoryProps) {
                 <time className="review-history__time" dateTime={record.createdAt}>
                   {formatReviewTimestamp(record.createdAt)}
                 </time>
-                <StatusBadge status={record.status} />
+                <StatusDot status={record.status} />
               </p>
               {record.comment !== '' ? (
                 <p className="review-history__comment">{record.comment}</p>
