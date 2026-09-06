@@ -6,7 +6,7 @@
 id: T-001
 cr: CR-005
 type: feature
-status: planned
+status: done
 owner: Builder
 reviewer: Reviewer
 priority: high
@@ -48,4 +48,13 @@ branch: feature/CR-005-T-001-remove-samples
 
 ## Definition of done
 
-- [ ] 验收通过；PR（body 写概要）；Reviewer 审查
+- [x] 验收通过；PR（body 写概要）；Reviewer 审查
+
+## Builder result
+
+- 实现摘要：移除 App 内置样本导入（SAMPLE_STL_NAMES/handleLoadSamples/samplesLoading/samplesError）与 TopToolbar 样本按钮/Icon.Samples/importing prop（导入按钮高亮由 importActive 承担，行为不变）；删除 public/samples/stl/ 4 个 STL（git 历史可恢复）；App.test 样本用例改写为"直接文件导入 STL → 打开 3D 查看器"，并断言顶栏无样本按钮；README 三处提及"内置样本/样本按钮"同步移除并注明 CR-005/R-011。
+- 文件清单：src/App.tsx、src/features/workbench/TopToolbar.tsx、src/App.test.tsx、README.md、public/samples/stl/（4 文件删除）、本任务卡。
+- 验证：verify.ps1 全绿 —— test 28 files / 246 passed（测试总数不变，用例内容重构）；build（tsc + vite）通过。
+- commit：<见分支 feature/CR-005-T-001-remove-samples>
+- 已知限制：src 内仍有个别注释/测试 label 提及"样本"（buildStlFile.ts 注释、Model3DViewer.test 的 asset source: '内置样本' 字符串），不影响功能与验收 grep（handleLoadSamples/SAMPLE_STL_NAMES 无残留）；DICOM 样本按 Out of scope 保留。
+- 需 Reviewer 关注：TopToolbar 对外 props 契约变化（移除 importing/samplesLoading/onLoadSamples）为新契约删除，符合 R-011；App.workbench.test 无需修改（未引用样本按钮）。

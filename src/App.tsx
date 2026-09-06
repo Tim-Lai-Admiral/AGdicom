@@ -33,9 +33,6 @@ const LOAD_ISSUE_MESSAGES: Readonly<Record<LoadIssue, string>> = {
 /** 比较视图最多可选图片数（R-002：两张并排比较） */
 const COMPARE_SELECTION_LIMIT = 2
 
-/** 内置 STL 样本（public/samples/stl/，T-009 复制的 4 个心脏 STL）：可从素材库一键加载 */
-const SAMPLE_STL_NAMES: readonly string[] = ['aorta.stl', 'CB.stl', 'LA.stl', 'LVOT.stl']
-
 /** 右栏信息面板页签：DICOM 默认元数据分组，其余素材评审（R：右栏自动切换） */
 type RightTab = 'meta' | 'review'
 
@@ -53,8 +50,6 @@ function App() {
   const [exportOpen, setExportOpen] = useState(false)
   /** 左栏展开切片列表的 DICOM 素材（同一时间至多一个） */
   const [expandedDicomId, setExpandedDicomId] = useState<string | null>(null)
-  const [samplesLoading, setSamplesLoading] = useState(false)
-  const [samplesError, setSamplesError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   /** 窗宽窗位（CR-003 T-003 / R-003 修改）：默认自动 min-max；右栏面板调节，中央查看器消费 */
   const [windowLevel, setWindowLevel] = useState<WindowLevelState>(AUTO_WINDOW_LEVEL)
@@ -145,34 +140,6 @@ function App() {
   /** 导入备份：以备份数据整体替换当前状态（导入前已经过 io.ts 深度校验与冲突确认） */
   const handleImportState = (incoming: AppState): void => {
     commit(incoming, '导入已在本会话生效，但保存失败')
-  }
-
-  /**
-   * 加载内置 STL 样本（T-006 / R-004 验收）：fetch public/samples/stl/ 下 4 个心脏 STL
-   * → 转为 File → 复用 T-003 导入管线（useImport）注册为素材（重复导入由管线去重提示）。
-   * 大文件（LA 约 14MB）导入期间由 ImportZone 的 importing/importingLarge 状态提示。
-   */
-  const handleLoadSamples = (): void => {
-    if (importing || samplesLoading) return
-    setSamplesLoading(true)
-    setSamplesError(null)
-    void (async () => {
-      try {
-        const files: File[] = []
-        for (const name of SAMPLE_STL_NAMES) {
-          const response = await fetch(`${import.meta.env.BASE_URL}samples/stl/${name}`)
-          if (!response.ok) throw new Error(`HTTP ${response.status}`)
-          files.push(new File([await response.blob()], name, { type: 'model/stl' }))
-        }
-        await importFiles(files, '内置样本')
-      } catch (error) {
-        const reason =
-          error instanceof Error && error.message !== '' ? error.message : String(error)
-        setSamplesError(`内置样本加载失败（${reason}）。请通过 Vite 启动应用后重试。`)
-      } finally {
-        setSamplesLoading(false)
-      }
-    })()
   }
 
   /**
@@ -292,9 +259,6 @@ function App() {
         filter={filter}
         tagNames={tagNames}
         onFilterChange={setFilter}
-        importing={importing}
-        samplesLoading={samplesLoading}
-        onLoadSamples={handleLoadSamples}
         compareReady={selectedIds.length === COMPARE_SELECTION_LIMIT}
         onOpenCompare={openCompare}
         importActive={activeAssetId === null}
@@ -312,7 +276,7 @@ function App() {
         </div>
       ) : null}
 
-      {initialLoad.issue !== null || saveError !== null || samplesError !== null ? (
+      {initialLoad.issue !== null || saveError !== null ? (
         <div className="workbench__warnings">
           {initialLoad.issue !== null ? (
             <p className="app__storage-warning" role="alert">
@@ -323,12 +287,7 @@ function App() {
             <p className="app__save-warning" role="alert">
               {saveError}
             </p>
-          ) : null}
-          {samplesError !== null ? (
-            <p className="library__samples-error" role="alert">
-              {samplesError}
-            </p>
-          ) : null}
+          )           : null}
         </div>
       ) : null}
 
