@@ -4,7 +4,8 @@
  * 覆盖任务卡 Test requirements：
  * - 布局切换：四区（顶栏/左栏/中央/右栏）齐全；左/右栏面板开关（折叠后不溢出）；
  *   中央查看区按状态切换（导入视图 / 图片预览 / DICOM 查看器）；
- * - 左栏 DICOM 展开：series + 切片缩略图（复用 seriesUtils 数据），点击切片切换；
+ * - 左栏 DICOM 患者组展开：患者组 → series → 切片缩略图（复用 seriesUtils 数据），
+ *   选中素材时对应患者组自动展开并高亮，点击切片切换；
  * - 折叠交互：右栏信息面板与顶栏开关联动；
  * - T-004：右栏评审全链路（状态/标签/备注/历史/AI 建议）与顶栏导出/导入入口回环。
  */
@@ -141,15 +142,26 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
     fireEvent.click(within(right).getByRole('button', { name: '元数据' }))
     expect(within(right).getByText('DICOM 元数据')).toBeTruthy()
 
-    // 关闭中央查看器 → 回到导入视图
+    // 左栏患者组两级展开（CR-005 T-002 / R-012）：选中 s1 时其患者组面板自动展开；
+    // 3 个文件姓名/ID 均空 → 单一“未知患者”组；同 series → 1 行 3 切片，
+    // 当前素材所在 series 自动展开并高亮（患者组头 is-active + 缩略图 is-active）
+    await waitFor(() => {
+      expect(screen.getByText('未知患者')).toBeTruthy()
+      expect(screen.getAllByRole('button', { name: /^查看切片/ })).toHaveLength(3)
+    })
+    const activeThumbs = screen.getAllByRole('button', { name: /^查看切片/ })
+    expect((activeThumbs[0] as HTMLElement).className).toContain('is-active')
+
+    // 关闭中央查看器 → 回到导入视图（左栏患者组面板保持展开状态）
     fireEvent.click(within(dialog).getByRole('button', { name: '关闭' }))
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.getByText('将图片 / DICOM / 3D 模型文件拖到此处')).toBeTruthy()
 
-    // 左栏展开切片：series + 切片缩略图（解析回写后 seriesUtils 可分组）；
-    // 每张 DICOM 卡片都有自己的展开开关，取第一张
-    const expandToggles = screen.getAllByRole('button', { name: '展开切片' })
-    fireEvent.click(expandToggles[0] as HTMLElement)
+    // series 行可折叠：收起后缩略图隐藏，再展开恢复（series → 切片层级）
+    const seriesToggle = screen.getByRole('button', { name: /Series/ })
+    fireEvent.click(seriesToggle)
+    expect(screen.queryByRole('button', { name: /^查看切片/ })).toBeNull()
+    fireEvent.click(seriesToggle)
     const thumbs = screen.getAllByRole('button', { name: /^查看切片/ })
     expect(thumbs).toHaveLength(3)
 
