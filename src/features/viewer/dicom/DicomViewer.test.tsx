@@ -130,15 +130,11 @@ describe('DicomViewer: 元数据与 series 聚合', () => {
     // series 聚合：按 SeriesInstanceUID 分组统计切片数
     expect(within(dialog).getByText('3 张（本序列）')).toBeTruthy()
 
-    // 切片选择器：按 InstanceNumber 升序排列选项
-    const sliceSelect = within(dialog).getByLabelText('选择切片') as HTMLSelectElement
-    const optionTexts = Array.from(sliceSelect.options).map((option) => option.text)
-    expect(optionTexts).toEqual([
-      '#1 phantom-001.dcm',
-      '#2 phantom-002.dcm',
-      '#3 phantom-003.dcm',
-    ])
-    expect(sliceSelect.value).toBe('d3')
+    // 切片滑动条：按 InstanceNumber 排序映射 1..N，初始落在打开的切片（#3）
+    const slider = within(dialog).getByLabelText('选择切片') as HTMLInputElement
+    expect(slider.getAttribute('min')).toBe('1')
+    expect(slider.getAttribute('max')).toBe('3')
+    expect(slider.value).toBe('3')
     expect(within(dialog).getByText('切片 3 / 3（按 InstanceNumber 排序）')).toBeTruthy()
   })
 
@@ -182,8 +178,8 @@ describe('DicomViewer: 切片切换与预览', () => {
       expect(putImageData).toHaveBeenCalled()
     })
 
-    // 切换到 #1：表格切片序号与预览绘制同步更新
-    fireEvent.change(screen.getByLabelText('选择切片'), { target: { value: 'd1' } })
+    // 切换到 #1（滑动条 1..N 按 orderedSlices 索引映射）：读数与预览绘制同步更新
+    fireEvent.change(screen.getByLabelText('选择切片'), { target: { value: '1' } })
     await waitFor(() => {
       expect(screen.getByText('切片 1 / 3（按 InstanceNumber 排序）')).toBeTruthy()
     })
@@ -195,6 +191,28 @@ describe('DicomViewer: 切片切换与预览', () => {
     // min-max 归一化：最小值 → 0（黑），最大值 → 255（白），非全黑全白
     expect(lastImage.data[0]).toBe(0)
     expect(lastImage.data[63 * 4]).toBe(255)
+  })
+
+  it('ignores out-of-bound slider values without overflowing the slice range', async () => {
+    const { assets, files } = buildThreeSliceSeries()
+    stubFetchFor(files)
+    const { putImageData } = stubCanvasContext()
+
+    render(
+      <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('切片 3 / 3（按 InstanceNumber 排序）')).toBeTruthy()
+    })
+    await waitFor(() => {
+      expect(putImageData).toHaveBeenCalled()
+    })
+
+    // 越界值（0 / 超 max）：不切换（无 undefined 切片溢出），读数不变
+    fireEvent.change(screen.getByLabelText('选择切片'), { target: { value: '0' } })
+    fireEvent.change(screen.getByLabelText('选择切片'), { target: { value: '5' } })
+    expect(screen.getByText('切片 3 / 3（按 InstanceNumber 排序）')).toBeTruthy()
+    expect((screen.getByLabelText('选择切片') as HTMLInputElement).value).toBe('3')
   })
 })
 
@@ -506,8 +524,8 @@ describe('DicomViewer: W/L 与测量（CR-003 T-003）', () => {
       expect(screen.getByText('2.5 mm')).toBeTruthy()
     })
 
-    // 切换切片：测量清空（不泄漏到其他切片视图）
-    fireEvent.change(screen.getByLabelText('选择切片'), { target: { value: 'd1' } })
+    // 切换切片（滑动条）：测量清空（不泄漏到其他切片视图）
+    fireEvent.change(screen.getByLabelText('选择切片'), { target: { value: '1' } })
     await waitFor(() => {
       expect(screen.queryByText('2.5 mm')).toBeNull()
     })
@@ -562,16 +580,16 @@ describe('DicomViewer: 弹层交互', () => {
     )
     const dialog = await screen.findByRole('dialog', { name: 'DICOM 详情' })
     const closeButton = within(dialog).getByRole('button', { name: '关闭' }) as HTMLButtonElement
-    // 打开切片 #3：下一张禁用，可聚焦元素顺序 = [关闭, 上一张, 选择切片]
+    // 打开切片 #3：可聚焦元素顺序 = [关闭, 选择切片（滑动条）]
     // 切片导航在异步解析完成后才渲染，需等待
-    const select = (await within(dialog).findByLabelText('选择切片')) as HTMLSelectElement
+    const slider = (await within(dialog).findByLabelText('选择切片')) as HTMLInputElement
 
     // 打开时焦点自动落在关闭按钮（弹层内第一个可聚焦元素）
     expect(document.activeElement).toBe(closeButton)
 
     // Shift+Tab：从第一个可聚焦元素反向循环到最后一个
     fireEvent.keyDown(window, { key: 'Tab', shiftKey: true })
-    expect(document.activeElement).toBe(select)
+    expect(document.activeElement).toBe(slider)
 
     // Tab：从最后一个可聚焦元素正向循环回第一个
     fireEvent.keyDown(window, { key: 'Tab' })
