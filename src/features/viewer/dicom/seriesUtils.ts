@@ -92,3 +92,99 @@ export function sliceCountByAsset(entries: readonly DicomSeriesEntry[]): Record<
   }
   return counts
 }
+
+// ---------------------------------------------------------------------------
+// 患者分组（CR-005 T-002 / R-012）
+// ---------------------------------------------------------------------------
+
+/** 一个患者分组：PatientName + PatientID 完全相同的素材归入同组（R-012） */
+export interface DicomPatientGroup {
+  /**
+   * 分组键：`姓名\0ID`（\0 分隔避免字段拼接歧义）；
+   * 姓名与 ID 均缺失的素材共用 'unknown' 键（与已知键不含 \0，不会冲突）。
+   */
+  key: string
+  /** 患者姓名；缺失为 null */
+  patientName: string | null
+  /** 患者 ID；缺失为 null */
+  patientID: string | null
+  /** true = 姓名与 ID 均缺失（“未知患者”组，置于末尾） */
+  unknown: boolean
+  /** 组内 series（SeriesInstanceUID 升序，缺失 UID 排最后；切片按 InstanceNumber 排序） */
+  series: readonly DicomSeriesGroup[]
+  /** series 数（= series.length） */
+  seriesCount: number
+  /** 该患者全部切片数（组内各 series 切片数之和） */
+  sliceCount: number
+}
+
+/** SeriesInstanceUID 升序；null（无 UID 的孤立文件组）排最后并保持输入相对顺序 */
+function sortSeriesByUID(series: readonly DicomSeriesGroup[]): DicomSeriesGroup[] {
+  return [...series].sort((a, b) => {
+    if (a.seriesInstanceUID === null && b.seriesInstanceUID === null) return 0
+    if (a.seriesInstanceUID === null) return 1
+    if (b.seriesInstanceUID === null) return -1
+    if (a.seriesInstanceUID !== b.seriesInstanceUID) {
+      return a.seriesInstanceUID < b.seriesInstanceUID ? -1 : 1
+    }
+    return 0
+  })
+}
+
+/**
+ * 按 PatientName + PatientID 分组（R-012）：
+ * - 两者完全相同的素材同组（缺失一侧归一为空串参与键，parseDicom 已把空值归一为 undefined）；
+ * - 姓名与 ID 均缺失者（去标识化常见形态，同 'empty-patient-fields' 依据）共用一个
+ *   “未知患者”组（unknown=true），置于末尾；
+ * - 仅缺其一者按现有值参与键（不并入未知组，保留部分归属信息）；
+ * - 组间按（姓名, ID）升序（码点序，确定性优先）；组内 series 复用 groupDicomBySeries
+ *   （切片沿用 InstanceNumber 排序）并按 SeriesInstanceUID 升序排，缺失 UID 最后。
+ */
+export function groupDicomByPatient(entries: readonly DicomSeriesEntry[]): DicomPatientGroup[] {
+  const buckets = new Map<string, DicomSeriesEntry[]>()
+  for (const entry of entries) {
+    const name = entry.meta.patientName ?? ''
+    const id = entry.meta.patientID ?? ''
+    const key = name === '' && id === '' ? 'unknown' : `${name}\u0000${id}`
+    const bucket = buckets.get(key)
+    if (bucket === undefined) buckets.set(key, [entry])
+    else bucket.push(entry)
+  }
+  const groups: DicomPatientGroup[] = []
+  for (const [key, bucket] of buckets) {
+    const series = sortSeriesByUID(groupDicomBySeries(bucket))
+    const firstName = bucket[0]?.meta.patientName
+    const firstID = bucket[0]?.meta.patientID
+    groups.push({
+      key,
+      patientName: firstName !== undefined && firstName !== '' ? firstName : null,
+      patientID: firstID !== undefined && firstID !== '' ? firstID : null,
+      unknown: key === 'unknown',
+      series,
+      seriesCount: series.length,
+      sliceCount: series.reduce((sum, group) => sum + group.sliceCount, 0),
+    })
+  }
+  const known = groups.filter((group) => !group.unknown)
+  const unknowns = groups.filter((group) => group.unknown)
+  known.sort((a, b) => {
+    const aName = a.patientName ?? ''
+    const bName = b.patientName ?? ''
+    if (aName !== bName) return aName < bName ? -1 : 1
+    const aId = a.patientID ?? ''
+    const bId = b.patientID ?? ''
+    if (aId !== bId) return aId < bId ? -1 : 1
+    return 0
+  })
+  return [...known, ...unknowns]
+}
+
+/** 找到某素材所属的患者分组（素材无可用元数据时为 undefined） */
+export function findDicomPatientGroup(
+  groups: readonly DicomPatientGroup[],
+  assetId: string,
+): DicomPatientGroup | undefined {
+  return groups.find((group) =>
+    group.series.some((series) => series.slices.some((slice) => slice.assetId === assetId)),
+  )
+}

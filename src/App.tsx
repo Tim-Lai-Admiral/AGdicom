@@ -89,12 +89,14 @@ function App() {
     }
   }
 
-  /** 选中素材（工作台）：中央查看区 + 右栏面板联动（DICOM → 元数据分组，其余 → 评审） */
+  /** 选中素材（工作台）：中央查看区 + 右栏面板联动（DICOM → 元数据分组，其余 → 评审）；
+   *  DICOM 同时自动展开其患者分组面板（CR-005 T-002 / R-012：选中素材时对应患者组自动展开） */
   const selectAsset = (assetId: string): void => {
     setActiveAssetId(assetId)
     setRightOpen(true)
     const asset = state.assets[assetId]
     setRightTab(asset !== undefined && asset.kind === 'dicom' ? 'meta' : 'review')
+    if (asset !== undefined && asset.kind === 'dicom') setExpandedDicomId(assetId)
   }
 
   /** 关闭中央查看区：回到导入视图（查看器“关闭”/Esc 与评审面板“关闭”/Esc 共用） */
