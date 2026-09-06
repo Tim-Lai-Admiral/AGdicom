@@ -106,7 +106,7 @@ export default function TopToolbar({
       <span className="workbench__sep" aria-hidden="true" />
       <button
         type="button"
-        className={importActive ? 'tool-btn is-active' : 'tool-btn'}
+        className={importActive ? 'tool-btn active' : 'tool-btn'}
         aria-label="导入"
         aria-pressed={importActive}
         title="导入素材（选择文件 / 拖拽）"
@@ -139,7 +139,7 @@ export default function TopToolbar({
       <span className="workbench__spacer" aria-hidden="true" />
       <button
         type="button"
-        className={exportOpen ? 'tool-btn is-active' : 'tool-btn'}
+        className={exportOpen ? 'tool-btn active' : 'tool-btn'}
         aria-label="导出"
         aria-expanded={exportOpen}
         title="导出 / 导入评审数据"

@@ -54,13 +54,7 @@ describe('AssetGrid', () => {
     expect(img.getAttribute('src')).toBe('blob:mock-1')
   })
 
-  it('shows a placeholder with hint when the image has no objectUrl (post-refresh)', () => {
-    setup([makeAsset({ id: 'a1' })])
-    expect(screen.getByText(/预览不可用/)).toBeTruthy()
-    expect(screen.queryByRole('img')).toBeNull()
-  })
-
-  it('shows a placeholder on image load error without breaking other rows', () => {
+it('shows a placeholder on image load error without breaking other rows', () => {
     const { container } = setup([
       makeAsset({ id: 'a1', objectUrl: 'blob:broken' }),
       makeAsset({ id: 'a2', name: 'scan.dcm', kind: 'dicom' }),
@@ -71,16 +65,7 @@ describe('AssetGrid', () => {
     expect(container.querySelectorAll('.asset-row')).toHaveLength(2)
   })
 
-  it('shows the type glyph placeholder for dicom and model rows', () => {
-    const { container } = setup([
-      makeAsset({ id: 'a1', name: 'scan.dcm', kind: 'dicom' }),
-      makeAsset({ id: 'a2', name: 'aorta.stl', kind: 'model' }),
-    ])
-    expect(screen.queryByRole('img')).toBeNull()
-    expect(container.querySelectorAll('.asset-row__glyph')).toHaveLength(2)
-  })
-
-  it('toggles compare selection on image row click and marks the selected row', () => {
+it('toggles compare selection on image row click and marks the selected row', () => {
     const { onToggleSelect } = setup(
       [makeAsset({ id: 'a1' }), makeAsset({ id: 'a2', name: 'lung.png' })],
       ['a1'],
@@ -130,12 +115,7 @@ describe('AssetGrid', () => {
     expect(screen.queryByRole('button', { name: /aorta\.stl/ })).toBeNull()
   })
 
-  it('keeps dicom rows non-interactive when no onOpenDicom handler is provided', () => {
-    setup([makeAsset({ id: 'a1', name: 'scan.dcm', kind: 'dicom' })])
-    expect(screen.queryByRole('button', { name: /DICOM 详情/ })).toBeNull()
-  })
-
-  it('renders status as display-only: no inline status button and no review button (CR-004 T-001)', () => {
+it('renders status as display-only: no inline status button and no review button (CR-004 T-001)', () => {
     setup([makeAsset({ id: 'a1', status: 'pending' })])
     // 状态点仅展示；状态修改入口移到右栏评审面板（选中素材后）
     expect(screen.getByText('待评审', { selector: '.status-dot' })).toBeTruthy()

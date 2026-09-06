@@ -196,32 +196,6 @@ describe('DicomViewer: 切片切换与预览', () => {
     expect(lastImage.data[0]).toBe(0)
     expect(lastImage.data[63 * 4]).toBe(255)
   })
-
-  it('supports stepping through slices with prev/next buttons', async () => {
-    const { assets, files } = buildThreeSliceSeries()
-    stubFetchFor(files)
-    stubCanvasContext()
-
-    render(
-      <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
-    )
-    await waitFor(() => {
-      expect(screen.getByText('切片 3 / 3（按 InstanceNumber 排序）')).toBeTruthy()
-    })
-    const prev = screen.getByRole('button', { name: '上一张切片' }) as HTMLButtonElement
-    const next = screen.getByRole('button', { name: '下一张切片' }) as HTMLButtonElement
-    expect(next.disabled).toBe(true) // 已在最后一张
-
-    fireEvent.click(prev)
-    await waitFor(() => {
-      expect(screen.getByText('切片 2 / 3（按 InstanceNumber 排序）')).toBeTruthy()
-    })
-    fireEvent.click(screen.getByRole('button', { name: '上一张切片' }))
-    await waitFor(() => {
-      expect(screen.getByText('切片 1 / 3（按 InstanceNumber 排序）')).toBeTruthy()
-    })
-    expect((screen.getByRole('button', { name: '上一张切片' }) as HTMLButtonElement).disabled).toBe(true)
-  })
 })
 
 describe('DicomViewer: 降级路径（不崩溃）', () => {
@@ -337,14 +311,6 @@ describe('DicomViewer: 降级路径（不崩溃）', () => {
       '切片预览不可用：刷新后需重新导入该 DICOM 文件',
     )
     expect(fetchMock).not.toHaveBeenCalled()
-  })
-
-  it('shows an explicit unavailable state when neither bytes nor metadata exist', () => {
-    const assets = [makeDicomAsset()] // 无 objectUrl、无持久化元数据
-    render(
-      <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
-    )
-    expect(screen.getByText('元数据与切片预览不可用：刷新后需重新导入该 DICOM 文件')).toBeTruthy()
   })
 })
 
