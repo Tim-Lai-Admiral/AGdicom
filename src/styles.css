@@ -746,49 +746,25 @@ button.asset-row__main:hover {
   flex-wrap: wrap;
 }
 
-.dicom-viewer__slice-button {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
-  padding: 0.35rem 0.8rem;
-  font-size: 0.875rem;
-  font-family: inherit;
-  cursor: pointer;
+.dicom-viewer__slice-counter {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
   white-space: nowrap;
 }
 
-.dicom-viewer__slice-button:hover:not(:disabled) {
-  background: var(--color-bg);
-}
-
-.dicom-viewer__slice-button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.dicom-viewer__slice-select-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  font-size: 0.875rem;
-  color: var(--color-text-muted);
-}
-
-.dicom-viewer__slice-select {
-  max-width: 16rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
+.dicom-viewer__slice-counter-current {
   color: var(--color-text);
-  padding: 0.35rem 0.5rem;
-  font-size: 0.875rem;
-  font-family: inherit;
+}
+
+.dicom-viewer__slice-slider {
+  min-width: 8rem;
 }
 
 .dicom-viewer__slice-position {
   font-size: 0.8125rem;
   color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 /* --- 元数据表格 --- */

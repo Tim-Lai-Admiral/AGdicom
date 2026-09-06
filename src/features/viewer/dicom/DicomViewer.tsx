@@ -312,11 +312,6 @@ export default function DicomViewer({
     }
   }, [onClose])
 
-  const handleStepSlice = (delta: number): void => {
-    const next = orderedSlices[selectedSliceIndex + delta]
-    if (next !== undefined) setSelectedAssetId(next.assetId)
-  }
-
   // ---- 测量工具指针交互（R-010 Mock）：工具开启且预览渲染后可拖拽，抬起落笔 ----
   const canvasPointFromEvent = (event: ReactPointerEvent<HTMLCanvasElement>): MeasurePoint | null => {
     const canvas = canvasRef.current
@@ -513,46 +508,26 @@ export default function DicomViewer({
             </div>
             {orderedSlices.length > 0 ? (
               <div className="dicom-viewer__slice-nav">
-                <button
-                  type="button"
-                  className="dicom-viewer__slice-button"
-                  onClick={() => handleStepSlice(-1)}
-                  disabled={selectedSliceIndex === 0}
-                  aria-label="上一张切片"
-                >
-                  ‹ 上一张
-                </button>
-                <label className="dicom-viewer__slice-select-label">
-                  <span>切片</span>
-                  <select
-                    className="dicom-viewer__slice-select"
-                    aria-label="选择切片"
-                    value={selectedAssetId}
-                    onChange={(event) => {
-                      setSelectedAssetId(event.target.value)
-                    }}
-                  >
-                    {orderedSlices.map((slice, index) => {
-                      const sliceAsset = assetById.get(slice.assetId)
-                      return (
-                        <option key={slice.assetId} value={slice.assetId}>
-                          {`#${slice.instanceNumber ?? index + 1} ${
-                            sliceAsset?.file.fileName ?? slice.assetId
-                          }`}
-                        </option>
-                      )
-                    })}
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  className="dicom-viewer__slice-button"
-                  onClick={() => handleStepSlice(1)}
-                  disabled={selectedSliceIndex >= orderedSlices.length - 1}
-                  aria-label="下一张切片"
-                >
-                  下一张 ›
-                </button>
+                <span className="dicom-viewer__slice-counter">
+                  <span className="dicom-viewer__slice-counter-current">
+                    {selectedSliceIndex + 1}
+                  </span>
+                  {` / ${orderedSlices.length}`}
+                </span>
+                <input
+                  type="range"
+                  className="dicom-viewer__slice-slider range-input"
+                  aria-label="选择切片"
+                  min={1}
+                  max={orderedSlices.length}
+                  value={selectedSliceIndex + 1}
+                  style={{ flex: 1 }}
+                  onChange={(event) => {
+                    const index = Number(event.target.value) - 1
+                    const slice = orderedSlices[index]
+                    if (slice !== undefined) setSelectedAssetId(slice.assetId)
+                  }}
+                />
                 <span className="dicom-viewer__slice-position">
                   {`切片 ${selectedSliceIndex + 1} / ${orderedSlices.length}（按 InstanceNumber 排序）`}
                 </span>
