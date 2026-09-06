@@ -99,4 +99,4 @@ branch: feature/CR-005-T-002-patient-grouping
 - `App.tsx` 的 `selectAsset` 增加 `setExpandedDicomId` 联动：卡片级面板打开后患者组内
   series 自动展开是否与验收"选中素材时对应患者组自动展开并高亮"一致。
 
-（commit/PR 链接见派发报告；分支 `feature/CR-005-T-002-patient-grouping`）
+（commit `482bee5`；PR：https://github.com/Tim-Lai-Admiral/AGdicom/pull/24；分支 `feature/CR-005-T-002-patient-grouping`。注意：分支历史包含 T-001 的 3 个 commit——分支实际自 T-001 分支创建，与派发说明不符；T-002 改动与 T-001 无文件重叠，PR diff 说明已写入 PR body）
