@@ -12,7 +12,7 @@
 
 1. 打开应用 → 全屏工作台：顶栏筛选/搜索/导入/导出；左栏素材列表；中央查看区；右栏元数据/评审面板。
 2. 顶栏筛选/搜索 → 左栏素材列表更新 → 点击素材 → 中央渲染对应查看器 → 右栏自动切换（DICOM 显示元数据+W/L，其余显示评审面板）。
-3. DICOM：左栏展开 series + 切片缩略图（点击/滚轮/滑块切换切片）；右栏窗宽窗位滑杆（C:-1000..1000 / W:1..4000）与 6 预设（Lung/Mediastinum/Bone/Brain/Liver/S.Tissue）实时调窗；测量工具拖拽绘制（Mock，PixelSpacing 可用时确定性 mm，否则 px 模拟值）。
+3. DICOM：左栏按患者组展开（姓名+ID 分组 → series → 切片缩略图，点击切换）；切片导航为**滑动条**（rec 样式，含计数读数）；右栏窗宽窗位滑杆（C:-1000..1000 / W:1..4000）与 6 预设（Lung/Mediastinum/Bone/Brain/Liver/S.Tissue）实时调窗；测量工具拖拽绘制（Mock，PixelSpacing 可用时确定性 mm，否则 px 模拟值）。
 4. 图片：预览与双图并排比较（选中两张 → 比较态 → Esc 退出）；3D：旋转/缩放/平移（WebGL 降级提示）。
 5. 评审面板（右栏）：状态 + 评审意见（追加历史）、标签/备注、AI 建议（Mock 明示，采纳/忽略）。
 6. 导出 JSON（review-export-YYYYMMDD-HHmmss.json）→ 导入恢复（非法拒绝）。

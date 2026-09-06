@@ -6,7 +6,7 @@
 id: CR-005
 title: "移除内置样本导入、DICOM 按患者分组索引排序、切片切换改滑动条（rec 样式）"
 change_level: L2
-status: approved
+status: completed
 parent: null
 created_by: Planner
 created_at: 2026-09-06
@@ -50,9 +50,10 @@ Human 反馈（2026-09-06）：
 
 ## Tasks
 
-- [ ] T-001: 移除内置样本导入（App/TopToolbar/样本文件/测试）
-- [ ] T-002: DICOM 患者分组索引与排序（seriesUtils 纯函数 + 左栏展开层级）
-- [ ] T-003: 切片切换改滑动条（DicomViewer + 测试适配）
+- [x] T-001: 移除内置样本导入（App/TopToolbar/样本文件/测试）
+- [x] T-002: DICOM 患者分组索引与排序（seriesUtils 纯函数 + 左栏展开层级）
+- [x] T-003: 切片切换改滑动条（DicomViewer + 测试适配）
+- [x] T-004: 审查 Minor 收尾清理（死代码/注释/CURRENT 表述）
 
 ## Dependencies
 
@@ -64,4 +65,7 @@ Human 反馈（2026-09-06）：
 
 ## Result
 
-<!-- 合并后填写 -->
+- 2026-09-06 完成。T-001~T-004 合并至 master（PR #23~#26，顺序 23→24→25→26，分支已删）。
+- 审查 PASS（REVIEW-CR005.md；代码全部 PASS，2 个合并卫生阻塞已解决：PR #25 body 披露分支链、CR-005 文档提交推送 origin）。
+- R-012 口径（Human 已接受）：患者字段"两者皆缺"→未知患者组末尾；"仅缺其一"→按空串参与（姓名, ID）码点排序。
+- CURRENT 已更新（REQUIREMENTS R-011/012/013、DESIGN 滑动条与患者分组），Tag v0.2.2。
