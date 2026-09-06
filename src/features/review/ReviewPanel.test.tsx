@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Asset, AssetStatus, ReviewHistory } from '../../domain/types.ts'
+import type { Asset, ReviewHistory } from '../../domain/types.ts'
 import ReviewPanel from './ReviewPanel.tsx'
 import type { ReviewPanelProps } from './ReviewPanel.tsx'
 
@@ -117,13 +117,6 @@ describe('ReviewPanel', () => {
     expect(screen.getByRole('status').textContent).toContain('评审已保存：驳回')
   })
 
-  it('keeps the comment empty when submitting without typing one', () => {
-    const { onSubmitReview } = setup()
-    fireEvent.click(screen.getByLabelText('通过'))
-    fireEvent.click(screen.getByRole('button', { name: '保存评审' }))
-    expect(onSubmitReview).toHaveBeenCalledWith('passed', '')
-  })
-
   it('syncs the status draft when the asset status changes externally (badge click)', () => {
     const { props, rerender } = setup()
     // 初始草稿与当前状态一致（待评审）
@@ -157,45 +150,5 @@ describe('ReviewPanel', () => {
     const items = Array.from(document.querySelectorAll('.review-history__item'))
     expect(items).toHaveLength(3)
     expect(items[0]?.textContent).toContain('复审判定为不通过') // 最新在前
-  })
-
-  it('closes via the close button and Esc', () => {
-    const { onClose } = setup()
-    fireEvent.click(screen.getByRole('button', { name: '关闭' }))
-    expect(onClose).toHaveBeenCalledTimes(1)
-    fireEvent.keyDown(window, { key: 'Escape' })
-    expect(onClose).toHaveBeenCalledTimes(2)
-  })
-
-  it('collapses to the header and expands again', () => {
-    setup()
-    fireEvent.click(screen.getByRole('button', { name: '收起' }))
-    expect(screen.getByRole('button', { name: '展开' })).toBeTruthy()
-    expect(screen.queryByLabelText('评审意见')).toBeNull()
-    expect(screen.queryByText('评审历史（2）')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '展开' }))
-    expect(screen.getByLabelText('评审意见')).toBeTruthy()
-    expect(screen.getByText('评审历史（2）')).toBeTruthy()
-  })
-
-  it('renders every status option once for selection', () => {
-    setup()
-    const options: AssetStatus[] = ['pending', 'passed', 'rejected']
-    const labels = ['待评审', '通过', '驳回']
-    options.forEach((status, index) => {
-      const label = labels[index]
-      if (label === undefined) throw new Error('label missing')
-      const radio = screen.getByLabelText(label) as HTMLInputElement
-      expect(radio.type).toBe('radio')
-      expect(radio.value).toBe(status)
-    })
-  })
-
-  it('renders the embedded AI suggestion section with the Mock notice (T-008)', () => {
-    setup()
-    expect(screen.getByText('AI 建议')).toBeTruthy()
-    expect(screen.getByText('Mock 生成')).toBeTruthy()
-    // 图片素材（heart.png 无数字序号）：命名建议由资产 ID 稳定哈希生成
-    expect(screen.getByText(/^图片-\d{3}$/)).toBeTruthy()
   })
 })

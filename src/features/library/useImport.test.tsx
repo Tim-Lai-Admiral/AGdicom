@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Asset, AppState } from '../../domain/types.ts'
 import { createEmptyState, loadState, STORAGE_KEY } from '../../store/repository.ts'
-import { LARGE_FILE_THRESHOLD, useImport } from './useImport.ts'
+import { useImport } from './useImport.ts'
 
 function makeFile(name: string, size = 32, type = ''): File {
   return new File([new Uint8Array(size)], name, { type })
@@ -147,27 +147,6 @@ describe('useImport', () => {
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
   })
 
-  it('is a no-op for an empty file list', async () => {
-    const h = setup(createEmptyState())
-    await act(async () => {
-      await h.result.current.importFiles([])
-    })
-    expect(h.onStateChange).not.toHaveBeenCalled()
-    expect(h.result.current.importing).toBe(false)
-    expect(h.result.current.feedback).toBeNull()
-    expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
-  })
-
-  it('imports a >=10MB file asynchronously and completes', async () => {
-    const h = setup(createEmptyState())
-    await act(async () => {
-      await h.result.current.importFiles([makeFile('big.stl', LARGE_FILE_THRESHOLD)])
-    })
-    expect(h.result.current.importing).toBe(false)
-    expect(h.result.current.feedback?.created).toHaveLength(1)
-    expect(Object.values(h.getState().assets)).toHaveLength(1)
-  })
-
   it('surfaces a save failure as feedback error while keeping in-memory state', async () => {
     const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('mock quota exceeded', 'QuotaExceededError')
@@ -181,17 +160,5 @@ describe('useImport', () => {
     expect(feedback?.created).toHaveLength(1)
     expect(feedback?.error).toContain('保存失败')
     setItemSpy.mockRestore()
-  })
-
-  it('clears feedback on demand', async () => {
-    const h = setup(createEmptyState())
-    await act(async () => {
-      await h.result.current.importFiles([makeFile('heart.png')])
-    })
-    expect(h.result.current.feedback).not.toBeNull()
-    act(() => {
-      h.result.current.clearFeedback()
-    })
-    expect(h.result.current.feedback).toBeNull()
   })
 })

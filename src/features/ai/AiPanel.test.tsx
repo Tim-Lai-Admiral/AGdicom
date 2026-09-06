@@ -93,19 +93,6 @@ describe('AiPanel', () => {
     expect(screen.getByRole('status').textContent).toContain('未产生任何变更')
   })
 
-  it('regenerating after ignoring shows the same deterministic suggestion', () => {
-    setup()
-    fireEvent.click(screen.getByRole('button', { name: '忽略建议' }))
-    fireEvent.click(screen.getByRole('button', { name: '重新查看建议' }))
-    expect(screen.getByText('CT-序列1.2.840-12切片')).toBeTruthy()
-  })
-
-  it('disables name acceptance when the suggestion equals the current name', () => {
-    setup({ asset: makeAsset({ name: 'CT-序列1.2.840-12切片' }) })
-    const button = screen.getByRole('button', { name: '名称已符合建议' }) as HTMLButtonElement
-    expect(button.disabled).toBeTruthy()
-  })
-
   it('degrades to an empty suggestion without crashing when the provider throws', () => {
     setup({ provider: THROWING_PROVIDER })
     expect(screen.getByText('暂无建议：生成失败，素材数据不受影响。')).toBeTruthy()

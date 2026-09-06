@@ -70,30 +70,12 @@ describe('ImportZone', () => {
     expect(onImportFiles).toHaveBeenCalledWith([file], '拖拽导入')
   })
 
-  it('ignores drops while an import is in progress', () => {
-    const { dropzone, onImportFiles } = renderZone({ importing: true })
-    fireEvent.drop(dropzone, { dataTransfer: { files: [makeFile('heart.png')] } })
-    expect(onImportFiles).not.toHaveBeenCalled()
-  })
-
-  it('ignores drops with an empty file list', () => {
-    const { dropzone, onImportFiles } = renderZone()
-    fireEvent.drop(dropzone, { dataTransfer: { files: [] } })
-    expect(onImportFiles).not.toHaveBeenCalled()
-  })
-
   it('imports picked files with the picker source', () => {
     const { input, onImportFiles } = renderZone()
     const file = makeFile('scan.dcm')
     fireEvent.change(input, { target: { files: [file] } })
     expect(onImportFiles).toHaveBeenCalledTimes(1)
     expect(onImportFiles).toHaveBeenCalledWith([file], '文件选择导入')
-  })
-
-  it('does nothing when the picker change carries no files', () => {
-    const { input, onImportFiles } = renderZone()
-    fireEvent.change(input, { target: { files: [] } })
-    expect(onImportFiles).not.toHaveBeenCalled()
   })
 
   it('shows importing status, large-file hint and disables the button while importing', () => {

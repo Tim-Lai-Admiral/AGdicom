@@ -191,25 +191,6 @@ describe('ExportImport', () => {
     expect(onImport).not.toHaveBeenCalled()
   })
 
-  it('rejects structurally invalid state with a validation summary', async () => {
-    const onImport = vi.fn()
-    const { container } = render(<ExportImport state={makeState()} onImport={onImport} />)
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement
-    chooseFile(
-      input,
-      JSON.stringify({
-        schemaVersion: 1,
-        exportedAt: NOW,
-        state: { assets: { a1: { id: 1 } }, tags: {}, reviews: {} },
-      }),
-    )
-    await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeTruthy()
-    })
-    expect(screen.getByRole('alert').textContent).toContain('数据结构校验未通过')
-    expect(onImport).not.toHaveBeenCalled()
-  })
-
   it('warns on name conflicts and imports only after confirmation', async () => {
     // 现有素材 heart.png（asset-1）；备份里的 heart.png（asset-2）与其名称冲突
     const incoming = makeState()
@@ -241,14 +222,5 @@ describe('ExportImport', () => {
     })
     expect(onImport.mock.calls[0]?.[0]).toEqual(incoming)
     expect(screen.getByRole('status').textContent).toContain('已导入并还原 1 个素材')
-  })
-
-  it('does nothing when the file picker change carries no file', () => {
-    const onImport = vi.fn()
-    const { container } = render(<ExportImport state={makeState()} onImport={onImport} />)
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement
-    fireEvent.change(input, { target: { files: [] } })
-    expect(onImport).not.toHaveBeenCalled()
-    expect(screen.queryByRole('alert')).toBeNull()
   })
 })

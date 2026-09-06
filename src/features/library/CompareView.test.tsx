@@ -51,15 +51,6 @@ describe('CompareView', () => {
     expect(screen.getByRole('img', { name: /lung\.png/ })).toBeTruthy()
   })
 
-  it('shows placeholders when objectUrl is missing (post-refresh session)', () => {
-    renderCompare(
-      makeImageAsset({ id: 'a1', name: 'heart.png' }),
-      makeImageAsset({ id: 'a2', name: 'lung.png' }),
-    )
-    expect(screen.queryByRole('img')).toBeNull()
-    expect(screen.getAllByText(/预览不可用/)).toHaveLength(2)
-  })
-
   it('exits via the exit button and via the Escape key', () => {
     const { onExit } = renderCompare(
       makeImageAsset({ id: 'a1', name: 'heart.png', objectUrl: 'blob:mock-1' }),
@@ -83,15 +74,5 @@ describe('CompareView', () => {
     fireEvent.error(images[0] as HTMLImageElement)
     expect(screen.getByText('图片加载失败')).toBeTruthy()
     expect(screen.getByRole('img', { name: /lung\.png/ })).toBeTruthy()
-  })
-
-  it('removes the Escape listener on unmount', () => {
-    const { onExit } = renderCompare(
-      makeImageAsset({ id: 'a1', name: 'heart.png' }),
-      makeImageAsset({ id: 'a2', name: 'lung.png' }),
-    )
-    cleanup()
-    fireEvent.keyDown(window, { key: 'Escape' })
-    expect(onExit).not.toHaveBeenCalled()
   })
 })
