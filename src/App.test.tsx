@@ -257,9 +257,9 @@ describe('App', () => {
     expect(compareButton().disabled).toBe(true)
   })
 
-  it('loads built-in STL samples and opens the 3D viewer from a model card', async () => {
-    // 内置样本与查看器加载统一 stub fetch：返回最小二进制 STL（284 字节）。
-    // 样本按钮走 blob()（转 File），查看器走 arrayBuffer()（loader 读取），两者都要提供。
+  it('imports a STL file directly via file selection and opens the 3D viewer from a model card', async () => {
+    // R-011：内置样本已移除，STL 仅经文件选择导入。查看器加载 stub fetch：
+    // 返回最小二进制 STL（arrayBuffer 供 loader 读取）。
     const stlBytes = new Uint8Array(buildStlFile())
     vi.stubGlobal(
       'fetch',
@@ -268,7 +268,6 @@ describe('App', () => {
         status: 200,
         headers: { get: () => String(stlBytes.byteLength) },
         body: null,
-        blob: async () => new Blob([stlBytes], { type: 'model/stl' }),
         arrayBuffer: async () => stlBytes.slice().buffer,
       })),
     )
@@ -283,15 +282,12 @@ describe('App', () => {
     })
     try {
       const { container } = render(<App />)
-      dropFiles(container, [makeFile('heart.png', 64, 'image/png')])
+      dropFiles(container, [
+        makeFile('heart.png', 64, 'image/png'),
+        new File([stlBytes.slice()], 'aorta.stl', { type: 'model/stl' }),
+      ])
       await waitFor(() => {
-        expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
-      })
-
-      // 一键加载内置样本：fetch 4 个 STL → File → T-003 导入管线注册（去重）
-      fireEvent.click(screen.getByRole('button', { name: '加载内置样本（STL）' }))
-      await waitFor(() => {
-        expect(screen.getByText('成功导入 4 个素材')).toBeTruthy()
+        expect(screen.getByText('成功导入 2 个素材')).toBeTruthy()
       })
       expect(screen.getByText('aorta.stl')).toBeTruthy()
 
@@ -307,10 +303,11 @@ describe('App', () => {
       expect(within(dialog).getByText('左键拖拽：旋转')).toBeTruthy()
       expect(within(dialog).getByText('右键拖拽：平移')).toBeTruthy()
 
-      // Esc 关闭；素材库仍在
+      // Esc 关闭；素材库仍在；顶栏无内置样本按钮
       fireEvent.keyDown(window, { key: 'Escape' })
       expect(screen.queryByRole('dialog', { name: '3D 模型预览' })).toBeNull()
-      expect(screen.getByText('素材库（5）')).toBeTruthy()
+      expect(screen.getByText('素材库（2）')).toBeTruthy()
+      expect(screen.queryByRole('button', { name: '加载内置样本（STL）' })).toBeNull()
     } finally {
       if (originalCreateObjectURL === undefined) {
         delete (URL as { createObjectURL?: unknown }).createObjectURL
