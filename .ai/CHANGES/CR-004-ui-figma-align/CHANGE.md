@@ -4,9 +4,9 @@
 
 ```yaml
 id: CR-004
-title: "UI 全面对齐 rec/（Figma Make）设计语言，放弃旧卡片/评审按钮等独立设计"
+title: "UI 全面对齐 rec/（Figma Make）设计语言，清除旧卡片/评审按钮等独立设计"
 change_level: L4
-status: approved
+status: completed
 parent: CR-003
 created_by: Planner
 created_at: 2026-09-06
@@ -46,7 +46,7 @@ CR-003 完成工作台布局后，Human 检查发现界面仍残留旧设计元�
 
 ## Tasks
 
-- [ ] T-001: UI 全面对齐 rec/（左栏行式列表、顶栏 rec 语言、清除旧卡片/评审按钮设计）
+- [x] T-001: UI 全面对齐 rec/（左栏行式列表、顶栏图标化、状态点、清除旧卡片/评审按钮设计）
 
 ## Dependencies
 
@@ -58,4 +58,7 @@ CR-003 完成工作台布局后，Human 检查发现界面仍残留旧设计元�
 
 ## Result
 
-<!-- 合并后填写 -->
+- 2026-09-06 完成。T-001（PR #20）与 T-002（PR #21）合并至 master，分支已删；审查 PASS（REVIEW-CR004.md；T-002 经 rebase 解决 T-001 合流冲突后复评通过）。
+- P-005 数字修正：测试基线实为 274（非预估 270），T-001 后 270，T-002 裁 24 → 246（REQUIREMENTS.md 已更正）。
+- 附带修复：顶栏激活态类名 is-active→active（M2）。
+- CURRENT 已更新（DESIGN/REQUIREMENTS），Tag v0.2.1。
