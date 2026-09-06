@@ -289,7 +289,7 @@ function App() {
             <p className="app__save-warning" role="alert">
               {saveError}
             </p>
-          )           : null}
+          ) : null}
         </div>
       ) : null}
 

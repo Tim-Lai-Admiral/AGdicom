@@ -21,7 +21,7 @@ function makeModelAsset(objectUrl?: string): Asset {
     status: 'pending',
     tags: [],
     note: '',
-    source: '内置样本',
+    source: '样本 STL',
     file: { fileName: 'aorta.stl', fileSize: 284, fileType: 'model/stl' },
     createdAt: at,
     updatedAt: at,

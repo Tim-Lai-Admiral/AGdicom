@@ -101,7 +101,7 @@ export function sliceCountByAsset(entries: readonly DicomSeriesEntry[]): Record<
 export interface DicomPatientGroup {
   /**
    * 分组键：`姓名\0ID`（\0 分隔避免字段拼接歧义）；
-   * 姓名与 ID 均缺失的素材共用 'unknown' 键（与已知键不含 \0，不会冲突）。
+   * 姓名与 ID 均缺失的素材共用 'unknown' 键（已知键含 \0 分隔符，'unknown' 不含 \0，不会冲突）。
    */
   key: string
   /** 患者姓名；缺失为 null */
