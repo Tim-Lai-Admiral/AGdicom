@@ -3,8 +3,9 @@
  *
  * 工作台右栏信息面板内嵌（非路由、非模态，可与查看器并存——查看器位于中央区，
  * 互不覆盖；CR-003 T-002 布局壳 / T-004 归位）：
- * - 评审结论：状态单选（待评审/通过/驳回，草稿态，随外部变更如卡片徽标同步）+
+ * - 评审结论：状态单选（待评审/通过/驳回，草稿态，随外部变更同步）+
  *   评审意见 → “保存评审”一次提交（每次保存追加一条评审历史并留痕）；
+ *   CR-004 T-001 起状态修改入口唯一：选中素材 → 本面板（左栏行内状态仅展示）。
  * - 标签：当前标签可移除；输入框可新建自建标签（由领域层自动并入全局标签库）；
  *   全局标签库（注册表 ∪ 实际使用）一键复用；
  * - 备注：独立保存（不追加评审历史）；
@@ -19,7 +20,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Asset, AssetStatus, ReviewHistory as ReviewHistoryData } from '../../domain/types.ts'
 import { ASSET_KIND_LABELS, ASSET_STATUS_LABELS } from '../../domain/types.ts'
 import AiPanel from '../ai/AiPanel.tsx'
-import StatusBadge from '../library/StatusBadge.tsx'
+import StatusDot from '../library/StatusDot.tsx'
 import ReviewHistory from './ReviewHistory.tsx'
 
 /** 状态单选的固定顺序（与状态徽标循环一致） */
@@ -76,7 +77,7 @@ export default function ReviewPanel({
     setNewTag('')
     // 仅在素材切换时重置
   }, [asset.id])
-  // 外部状态/备注变更（如卡片徽标点击）同步到草稿，面板显示不落伍
+  // 外部状态/备注变更（如评审保存后）同步到草稿，面板显示不落伍
   useEffect(() => {
     setDraftStatus(asset.status)
   }, [asset.status])
@@ -174,7 +175,7 @@ export default function ReviewPanel({
             </p>
             <p className="review-panel__asset-meta">
               <span className="review-panel__asset-kind">{ASSET_KIND_LABELS[asset.kind]}</span>
-              <StatusBadge status={asset.status} />
+              <StatusDot status={asset.status} />
             </p>
             <p className="review-panel__asset-source">
               文件：{asset.file.fileName}　来源：{asset.source === '' ? '未提供' : asset.source}
