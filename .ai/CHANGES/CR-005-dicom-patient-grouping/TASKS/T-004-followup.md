@@ -61,7 +61,7 @@ branch: feature/CR-005-T-004-followup
   5. CURRENT 文档按 R-011 更新：`REQUIREMENTS.md` R-004 移除"内置样本加载入口"（标注已按 R-011 移除）、UI-001 移除"加载样本"；`DESIGN.md` Primary flow 移除"加载样本"。
 - **文件清单**：`src/App.tsx`、`src/styles.css`、`src/features/viewer/dicom/seriesUtils.ts`、`src/features/viewer/model3d/__fixtures__/buildStlFile.ts`、`src/features/viewer/model3d/Model3DViewer.test.tsx`、`.ai/CURRENT/REQUIREMENTS.md`、`.ai/CURRENT/DESIGN.md`（共 7 文件，+11/−23）。
 - **验证结果**：grep `library__samples|samples-error` → src 0 命中；`scripts\verify.ps1` 全绿（259 passed / 29 文件 + tsc/vite build OK），与基线一致。
-- **commit**：见分支 `feature/CR-005-T-004-followup`（PR 链接待 push 后填写）。
+- **commit**：`1e95b0e`（分支 `feature/CR-005-T-004-followup`）；PR：https://github.com/Tim-Lai-Admiral/AGdicom/pull/26
 - **已知限制 / 需 Reviewer 关注**：
   - `.ai/CURRENT/PRODUCT.md:33,38` 仍有"内置样本加载/内置样本"表述，不在本任务卡范围（卡片仅列 REQUIREMENTS.md 与 DESIGN.md），建议后续 CURRENT 收口时一并处理。
   - 工作区存在未跟踪的 `REVIEW-CR005.md`（Reviewer 文档），未随本任务提交，归属 Reviewer。
