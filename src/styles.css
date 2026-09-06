@@ -858,16 +858,6 @@ button.asset-row__main:hover {
   }
 }
 
-/* --- 内置样本加载错误提示（CR-001 T-006；按钮入口 CR-003 T-002 起由顶栏承担，CR-004 T-001 起为 tool-btn 图标） --- */
-.library__samples-error {
-  margin: 0;
-  padding: 0.5rem 0.75rem;
-  border-radius: var(--radius-sm);
-  background: #fbe9e6;
-  color: var(--color-danger);
-  font-size: 0.875rem;
-}
-
 /* --- 3D 模型查看器（CR-001 T-006 / R-004）：CR-003 T-002 起嵌入中央查看区 --- */
 .model3d-overlay {
   position: absolute;
@@ -1706,7 +1696,7 @@ button.asset-row__main:hover {
   background: transparent;
 }
 
-/* --- 警告条（存储异常 / 保存失败 / 样本加载失败） --- */
+/* --- 警告条（存储异常 / 保存失败） --- */
 .workbench__warnings {
   flex: 0 0 auto;
   display: flex;
@@ -1718,8 +1708,7 @@ button.asset-row__main:hover {
 }
 
 .workbench .app__storage-warning,
-.workbench .app__save-warning,
-.workbench .library__samples-error {
+.workbench .app__save-warning {
   border: 1px solid transparent;
 }
 
@@ -1729,8 +1718,7 @@ button.asset-row__main:hover {
   border-color: rgba(245, 166, 35, 0.35);
 }
 
-.workbench .app__save-warning,
-.workbench .library__samples-error {
+.workbench .app__save-warning {
   background: rgba(255, 82, 82, 0.12);
   color: var(--danger, #ff5252);
   border-color: rgba(255, 82, 82, 0.35);
