@@ -7,6 +7,8 @@
  * - 左栏 DICOM 患者分组独立面板（CR-008 T-001 / R-021）：面板一次渲染全部患者组，
  *   患者组 → series → 切片缩略图（复用 seriesUtils 数据）；选中素材时对应患者组
  *   自动展开并高亮，点击切片仅切换中央查看器与高亮（面板停留原位、展开状态不变）；
+ * - 切片高亮同步（CR-008 T-002 / R-022）：查看器内滑动条切换切片 → 左栏分组面板
+ *   对应缩略图高亮实时跟随（onSelectedSliceChange 通路）；关闭查看器 → 高亮清理；
  * - 折叠交互：右栏信息面板与顶栏开关联动；
  * - T-004：右栏评审全链路（状态/标签/备注/历史/AI 建议）与顶栏导出/导入入口回环。
  */
@@ -184,6 +186,80 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
     expect(within(leftColumn).getAllByRole('button', { name: /^查看切片/ })).toHaveLength(3)
     const highlightThumbs = screen.getAllByRole('button', { name: /^查看切片/ })
     expect((highlightThumbs[1] as HTMLElement).className).toContain('is-active')
+  })
+
+  it('follows viewer slice switches with the left panel highlight and clears it on close (CR-008 T-002 / R-022)', async () => {
+    // 3 切片同 series：查看器内滑动条切换 → 左栏分组面板高亮实时跟随（R-022）
+    const buffers = buildDicomSeriesBuffers(3, {
+      patientName: '',
+      patientID: '',
+      patientIdentityRemoved: 'YES',
+      pixelData: gradientPixels8(8, 8, 30, 200),
+    })
+    let fetchCall = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        const bytes = new Uint8Array(buffers[Math.min(fetchCall, buffers.length - 1)])
+        fetchCall += 1
+        return {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => bytes.slice().buffer,
+        }
+      }),
+    )
+    // jsdom 无 2D Canvas：走查看器“环境不支持”降级分支（高亮通路不依赖画布）
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+
+    const { container } = render(<App />)
+    dropFiles(container, [
+      new File([new Uint8Array(buffers[0])], 's1.dcm', { type: 'application/dicom' }),
+      new File([new Uint8Array(buffers[1])], 's2.dcm', { type: 'application/dicom' }),
+      new File([new Uint8Array(buffers[2])], 's3.dcm', { type: 'application/dicom' }),
+    ])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 3 个素材')).toBeTruthy()
+    })
+
+    // 打开 s1：患者分组自动展开，当前切片（#1）缩略图高亮
+    fireEvent.click(screen.getByRole('button', { name: '查看“s1.dcm”的 DICOM 详情' }))
+    const dialog = screen.getByRole('dialog', { name: 'DICOM 详情' })
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /^查看切片/ })).toHaveLength(3)
+    })
+    expect(screen.getByRole('button', { name: '查看切片 #1' }).className).toContain('is-active')
+    expect(screen.getByRole('button', { name: '查看切片 #2' }).className).not.toContain('is-active')
+
+    // 滑动条切到 #2：左栏高亮实时跟随到切片 #2（中央读数同步）
+    fireEvent.change(within(dialog).getByLabelText('选择切片'), { target: { value: '2' } })
+    await waitFor(() => {
+      expect(within(dialog).getByText('切片 2 / 3（按 InstanceNumber 排序）')).toBeTruthy()
+    })
+    expect(screen.getByRole('button', { name: '查看切片 #2' }).className).toContain('is-active')
+    expect(screen.getByRole('button', { name: '查看切片 #1' }).className).not.toContain('is-active')
+
+    // 点击左栏切片（现有路径不回归）：中央切到 #3、高亮跟随到 #3
+    fireEvent.click(screen.getByRole('button', { name: '查看切片 #3' }))
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole('dialog', { name: 'DICOM 详情' })).getByText(
+          '切片 3 / 3（按 InstanceNumber 排序）',
+        ),
+      ).toBeTruthy()
+    })
+    expect(screen.getByRole('button', { name: '查看切片 #3' }).className).toContain('is-active')
+    expect(screen.getByRole('button', { name: '查看切片 #2' }).className).not.toContain('is-active')
+
+    // 关闭查看器：高亮清理（分组面板与展开状态保留，无任何 is-active）
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'DICOM 详情' })).getByRole('button', { name: '关闭' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    const remainingThumbs = screen.getAllByRole('button', { name: /^查看切片/ })
+    expect(remainingThumbs).toHaveLength(3)
+    for (const thumb of remainingThumbs) {
+      expect((thumb as HTMLElement).className).not.toContain('is-active')
+    }
+    expect(screen.getByText('未知患者').closest('button')?.className).not.toContain('is-active')
   })
 
   it('shows the W/L panel in the right column for a DICOM asset (CR-003 T-003 / R-003 修改)', async () => {
