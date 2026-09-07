@@ -166,12 +166,12 @@ describe('App', () => {
     const dialog = screen.getByRole('dialog', { name: 'DICOM 详情' })
     // CR-003 T-004：查看器嵌入中央查看区，不再声明 aria-modal（非模态语义）
     expect(dialog.getAttribute('aria-modal')).toBeNull()
+    // CR-009 T-001：中央视口四角元数据（R-023）；去标识化样本右上展示去标识化标记
     await waitFor(() => {
-      expect(within(dialog).getByText('CT')).toBeTruthy()
+      expect(within(dialog).getByText('CT · 去标识化')).toBeTruthy()
     })
-    expect(within(dialog).getAllByText('已置空')).toHaveLength(2)
-    expect(within(dialog).getByText('是', { selector: '.dicom-viewer__deid-yes' })).toBeTruthy()
-    expect(within(dialog).getByText('1 张（本序列）')).toBeTruthy()
+    expect(within(dialog).getAllByText(/已置空/)).toHaveLength(2)
+    expect(within(dialog).getByText('Inst #1 / 1')).toBeTruthy()
 
     // 解析出的元数据已回写素材并持久化（刷新后元数据表格仍可展示）
     const stored = loadState()

@@ -1,9 +1,21 @@
 /**
- * DICOM 查看器（CR-001 T-005 / R-003；CR-003 T-003 增强 W/L 与测量 Mock）。
+ * DICOM 查看器（CR-001 T-005 / R-003；CR-003 T-003 增强 W/L 与测量 Mock；
+ * CR-009 T-001 视口化：四角元数据覆盖层 + 滚轮切片同步，中央元数据表格下线）。
  *
- * 应用内查看区（role="dialog"，非路由）：元数据表格（可读中文标签）+ 切片选择器
- * （多文件 series 按 InstanceNumber 排序切换）+ Canvas 灰度预览（自动 min-max 或
- * 显式窗宽窗位，R-003 修改）+ 测量工具（拖拽绘制 + 距离标注，Mock 非临床，R-010）。
+ * 应用内查看区（role="dialog"，非路由）：Canvas 灰度预览（自动 min-max 或显式窗宽窗位，
+ * R-003 修改）+ 四角元数据覆盖层（R-023，视觉参照 rec/src/App.tsx Viewport，只读素材：
+ * 左上患者/ID/文件名；右上模态·传输语法或去标识化 / series UID 截断 / Inst #N / M；
+ * 左下 C/W（实时）+ PixelSpacing；右下 Zoom/Rot/平面 + 方向标记）+ 切片选择器
+ * （多文件 series 按 InstanceNumber 排序切换；视口滚轮与滑条经 selectedAssetId
+ * 共享状态双向同步，R-025）+ 测量工具（拖拽绘制 + 距离标注，Mock 非临床，R-010）。
+ * 中央元数据表格已移除：元数据唯一来源为右栏 MetadataPanel（CR-009 T-001 / R-023）。
+ *
+ * 四角降级口径（DicomMeta 契约 R-003 未含的字段，如实降级而非造数）：
+ * - 日期时间：无日期字段 → 左上第三行以当前切片文件名占位（随切片切换，辅助识别）；
+ * - SliceThickness / plane：无字段 → 左下省略厚度行；平面默认 AXL（显示 AXIAL，
+ *   方向标记 R/L/A/P）；
+ * - Zoom/Rot：R-024（T-002）工具状态预留 → 恒为默认 100% / 0°（Rot 0° 不显示）；
+ * - auto W/L：真实 min/max 在解码器内部计算不外泄 → C/W 展示 App 状态值并标注“（自动）”。
  *
  * 数据流（解析范围见 R-018，聚合口径见 R-019）：
  * - 打开时解析“所属 series 的文件集合”（按患者分组语义匹配，含缺 UID 聚合出的
@@ -11,7 +23,7 @@
  *   解析”行为；解析出元数据后即纳入分组并去重，不再重复解析），每个文件间让出
  *   事件循环，大 series 不阻塞界面，dicom-parser 数据集留在会话缓存供像素解码；
  * - 解析完成后按患者分组内的 series 聚合统计切片数（seriesUtils），经 onMetasParsed
- *   批量回写素材（含 sliceCount），由 App 持久化（刷新后元数据表格仍可展示）；
+ *   批量回写素材（含 sliceCount），由 App 持久化（刷新后右栏元数据面板仍可展示）；
  * - 降级：压缩传输语法 / 解码失败 / Canvas 不可用 → 预览区显示“仅元数据”类文案；
  *   文件无法解析 → 显示解析错误；刷新后（无 objectUrl）→ 元数据来自持久化记录，
  *   预览提示统一为“会话失效，可重新导入或删除该素材”（CR-006 T-004）；任何路径都不崩溃；
@@ -31,7 +43,7 @@ import { AUTO_WINDOW_LEVEL } from './windowLevel.ts'
 import type { WindowLevelState } from './windowLevel.ts'
 import { clientToImagePoint, formatMeasureLength, measureLength } from './measure.ts'
 import type { MeasureLength, MeasurePoint } from './measure.ts'
-import { DEID_EVIDENCE_LABELS, sopClassLabel, transferSyntaxLabel } from './metaLabels.ts'
+import { transferSyntaxLabel } from './metaLabels.ts'
 import { findDicomPatientSeriesGroup, sliceCountByAsset } from './seriesUtils.ts'
 import type { DicomSeriesEntry } from './seriesUtils.ts'
 
@@ -67,6 +79,16 @@ interface MeasureEntry {
   a: MeasurePoint
   b: MeasurePoint
   length: MeasureLength
+}
+
+/** SeriesInstanceUID 截断展示口径（R-023 右上角；> 20 字符截断加省略号，全文经 title 悬停查看） */
+const SERIES_UID_MAX_LENGTH = 20
+
+function truncateSeriesUid(uid: string | undefined): string | undefined {
+  if (uid === undefined) return undefined
+  return uid.length > SERIES_UID_MAX_LENGTH
+    ? `${uid.slice(0, SERIES_UID_MAX_LENGTH)}…`
+    : uid
 }
 
 export interface DicomViewerProps {
@@ -122,6 +144,8 @@ export default function DicomViewer({
   const completedIdsRef = useRef(new Set<string>())
   const nextMeasureIdRef = useRef(1)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  /** 视口容器（四角覆盖层 + 滚轮切片宿主；R-025 原生 wheel 监听挂载点） */
+  const canvasWrapRef = useRef<HTMLDivElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLElement>(null)
   const onMetasParsedRef = useRef(onMetasParsed)
@@ -167,6 +191,13 @@ export default function DicomViewer({
     0,
     orderedSlices.findIndex((slice) => slice.assetId === selectedAssetId),
   )
+
+  // ---- 四角覆盖层派生文案（R-023；缺失字段按文件头注释口径如实降级，不造数）----
+  const cornerSeriesUid = truncateSeriesUid(selectedMeta?.seriesInstanceUID)
+  // Inst #：优先 DICOM InstanceNumber（缺失回退视口序位）；M = 所属 series 切片数
+  const cornerInstanceNumber = selectedMeta?.instanceNumber ?? selectedSliceIndex + 1
+  const cornerSliceTotal =
+    orderedSlices.length > 0 ? orderedSlices.length : (selectedMeta?.sliceCount ?? 1)
 
   // 解析范围（R-018）：所属 series 的文件集合（含聚合后的“未知系列”）∪ 尚无元数据、
   // 无法归类的文件——后者可能属于当前 series，保持“打开即解析”的既有行为，解析出
@@ -413,19 +444,47 @@ export default function DicomViewer({
     ])
   }
 
+  // ---- 视口滚轮切片（CR-009 T-001 / R-025）----
+  // 原生 wheel 监听挂载在视口容器（passive:false 才能 preventDefault，拦截页面滚动与
+  // 浏览器缩放手势）：非 Ctrl/Cmd → 切片 ±1（上下边界钳制不溢出），经 setSelectedAssetId
+  // 与底部滑条共享同一状态实现双向同步；Ctrl/Cmd + 滚轮 → 缩放为 R-024（T-002）工具
+  // 范畴，当前预留不处理（仅拦截浏览器页面缩放，避免误触整体缩放）。
+  // 当前切片与有序切片经 ref 读取（监听器仅随容器挂载一次，避免闭包过期值）。
+  const orderedSlicesRef = useRef(orderedSlices)
+  const selectedAssetIdRef = useRef(selectedAssetId)
+  useEffect(() => {
+    orderedSlicesRef.current = orderedSlices
+    selectedAssetIdRef.current = selectedAssetId
+  })
+  useEffect(() => {
+    const wrap = canvasWrapRef.current
+    if (wrap === null) return
+    const handleWheel = (event: WheelEvent): void => {
+      event.preventDefault()
+      if (event.ctrlKey || event.metaKey) return // 缩放预留（T-002 / R-024）
+      if (event.deltaY === 0) return // 横向滚动不切切片
+      const slices = orderedSlicesRef.current
+      if (slices.length === 0) return
+      const currentId = selectedAssetIdRef.current
+      const currentIndex = slices.findIndex((slice) => slice.assetId === currentId)
+      const base = currentIndex < 0 ? 0 : currentIndex
+      const nextIndex =
+        event.deltaY > 0 ? Math.min(slices.length - 1, base + 1) : Math.max(0, base - 1)
+      const next = slices[nextIndex]
+      if (next !== undefined && next.assetId !== currentId) setSelectedAssetId(next.assetId)
+    }
+    wrap.addEventListener('wheel', handleWheel, { passive: false })
+    return () => {
+      wrap.removeEventListener('wheel', handleWheel)
+    }
+  }, [])
+
   const failedCount = Object.keys(sessionErrors).length
   // 测量覆盖层视觉尺寸随图像分辨率缩放（端点半径/字号在 viewBox 坐标系内取值）
   const measureImageSpan = Math.max(previewSize?.width ?? 0, previewSize?.height ?? 0)
   const measureEndpointRadius = Math.max(2, Math.round(measureImageSpan / 150))
   const measureLabelFontSize = Math.max(11, Math.min(24, Math.round(measureImageSpan / 32)))
   const measureLabelOffset = measureLabelFontSize * 0.7
-  const metaMissingMessage =
-    parseProgress !== null
-      ? '正在解析该 DICOM 文件的元数据…'
-      : (sessionErrors[selectedAsset.id] ??
-        (selectedAsset.objectUrl === undefined
-          ? '暂无可展示的元数据：会话失效，可重新导入或删除该素材'
-          : '该文件暂无可展示的元数据'))
 
   return (
     <div className="dicom-viewer-overlay">
@@ -458,7 +517,7 @@ export default function DicomViewer({
 
         <div className="dicom-viewer__body">
           <section className="dicom-viewer__preview" aria-label="切片预览">
-            <div className="dicom-viewer__canvas-wrap">
+            <div ref={canvasWrapRef} className="dicom-viewer__canvas-wrap">
               <canvas
                 ref={canvasRef}
                 className={
@@ -530,6 +589,76 @@ export default function DicomViewer({
                   {previewMessage}
                 </p>
               ) : null}
+              {/* 四角元数据覆盖层（CR-009 T-001 / R-023；视觉参照 rec/src/App.tsx Viewport，
+                  只读素材）。.viewport-overlay 为 pointer-events:none（index.css），
+                  不遮挡画布/测量交互；降级口径见文件头注释。 */}
+              {/* 左上：患者姓名 / ID / 日期时间（无日期字段 → 当前切片文件名占位） */}
+              <div className="viewport-overlay" style={{ top: 10, left: 12 }}>
+                <div>{selectedMeta?.patientName ?? '已置空'}</div>
+                <div>{`ID: ${selectedMeta?.patientID ?? '已置空'}`}</div>
+                <div>{selectedAsset.file.fileName}</div>
+              </div>
+              {/* 右上：模态 · 传输语法或去标识化标记 / series UID 截断 / Inst #N / M */}
+              <div className="viewport-overlay" style={{ top: 10, right: 12, textAlign: 'right' }}>
+                <div>
+                  {`${selectedMeta?.modality ?? '未提供'} · ${
+                    selectedMeta?.deidentified
+                      ? '去标识化'
+                      : transferSyntaxLabel(selectedMeta?.transferSyntax)
+                  }`}
+                </div>
+                {cornerSeriesUid !== undefined ? (
+                  <div title={selectedMeta?.seriesInstanceUID}>{cornerSeriesUid}</div>
+                ) : null}
+                <div>{`Inst #${cornerInstanceNumber} / ${cornerSliceTotal}`}</div>
+              </div>
+              {/* 左下：C/W（App 持有的真实 wc/ww，随右栏 W/L 调节实时更新）+ PixelSpacing。
+                  auto=min-max 归一化（真实 min/max 在解码器内部），标注“（自动）”避免误读 */}
+              <div className="viewport-overlay" style={{ bottom: 10, left: 12 }}>
+                <div>
+                  {`C: ${windowLevel.wc > 0 ? '+' : ''}${windowLevel.wc} W: ${windowLevel.ww}${
+                    windowLevel.auto ? '（自动）' : ''
+                  }`}
+                </div>
+                {selectedMeta?.pixelSpacing !== undefined ? (
+                  <div>{`${selectedMeta.pixelSpacing.join(' × ')} mm/px`}</div>
+                ) : null}
+              </div>
+              {/* 右下：Zoom/Rot（T-002 工具状态预留：默认 100% / 0°，0° 不显示）/ 平面
+                  （无 plane 字段 → 默认 AXL） */}
+              <div className="viewport-overlay" style={{ bottom: 10, right: 12, textAlign: 'right' }}>
+                <div>Zoom: 100%</div>
+                <div>AXIAL</div>
+              </div>
+              {/* 方向标记（R-023，rec Viewport 同款）：plane 默认 AXL → R/L/A/P */}
+              <div
+                className="dicom-viewer__orient"
+                style={{ top: '50%', left: 10, transform: 'translateY(-50%)' }}
+                aria-hidden="true"
+              >
+                R
+              </div>
+              <div
+                className="dicom-viewer__orient"
+                style={{ top: '50%', right: 10, transform: 'translateY(-50%)' }}
+                aria-hidden="true"
+              >
+                L
+              </div>
+              <div
+                className="dicom-viewer__orient"
+                style={{ top: 10, left: '50%', transform: 'translateX(-50%)' }}
+                aria-hidden="true"
+              >
+                A
+              </div>
+              <div
+                className="dicom-viewer__orient"
+                style={{ bottom: 10, left: '50%', transform: 'translateX(-50%)' }}
+                aria-hidden="true"
+              >
+                P
+              </div>
             </div>
             <div className="dicom-viewer__tools">
               <button
@@ -584,112 +713,11 @@ export default function DicomViewer({
                 </span>
               </div>
             ) : null}
-          </section>
-
-          <section className="dicom-viewer__meta" aria-label="DICOM 元数据">
-            <h3 className="dicom-viewer__meta-title">元数据</h3>
-            {selectedMeta === undefined ? (
-              <p className="dicom-viewer__meta-missing" role="alert">
-                {metaMissingMessage}
+            {sessionPartials[selectedAsset.id] === true ? (
+              <p className="dicom-viewer__partial-hint" role="status">
+                注：该文件仅解析出部分元数据（文件可能被截断），切片预览不可用。
               </p>
-            ) : (
-              <>
-                <table className="dicom-viewer__table">
-                  <tbody>
-                    <tr>
-                      <th scope="row">模态（Modality）</th>
-                      <td>{selectedMeta.modality ?? '未提供'}</td>
-                    </tr>
-                    <tr>
-                      <th scope="row">SOP Class</th>
-                      <td className="dicom-viewer__uid">{sopClassLabel(selectedMeta.sopClass)}</td>
-                    </tr>
-                    <tr>
-                      <th scope="row">传输语法（Transfer Syntax）</th>
-                      <td className="dicom-viewer__uid">
-                        {transferSyntaxLabel(selectedMeta.transferSyntax)}
-                      </td>
-                    </tr>
-                    <tr>
-                      <th scope="row">行 × 列（Rows × Columns）</th>
-                      <td>
-                        {selectedMeta.rows !== undefined && selectedMeta.columns !== undefined
-                          ? `${selectedMeta.rows} × ${selectedMeta.columns}`
-                          : '未提供'}
-                      </td>
-                    </tr>
-                    <tr>
-                      <th scope="row">像素间距（PixelSpacing）</th>
-                      <td>
-                        {selectedMeta.pixelSpacing !== undefined
-                          ? `${selectedMeta.pixelSpacing.join(' × ')} mm`
-                          : '未提供'}
-                      </td>
-                    </tr>
-                    <tr>
-                      <th scope="row">序列实例 UID（SeriesInstanceUID）</th>
-                      <td className="dicom-viewer__uid">
-                        {selectedMeta.seriesInstanceUID ?? '未提供'}
-                      </td>
-                    </tr>
-                    <tr>
-                      <th scope="row">切片序号（InstanceNumber）</th>
-                      <td>
-                        {selectedMeta.instanceNumber !== undefined
-                          ? `#${selectedMeta.instanceNumber}`
-                          : '未提供'}
-                      </td>
-                    </tr>
-                    <tr>
-                      <th scope="row">切片数（按序列分组统计）</th>
-                      <td>
-                        {currentGroup !== undefined
-                          ? `${currentGroup.sliceCount} 张（本序列）`
-                          : `${selectedMeta.sliceCount} 张`}
-                      </td>
-                    </tr>
-                    <tr>
-                      <th scope="row">患者姓名（PatientName）</th>
-                      <td>{selectedMeta.patientName ?? '已置空'}</td>
-                    </tr>
-                    <tr>
-                      <th scope="row">患者 ID（PatientID）</th>
-                      <td>{selectedMeta.patientID ?? '已置空'}</td>
-                    </tr>
-                    <tr>
-                      <th scope="row">去标识化（Deidentification）</th>
-                      <td>
-                        {selectedMeta.deidentified ? (
-                          <>
-                            <span className="dicom-viewer__deid-yes">是</span>
-                            {selectedMeta.deidentifiedEvidence !== undefined ? (
-                              <ul className="dicom-viewer__deid-evidence">
-                                {selectedMeta.deidentifiedEvidence.map((item) => (
-                                  <li key={item}>
-                                    {DEID_EVIDENCE_LABELS[item]}
-                                    {item === 'deidentification-method' &&
-                                    selectedMeta.deidentificationMethod !== undefined
-                                      ? `：${selectedMeta.deidentificationMethod}`
-                                      : ''}
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : null}
-                          </>
-                        ) : (
-                          '否（未检测到去标识化标记）'
-                        )}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-                {sessionPartials[selectedAsset.id] === true ? (
-                  <p className="dicom-viewer__partial-hint" role="status">
-                    注：该文件仅解析出部分元数据（文件可能被截断），切片预览不可用。
-                  </p>
-                ) : null}
-              </>
-            )}
+            ) : null}
           </section>
         </div>
       </section>
