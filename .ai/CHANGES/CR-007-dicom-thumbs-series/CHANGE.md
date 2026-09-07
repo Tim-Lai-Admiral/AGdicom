@@ -6,7 +6,7 @@
 id: CR-007
 title: "DICOM 行/切片真实像素缩略图；未知系列聚合；DicomViewer 只解析所属 series（场景矩阵测试）"
 change_level: L2
-status: approved
+status: completed
 parent: null
 created_by: Planner
 created_at: 2026-09-07
@@ -51,9 +51,9 @@ Human 反馈（2026-09-07）：
 
 ## Tasks
 
-- [ ] T-001: 系列聚合与解析范围（R-018/R-019：未知系列聚合 + DicomViewer 只解析所属 series）
-- [ ] T-002: DICOM 真实缩略图（R-017：行 + 切片像素缩略图）
-- [ ] T-003: 场景矩阵测试（R-020：集成断言 + 手动清单 + 任务卡规范落地）
+- [x] T-001: 系列聚合与解析范围（R-018/R-019：未知系列聚合 + DicomViewer 只解析所属 series）
+- [x] T-002: DICOM 真实缩略图（R-017：行 + 切片像素缩略图）
+- [x] T-003: 场景矩阵测试（R-020：集成断言 + 手动清单 + 任务卡规范落地）
 
 ## Dependencies
 
@@ -65,4 +65,6 @@ Human 反馈（2026-09-07）：
 
 ## Result
 
-<!-- 合并后填写 -->
+- 2026-09-07 完成。T-001~T-003 合并至 master（PR #33~#35 按序，分支已删）；审查 PASS（REVIEW-CR007.md）。
+- 遗留：损坏文件每次打开重试解析（Reviewer Minor → TD-006 登记）。
+- CURRENT 已更新（REQUIREMENTS R-017~R-020、DESIGN 缩略图与未知系列），Tag v0.4.0。
