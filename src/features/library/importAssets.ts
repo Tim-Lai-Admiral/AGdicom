@@ -6,6 +6,9 @@
  * - 纯函数：不修改入参、无 IO；ID 与时间戳通过 options 注入（缺省用 crypto.randomUUID /
  *   当前时间），保证测试确定性；
  * - 去重键 = fileName + fileSize + kind：与库中存量或本批次先注册项完全一致视为重复；
+ * - 幽灵水合（CR-006 R-014）：去重命中且命中的存量记录没有 objectUrl（幽灵：刷新后
+ *   会话字段丢失）时，记入 hydrated 列表（assetId + File 引用），由 useImport 重建
+ *   objectUrl 回写该资产——不新增记录、不产生 duplicate；已有 objectUrl 的记录仍报重复；
  * - 扩展名匹配不区分大小写；无法识别的扩展名进入 unknown 列表并附中文提示。
  */
 import type { AppState, Asset, AssetKind } from '../../domain/types.ts'
@@ -44,6 +47,16 @@ export interface ImportDuplicate {
   kind: AssetKind
 }
 
+/** 水合项：幽灵资产命中去重键，由 useImport 按此重建 objectUrl 并回写原记录（R-014） */
+export interface ImportHydration {
+  /** 命中的幽灵资产 ID（回写目标，不新增记录） */
+  assetId: string
+  /** 触发水合的文件名（与 File 匹配用） */
+  fileName: string
+  fileSize: number
+  kind: AssetKind
+}
+
 /** 不支持项：扩展名无法识别，未注册 */
 export interface ImportUnknown {
   fileName: string
@@ -53,12 +66,14 @@ export interface ImportUnknown {
   message: string
 }
 
-/** 结构化导入结果：成功 / 重复 / 失败（未知类型）三类列表 + 注册后的下一状态 */
+/** 结构化导入结果：成功 / 水合 / 重复 / 失败（未知类型）四类列表 + 注册后的下一状态 */
 export interface ImportClassifyResult {
   /** 含新注册素材的下一状态；无新增时与入参为同一引用（不修改入参） */
   state: AppState
   /** 本次新建并注册的素材（按提交顺序） */
   created: Asset[]
+  /** 幽灵资产水合项：记录已存在，仅待重建 objectUrl（R-014） */
+  hydrated: ImportHydration[]
   /** 重复项，未注册 */
   duplicates: ImportDuplicate[]
   /** 扩展名不支持项，未注册 */
@@ -103,7 +118,8 @@ function defaultCreateId(): string {
 /**
  * 对一批候选文件分类并增量注册：
  * - 支持的扩展名 → 创建 Asset（pending 状态）并并入下一状态；
- * - 重复（同库中存量或本批次先注册项）→ 记入 duplicates，不重复注册；
+ * - 命中去重键且存量记录为幽灵（无 objectUrl）→ 记入 hydrated，待 useImport 水合（R-014）；
+ * - 重复（同库中存量、本批次先注册项或已水合过的幽灵键）→ 记入 duplicates，不重复注册；
  * - 未知扩展名 → 记入 unknown（含中文提示），不注册。
  */
 export function classifyImportFiles(
@@ -115,12 +131,19 @@ export function classifyImportFiles(
   const createId = options.createId ?? defaultCreateId
   const source = options.source ?? '拖拽导入'
   const created: Asset[] = []
+  const hydrated: ImportHydration[] = []
   const duplicates: ImportDuplicate[] = []
   const unknown: ImportUnknown[] = []
   /** 已注册素材的去重键（含库中存量与本批次新增，保证同批次内重复也被识别） */
   const seen = new Set<string>()
+  /** 库中幽灵资产：去重键 → 首个命中资产的 ID（objectUrl 为 undefined 才可水合） */
+  const ghostIdByKey = new Map<string, string>()
   for (const asset of Object.values(state.assets)) {
-    seen.add(dedupKey(asset.file.fileName, asset.file.fileSize, asset.kind))
+    const key = dedupKey(asset.file.fileName, asset.file.fileSize, asset.kind)
+    seen.add(key)
+    if (asset.objectUrl === undefined && !ghostIdByKey.has(key)) {
+      ghostIdByKey.set(key, asset.id)
+    }
   }
   let assets = state.assets
   for (const file of files) {
@@ -135,6 +158,13 @@ export function classifyImportFiles(
     }
     const key = dedupKey(file.fileName, file.fileSize, kind)
     if (seen.has(key)) {
+      const ghostId = ghostIdByKey.get(key)
+      if (ghostId !== undefined) {
+        hydrated.push({ assetId: ghostId, fileName: file.fileName, fileSize: file.fileSize, kind })
+        // 该幽灵键本批次已水合：之后再次命中按普通重复处理，避免同一资产重复水合
+        ghostIdByKey.delete(key)
+        continue
+      }
       duplicates.push({ fileName: file.fileName, fileSize: file.fileSize, kind })
       continue
     }
@@ -159,11 +189,12 @@ export function classifyImportFiles(
     assets = { ...assets, [asset.id]: asset }
   }
   if (created.length === 0) {
-    return { state, created, duplicates, unknown }
+    return { state, created, hydrated, duplicates, unknown }
   }
   return {
     state: { assets, tags: state.tags, reviews: state.reviews },
     created,
+    hydrated,
     duplicates,
     unknown,
   }

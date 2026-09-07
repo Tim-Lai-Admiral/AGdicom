@@ -135,6 +135,11 @@ body {
   color: var(--color-success);
 }
 
+/* 水合复活（幽灵资产重建 objectUrl，R-014）：正向结果，与成功导入同色 */
+.import-feedback__item.is-hydrated {
+  color: var(--color-success);
+}
+
 .import-feedback__item.is-duplicate,
 .import-feedback__item.is-unknown {
   color: var(--color-warning);

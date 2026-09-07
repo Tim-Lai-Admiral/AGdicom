@@ -85,9 +85,12 @@ describe('ImportZone', () => {
     expect(button.disabled).toBeTruthy()
   })
 
-  it('renders success, duplicate, unknown and error feedback', () => {
+  it('renders success, hydrated, duplicate, unknown and error feedback', () => {
     const feedback: ImportFeedback = {
       created: [makeAsset()],
+      hydrated: [
+        { assetId: 'ghost-1', fileName: 'scan.dcm', fileSize: 2048, kind: 'dicom' },
+      ],
       duplicates: [{ fileName: 'aorta.stl', fileSize: 512, kind: 'model' }],
       unknown: [
         {
@@ -100,6 +103,8 @@ describe('ImportZone', () => {
     }
     renderZone({ feedback })
     expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
+    expect(screen.getByText('已恢复预览 1 个素材：')).toBeTruthy()
+    expect(screen.getByText('scan.dcm（DICOM）')).toBeTruthy()
     expect(screen.getByText('已存在，跳过 1 个重复文件：')).toBeTruthy()
     expect(screen.getByText('aorta.stl（3D 模型）')).toBeTruthy()
     expect(screen.getByText('无法导入 1 个文件：')).toBeTruthy()
@@ -107,10 +112,24 @@ describe('ImportZone', () => {
     expect(screen.getByText('保存失败：本地存储容量不足')).toBeTruthy()
   })
 
+  it('renders hydrated feedback alone', () => {
+    const feedback: ImportFeedback = {
+      created: [],
+      hydrated: [{ assetId: 'ghost-1', fileName: 'aorta.stl', fileSize: 512, kind: 'model' }],
+      duplicates: [],
+      unknown: [],
+      error: null,
+    }
+    renderZone({ feedback })
+    expect(screen.getByText('已恢复预览 1 个素材：')).toBeTruthy()
+    expect(screen.getByText('aorta.stl（3D 模型）')).toBeTruthy()
+  })
+
   it('dismisses feedback via the clear button', () => {
     const onClearFeedback = vi.fn()
     const feedback: ImportFeedback = {
       created: [makeAsset()],
+      hydrated: [],
       duplicates: [],
       unknown: [],
       error: null,

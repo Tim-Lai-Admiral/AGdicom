@@ -160,7 +160,11 @@ describe('classifyImportFiles', () => {
 
   it('detects duplicates against existing assets by fileName + fileSize + kind', () => {
     const base = makeState([
-      makeAsset({ file: { fileName: 'aorta.stl', fileSize: 512, fileType: '' }, kind: 'model' }),
+      makeAsset({
+        file: { fileName: 'aorta.stl', fileSize: 512, fileType: '' },
+        kind: 'model',
+        objectUrl: 'blob:existing', // 非幽灵：objectUrl 可用 → 命中即重复
+      }),
     ])
     const result = classifyImportFiles(
       base,
@@ -168,6 +172,7 @@ describe('classifyImportFiles', () => {
       makeOptions(),
     )
     expect(result.created).toHaveLength(0)
+    expect(result.hydrated).toHaveLength(0)
     expect(result.duplicates).toEqual([
       { fileName: 'aorta.stl', fileSize: 512, kind: 'model' },
     ])
@@ -212,6 +217,7 @@ describe('classifyImportFiles', () => {
         name: 'scan.dcm',
         kind: 'dicom',
         file: { fileName: 'scan.dcm', fileSize: 2048, fileType: '' },
+        objectUrl: 'blob:existing-2', // 非幽灵：命中按重复处理
       }),
     ])
     const result = classifyImportFiles(
@@ -224,6 +230,7 @@ describe('classifyImportFiles', () => {
       makeOptions(),
     )
     expect(result.created).toHaveLength(1)
+    expect(result.hydrated).toHaveLength(0)
     expect(result.duplicates).toHaveLength(1)
     expect(result.unknown).toHaveLength(1)
     expect(Object.values(result.state.assets)).toHaveLength(2)
@@ -237,5 +244,136 @@ describe('classifyImportFiles', () => {
     classifyImportFiles(base, [{ fileName: 'new.stl', fileSize: 2, fileType: '' }], makeOptions())
     expect(JSON.stringify(base)).toBe(snapshot)
     expect(Object.keys(base.assets)).toHaveLength(1)
+  })
+})
+
+describe('classifyImportFiles 幽灵水合（CR-006 R-014）', () => {
+  it('reports a ghost hit as hydration instead of a duplicate', () => {
+    const base = makeState([
+      makeAsset({
+        id: 'ghost-1',
+        name: 'aorta.stl',
+        file: { fileName: 'aorta.stl', fileSize: 512, fileType: '' },
+        kind: 'model',
+        // 无 objectUrl：刷新后会话字段丢失的幽灵资产
+      }),
+    ])
+    const result = classifyImportFiles(
+      base,
+      [{ fileName: 'aorta.stl', fileSize: 512, fileType: '' }],
+      makeOptions(),
+    )
+    expect(result.created).toHaveLength(0)
+    expect(result.duplicates).toHaveLength(0)
+    expect(result.hydrated).toEqual([
+      { assetId: 'ghost-1', fileName: 'aorta.stl', fileSize: 512, kind: 'model' },
+    ])
+    // 不新增记录、不修改入参：水合回写由 useImport 负责
+    expect(result.state).toBe(base)
+    expect(Object.keys(base.assets)).toEqual(['ghost-1'])
+  })
+
+  it('keeps non-ghost hits as duplicates', () => {
+    const base = makeState([
+      makeAsset({
+        id: 'alive-1',
+        name: 'heart.png',
+        kind: 'image',
+        file: { fileName: 'heart.png', fileSize: 64, fileType: 'image/png' },
+        objectUrl: 'blob:alive-1',
+      }),
+    ])
+    const result = classifyImportFiles(
+      base,
+      [{ fileName: 'heart.png', fileSize: 64, fileType: 'image/png' }],
+      makeOptions(),
+    )
+    expect(result.hydrated).toHaveLength(0)
+    expect(result.duplicates).toEqual([{ fileName: 'heart.png', fileSize: 64, kind: 'image' }])
+    expect(result.state).toBe(base)
+  })
+
+  it('handles a mixed batch with created, hydrated, duplicate and unknown in one call', () => {
+    const base = makeState([
+      makeAsset({
+        id: 'ghost-1',
+        name: 'aorta.stl',
+        file: { fileName: 'aorta.stl', fileSize: 512, fileType: '' },
+        kind: 'model',
+      }),
+      makeAsset({
+        id: 'alive-1',
+        name: 'scan.dcm',
+        kind: 'dicom',
+        file: { fileName: 'scan.dcm', fileSize: 2048, fileType: '' },
+        objectUrl: 'blob:alive-1',
+      }),
+    ])
+    const result = classifyImportFiles(
+      base,
+      [
+        { fileName: 'heart.png', fileSize: 10, fileType: 'image/png' }, // 新建
+        { fileName: 'aorta.stl', fileSize: 512, fileType: '' }, // 幽灵 → 水合
+        { fileName: 'scan.dcm', fileSize: 2048, fileType: '' }, // 非幽灵 → 重复
+        { fileName: 'notes.txt', fileSize: 3, fileType: 'text/plain' }, // 未知
+      ],
+      makeOptions(),
+    )
+    expect(result.created).toHaveLength(1)
+    expect(result.created[0]?.id).toMatch(/^new-\d+$/)
+    expect(result.hydrated).toEqual([
+      { assetId: 'ghost-1', fileName: 'aorta.stl', fileSize: 512, kind: 'model' },
+    ])
+    expect(result.duplicates).toEqual([{ fileName: 'scan.dcm', fileSize: 2048, kind: 'dicom' }])
+    expect(result.unknown).toHaveLength(1)
+    // 仅新增 1 条记录：水合不产生新资产
+    const keys = Object.keys(result.state.assets)
+    expect(keys).toHaveLength(3)
+    expect(keys).toContain('alive-1')
+    expect(keys).toContain('ghost-1')
+    expect(keys).toContain(result.created[0]?.id)
+  })
+
+  it('hydrates the same ghost key once per batch and treats later hits as duplicates', () => {
+    const base = makeState([
+      makeAsset({
+        id: 'ghost-1',
+        name: 'aorta.stl',
+        file: { fileName: 'aorta.stl', fileSize: 512, fileType: '' },
+        kind: 'model',
+      }),
+    ])
+    const result = classifyImportFiles(
+      base,
+      [
+        { fileName: 'aorta.stl', fileSize: 512, fileType: '' },
+        { fileName: 'aorta.stl', fileSize: 512, fileType: '' },
+      ],
+      makeOptions(),
+    )
+    expect(result.hydrated).toEqual([
+      { assetId: 'ghost-1', fileName: 'aorta.stl', fileSize: 512, kind: 'model' },
+    ])
+    expect(result.duplicates).toEqual([{ fileName: 'aorta.stl', fileSize: 512, kind: 'model' }])
+    expect(result.created).toHaveLength(0)
+  })
+
+  it('does not mutate the input state during a hydration-only batch', () => {
+    const base = makeState([
+      makeAsset({
+        id: 'ghost-1',
+        name: 'aorta.stl',
+        file: { fileName: 'aorta.stl', fileSize: 512, fileType: '' },
+        kind: 'model',
+      }),
+    ])
+    const snapshot = JSON.stringify(base)
+    const result = classifyImportFiles(
+      base,
+      [{ fileName: 'aorta.stl', fileSize: 512, fileType: '' }],
+      makeOptions(),
+    )
+    expect(JSON.stringify(base)).toBe(snapshot)
+    expect(result.state).toBe(base)
   })
 })
