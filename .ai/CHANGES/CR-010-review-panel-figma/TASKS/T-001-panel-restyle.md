@@ -56,3 +56,19 @@ branch: feature/CR-010-T-001-panel-restyle
 ## Definition of done
 
 - [ ] 验收通过；PR（body 写概要）；Reviewer 审查
+
+## Builder result
+
+- **分支 / commit / PR**：`feature/CR-010-T-001-panel-restyle`；`4a31966`（feat: 评审面板按图样重样式）；PR #46（https://github.com/Tim-Lai-Admiral/AGdicom/pull/46）
+- **实现摘要**：
+  - 评审结论（VERDICT）：三态平铺瓦片（三等分 grid）；radio 视觉隐藏但保留键盘焦点流（label focus-within 外描边）；圆点+文字双通道；选中瓦片按状态着色（待评审=--warn 琥珀 / 通过=--success 绿 / 驳回=--danger 红）
+  - 素材头：卡片化（文件名 + 类型 chip（mono 描边胶囊，类名 `.review-panel__asset-kind` 沿用）+ StatusDot + 文件/来源）；DICOM 解析出元数据后追加 Series/切片行（UID >16 字符截断显示、title 保留全文）
+  - 危险区（DANGER ZONE→中文）：标题改「危险区」，红框 + 红描边「删除素材」按钮；内联二次确认（确认删除=实心红 / 取消）契约不变
+  - 合规脚注：绿点 + 文案；DICOM 按 `dicomMeta.deidentified` 分级（已去标识化 · 未检测到 PHI / 存在待核验标识信息，含 meta 未解析时保守提示），其余素材「工程素材 · 结论可追溯」
+  - styles.css：分区标题统一大写+字距小标签风；保存/采纳按钮通栏青色（accent）；AI 建议卡片化（Mock 徽标 accent 描边、建议卡片 surface 底）；评审历史空态斜体；页签 `.workbench__tab` 文本+2px 下划线高亮（aria-pressed 与「元数据/评审」文案不变）
+- **文件清单**：`src/features/review/ReviewPanel.tsx`、`src/features/review/ReviewPanel.test.tsx`、`src/styles.css`（AiPanel.tsx / ReviewHistory.tsx / App.tsx 零 TSX 改动，卡片化/空态/页签由 CSS 承载）
+- **测试适配说明（P-005）**：既有 374 用例零改动通过（aria/role/文案全保留：`getByLabelText('驳回')` 等经 label 关联不受瓦片重构影响）；新增 1 用例（合规脚注三态文案），既有用例补 评审结论/标签/备注/危险区 分区断言。改动 aria 一处：危险区 section `aria-label` 删除素材→危险区（与可见标题一致，无测试依赖）
+- **验证结果**：`scripts/verify.ps1` 全绿——38 文件 375 用例通过（374 存量 + 1 新增）+ `tsc -b && vite build` 通过
+- **关闭/折叠取舍**：图样无面板头/关闭按钮，保留「收起」（aria-expanded）与「关闭」钮 + Esc（合同要求的可访问入口，Esc 与查看器共用 closeActiveAsset）
+- **已知限制 / 需 Reviewer 关注**：① 浏览器对照图样目检（Manual 验收）待复核，尤其三态瓦片选中配色与页签下划线观感；② Series 行用 modality 之外的 UID 截断展示属低风险实现细节，若图样要求别的 series 表达可调；③ 深色/浅色令牌双兼容（`.workbench` 作用域映射），非 workbench  standalone 场景未目检（当前无该用法）
+- **未标记 done**：待 Reviewer 审查与 Human 合并
