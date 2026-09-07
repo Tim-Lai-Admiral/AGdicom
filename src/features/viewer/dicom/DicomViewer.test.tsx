@@ -473,7 +473,7 @@ describe('DicomViewer: 视口滚轮与滑条双向同步（R-025）', () => {
     expect(slider().value).toBe('2')
   })
 
-  it('does not change slices on Ctrl+wheel (zoom reserved for T-002 / R-024)', async () => {
+  it('does not change slices on Ctrl+wheel (zoom is applied instead, R-024 / R-025)', async () => {
     const { assets, files } = buildThreeSliceSeries()
     stubFetchFor(files)
     stubCanvasContext()
@@ -482,7 +482,7 @@ describe('DicomViewer: 视口滚轮与滑条双向同步（R-025）', () => {
       <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
     )
     await screen.findByText('Inst #3 / 3')
-    // Ctrl/Cmd + 滚轮：缩放为 T-002 工具范畴，当前预留 → 切片不变化
+    // Ctrl/Cmd + 滚轮：缩放（R-024），与切片切换不冲突（R-025）→ 切片不变化
     wheelViewport(100, true)
     wheelViewport(-100, true)
     expect(screen.getByText('Inst #3 / 3')).toBeTruthy()
@@ -749,13 +749,19 @@ describe('DicomViewer: W/L 与测量（CR-003 T-003）', () => {
     stubCanvasContext()
     stubCanvasRect()
 
+    // 测量工具激活（CR-009 T-002：入口为顶栏工具组，经 activeTool 下发）
     render(
-      <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
+      <DicomViewer
+        asset={assets[0]}
+        dicomAssets={assets}
+        onMetasParsed={vi.fn()}
+        onClose={vi.fn()}
+        activeTool="measure"
+      />,
     )
     const canvas = await waitForRenderedCanvas()
 
-    // 启用测量工具 → 拖拽 (0,0)→(3,4) 图像像素 → 2.5 mm（确定性）
-    fireEvent.click(screen.getByRole('button', { name: '测量（模拟）' }))
+    // 拖拽 (0,0)→(3,4) 图像像素 → 2.5 mm（确定性）
     expect(screen.getByText('模拟测量，非临床：距离标注仅供界面演示')).toBeTruthy()
     fireEvent.pointerDown(canvas, { button: 0, clientX: 0, clientY: 0 })
     fireEvent.pointerMove(canvas, { clientX: 37.5, clientY: 50 })
@@ -780,11 +786,16 @@ describe('DicomViewer: W/L 与测量（CR-003 T-003）', () => {
     stubCanvasRect()
 
     render(
-      <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
+      <DicomViewer
+        asset={assets[0]}
+        dicomAssets={assets}
+        onMetasParsed={vi.fn()}
+        onClose={vi.fn()}
+        activeTool="measure"
+      />,
     )
     const canvas = await waitForRenderedCanvas()
 
-    fireEvent.click(screen.getByRole('button', { name: '测量（模拟）' }))
     fireEvent.pointerDown(canvas, { button: 0, clientX: 0, clientY: 0 })
     fireEvent.pointerMove(canvas, { clientX: 37.5, clientY: 50 })
     fireEvent.pointerUp(canvas, { clientX: 37.5, clientY: 50 })
@@ -802,10 +813,15 @@ describe('DicomViewer: W/L 与测量（CR-003 T-003）', () => {
     stubCanvasRect()
 
     render(
-      <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
+      <DicomViewer
+        asset={assets[0]}
+        dicomAssets={assets}
+        onMetasParsed={vi.fn()}
+        onClose={vi.fn()}
+        activeTool="measure"
+      />,
     )
     const canvas = await waitForRenderedCanvas()
-    fireEvent.click(screen.getByRole('button', { name: '测量（模拟）' }))
 
     // 第一条：(0,0)→(3,4) → 2.5 mm
     fireEvent.pointerDown(canvas, { button: 0, clientX: 0, clientY: 0 })
@@ -824,7 +840,7 @@ describe('DicomViewer: W/L 与测量（CR-003 T-003）', () => {
     })
     expect(screen.getByText('2.5 mm')).toBeTruthy() // 第一条仍在（可多条）
 
-    // 清空按钮：全部移除后按钮禁用
+    // 清空按钮（视口右上小控件，R-024）：全部移除后按钮禁用
     const clear = screen.getByRole('button', { name: '清空测量' }) as HTMLButtonElement
     expect(clear.disabled).toBe(false)
     fireEvent.click(clear)
@@ -844,10 +860,15 @@ describe('DicomViewer: W/L 与测量（CR-003 T-003）', () => {
     stubCanvasRect()
 
     render(
-      <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
+      <DicomViewer
+        asset={assets[0]}
+        dicomAssets={assets}
+        onMetasParsed={vi.fn()}
+        onClose={vi.fn()}
+        activeTool="measure"
+      />,
     )
     const canvas = await waitForRenderedCanvas()
-    fireEvent.click(screen.getByRole('button', { name: '测量（模拟）' }))
     fireEvent.pointerDown(canvas, { button: 0, clientX: 0, clientY: 0 })
     fireEvent.pointerMove(canvas, { clientX: 37.5, clientY: 50 })
     fireEvent.pointerUp(canvas, { clientX: 37.5, clientY: 50 })
@@ -862,7 +883,7 @@ describe('DicomViewer: W/L 与测量（CR-003 T-003）', () => {
     })
   })
 
-  it('keeps the measure tool disabled while preview is unavailable (degraded path)', async () => {
+  it('does not draw measurements while preview is unavailable (degraded path)', async () => {
     const compressed = buildDicomFile({
       transferSyntax: JPEG_BASELINE_TRANSFER_SYNTAX_UID,
       patientName: '',
@@ -873,17 +894,185 @@ describe('DicomViewer: W/L 与测量（CR-003 T-003）', () => {
     stubFetchFor({ 'blob:j9': new Uint8Array(compressed) })
     const { putImageData } = stubCanvasContext()
 
+    // 测量工具经顶栏工具组激活（activeTool），但预览不可用：拖拽不落笔、不崩溃
     render(
-      <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
+      <DicomViewer
+        asset={assets[0]}
+        dicomAssets={assets}
+        onMetasParsed={vi.fn()}
+        onClose={vi.fn()}
+        activeTool="measure"
+      />,
     )
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toContain('仅元数据')
     })
-    const measureButton = screen.getByRole('button', {
-      name: '测量（模拟）',
-    }) as HTMLButtonElement
-    expect(measureButton.disabled).toBe(true)
+    const canvas = screen.getByLabelText('所选切片的灰度预览') as HTMLCanvasElement
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 0, clientY: 0 })
+    fireEvent.pointerMove(canvas, { clientX: 37.5, clientY: 50 })
+    fireEvent.pointerUp(canvas, { clientX: 37.5, clientY: 50 })
+    expect(screen.queryByText(/px（模拟）/)).toBeNull()
+    // 距离标注形如“N.N mm”（区别于左下角“mm/px”的 PixelSpacing 读数）
+    expect(screen.queryByText(/^\d+(\.\d+)? mm$/)).toBeNull()
     expect(putImageData).not.toHaveBeenCalled()
+  })
+})
+
+describe('DicomViewer: 视口工具（CR-009 T-002 / R-024）', () => {
+  /** 等待预览渲染完成并返回画布元素（拖拽交互前置条件） */
+  async function waitForRenderedCanvas() {
+    const canvas = (await waitFor(() => {
+      const element = screen.getByLabelText('所选切片的灰度预览') as HTMLCanvasElement
+      expect(element.className).not.toContain('is-hidden')
+      return element
+    })) as HTMLCanvasElement
+    return canvas
+  }
+
+  function stubCanvasRect(width = 100, height = 100): void {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width,
+      height,
+      right: width,
+      bottom: height,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect)
+  }
+
+  it('pans the viewport by drag (translate offset) with the pan tool', async () => {
+    const { assets, files } = buildThreeSliceSeries()
+    stubFetchFor(files)
+    stubCanvasContext()
+    stubCanvasRect()
+
+    render(
+      <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
+    )
+    const canvas = await waitForRenderedCanvas()
+    const stage = document.querySelector('.dicom-viewer__stage') as HTMLElement
+    const wrap = document.querySelector('.dicom-viewer__canvas-wrap') as HTMLElement
+    expect(wrap.getAttribute('data-tool')).toBe('pan') // 默认工具：平移
+
+    // 拖拽 (+30, +5) → translate(30px, 5px)，rotate/scale 保持默认
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 10, clientY: 10 })
+    fireEvent.pointerMove(canvas, { clientX: 40, clientY: 15 })
+    fireEvent.pointerUp(canvas, { clientX: 40, clientY: 15 })
+    expect(stage.style.transform).toBe('translate(30px, 5px) rotate(0deg) scale(1)')
+  })
+
+  it('rotates the viewport by drag and live-updates the Rot corner readout', async () => {
+    const { assets, files } = buildThreeSliceSeries()
+    stubFetchFor(files)
+    stubCanvasContext()
+    stubCanvasRect()
+
+    render(
+      <DicomViewer
+        asset={assets[0]}
+        dicomAssets={assets}
+        onMetasParsed={vi.fn()}
+        onClose={vi.fn()}
+        activeTool="rotate"
+      />,
+    )
+    const canvas = await waitForRenderedCanvas()
+    const stage = document.querySelector('.dicom-viewer__stage') as HTMLElement
+
+    // 拖拽 +40px × 0.5°/px → 20°（右下角 Rot 读数实时更新；Zoom 不变）
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 10, clientY: 50 })
+    fireEvent.pointerMove(canvas, { clientX: 50, clientY: 50 })
+    fireEvent.pointerUp(canvas, { clientX: 50, clientY: 50 })
+    expect(stage.style.transform).toBe('translate(0px, 0px) rotate(20deg) scale(1)')
+    expect(screen.getByText('Rot: 20°')).toBeTruthy()
+    expect(screen.getByText('Zoom: 100%')).toBeTruthy()
+
+    // Rot 0° 不显示（回正后读数隐藏，T-001 预留口径）
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 50, clientY: 50 })
+    fireEvent.pointerMove(canvas, { clientX: 10, clientY: 50 })
+    fireEvent.pointerUp(canvas, { clientX: 10, clientY: 50 })
+    expect(stage.style.transform).toBe('translate(0px, 0px) rotate(0deg) scale(1)')
+    expect(screen.queryByText(/^Rot: /)).toBeNull()
+  })
+
+  it('zooms the viewport by drag and live-updates the Zoom corner readout', async () => {
+    const { assets, files } = buildThreeSliceSeries()
+    stubFetchFor(files)
+    stubCanvasContext()
+    stubCanvasRect()
+
+    render(
+      <DicomViewer
+        asset={assets[0]}
+        dicomAssets={assets}
+        onMetasParsed={vi.fn()}
+        onClose={vi.fn()}
+        activeTool="zoom"
+      />,
+    )
+    const canvas = await waitForRenderedCanvas()
+    const stage = document.querySelector('.dicom-viewer__stage') as HTMLElement
+
+    // 向上拖 50px × 0.01/px → 1.5 倍（150%）
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 50, clientY: 100 })
+    fireEvent.pointerMove(canvas, { clientX: 50, clientY: 50 })
+    fireEvent.pointerUp(canvas, { clientX: 50, clientY: 50 })
+    expect(stage.style.transform).toBe('translate(0px, 0px) rotate(0deg) scale(1.5)')
+    expect(screen.getByText('Zoom: 150%')).toBeTruthy()
+  })
+
+  it('zooms with Ctrl+wheel without changing slices (R-024 / R-025 不冲突)', async () => {
+    const { assets, files } = buildThreeSliceSeries()
+    stubFetchFor(files)
+    stubCanvasContext()
+
+    render(
+      <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
+    )
+    await waitForRenderedCanvas()
+    const wrap = document.querySelector('.dicom-viewer__canvas-wrap')
+    if (wrap === null) throw new Error('视口容器未渲染')
+
+    // Ctrl+滚轮上滚 → 放大一档（1 → 1.1 → 110%），切片与滑条不变
+    fireEvent.wheel(wrap, { deltaY: -100, ctrlKey: true })
+    expect(screen.getByText('Zoom: 110%')).toBeTruthy()
+    expect(screen.getByText('Inst #3 / 3')).toBeTruthy()
+    expect((screen.getByLabelText('选择切片') as HTMLInputElement).value).toBe('3')
+
+    // Ctrl+滚轮下滚 → 缩小回约 100%（钳制下限不溢出）
+    fireEvent.wheel(wrap, { deltaY: 100, ctrlKey: true })
+    expect(screen.getByText('Zoom: 100%')).toBeTruthy()
+  })
+
+  it('adjusts window level by drag through the App-owned setter (auto → manual)', async () => {
+    const { assets, files } = buildThreeSliceSeries()
+    stubFetchFor(files)
+    stubCanvasContext()
+    stubCanvasRect()
+    const onWindowLevelChange = vi.fn()
+
+    render(
+      <DicomViewer
+        asset={assets[0]}
+        dicomAssets={assets}
+        onMetasParsed={vi.fn()}
+        onClose={vi.fn()}
+        windowLevel={AUTO_WINDOW_LEVEL} // auto（wc 40 / ww 400 为展示口径）
+        activeTool="window"
+        onWindowLevelChange={onWindowLevelChange}
+      />,
+    )
+    const canvas = await waitForRenderedCanvas()
+
+    // 横拖 +50 → 窗宽 450；竖拖 -40 → 窗位 80；auto 首拖即转手动（上送 App）
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(canvas, { clientX: 150, clientY: 60 })
+    fireEvent.pointerUp(canvas, { clientX: 150, clientY: 60 })
+    expect(onWindowLevelChange).toHaveBeenCalledWith({ auto: false, wc: 80, ww: 450 })
+    expect(onWindowLevelChange).toHaveBeenCalledTimes(1) // 仅 move 上报（up 不重复）
   })
 })
 

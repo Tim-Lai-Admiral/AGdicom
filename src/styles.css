@@ -724,6 +724,32 @@ button.asset-row__main:hover {
   cursor: crosshair; /* 测量工具激活时的视口工具态 */
 }
 
+/* --- 变换舞台（CR-009 T-002 / R-024）：pan/zoom/rotate 经 CSS transform 施加；
+   画布与测量覆盖层同组变换，四角覆盖层/方向标记不随动 --- */
+.dicom-viewer__stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-origin: center;
+}
+
+/* 视口光标随激活工具切换（测量沿用画布 .is-measuring 十字） */
+.dicom-viewer__canvas-wrap[data-tool='pan'] {
+  cursor: grab;
+}
+.dicom-viewer__canvas-wrap[data-tool='pan']:active {
+  cursor: grabbing;
+}
+.dicom-viewer__canvas-wrap[data-tool='zoom'] {
+  cursor: zoom-in;
+}
+.dicom-viewer__canvas-wrap[data-tool='rotate'] {
+  cursor: ew-resize;
+}
+.dicom-viewer__canvas-wrap[data-tool='window'] {
+  cursor: ns-resize;
+}
+
 /* --- 测量工具（CR-003 T-003 / R-010 Mock）：SVG 覆盖层 + 工具行 --- */
 .dicom-viewer__measure-overlay {
   position: absolute;
@@ -755,38 +781,36 @@ button.asset-row__main:hover {
   stroke-width: 3px;
 }
 
-.dicom-viewer__tools {
+/* --- 测量小控件（CR-009 T-002 / R-024）：测量入口迁移至顶栏工具组；
+   Mock 提示 + 清空测量保留为视口右上小控件 --- */
+.dicom-viewer__measure-widgets {
+  position: absolute;
+  top: 66px;
+  right: 12px;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  flex-wrap: wrap;
 }
 
-.dicom-viewer__tool-btn {
+.dicom-viewer__measure-clear {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  background: rgba(16, 20, 26, 0.85);
   color: var(--color-text);
-  padding: 0.3rem 0.75rem;
-  font-size: 0.8125rem;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
 }
 
-.dicom-viewer__tool-btn:hover:not(:disabled) {
+.dicom-viewer__measure-clear:hover:not(:disabled) {
   background: var(--color-bg);
 }
 
-.dicom-viewer__tool-btn:disabled {
+.dicom-viewer__measure-clear:disabled {
   opacity: 0.55;
   cursor: not-allowed;
-}
-
-.dicom-viewer__tool-btn.is-active {
-  color: var(--color-primary);
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
 }
 
 .dicom-viewer__measure-hint {
@@ -1683,6 +1707,14 @@ button.asset-row__main:hover {
 
 /* 顶栏内图标按钮：复用 index.css 的 .tool-btn（rec 组件类），补禁用态 */
 .workbench__toolbar .tool-btn {
+  flex: 0 0 auto;
+}
+
+/* 视口工具组（CR-009 T-002 / R-024）：tool-btn 图标按钮横排（激活态见 .tool-btn.active） */
+.workbench__toolgroup {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   flex: 0 0 auto;
 }
 

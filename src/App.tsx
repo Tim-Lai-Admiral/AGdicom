@@ -15,6 +15,8 @@ import CompareView from './features/library/CompareView.tsx'
 import DicomViewer from './features/viewer/dicom/DicomViewer.tsx'
 import { AUTO_WINDOW_LEVEL } from './features/viewer/dicom/windowLevel.ts'
 import type { WindowLevelState } from './features/viewer/dicom/windowLevel.ts'
+import { DEFAULT_VIEWER_TOOL } from './features/viewer/viewerTools.ts'
+import type { ViewerTool } from './features/viewer/viewerTools.ts'
 // TD-002：three.js（~800KB）随 3D 查看器拆为独立 chunk，仅在首次打开 3D 模型时按需加载
 const Model3DViewer = lazy(() => import('./features/viewer/model3d/Model3DViewer.tsx'))
 import ReviewPanel from './features/review/ReviewPanel.tsx'
@@ -61,14 +63,18 @@ function App() {
   const [restoreNotice, setRestoreNotice] = useState<string | null>(null)
   /** 窗宽窗位（CR-003 T-003 / R-003 修改）：默认自动 min-max；右栏面板调节，中央查看器消费 */
   const [windowLevel, setWindowLevel] = useState<WindowLevelState>(AUTO_WINDOW_LEVEL)
+  /** 视口激活工具（CR-009 T-002 / R-024）：顶栏工具组切换，中央查看器按工具解释拖拽 */
+  const [viewerTool, setViewerTool] = useState<ViewerTool>(DEFAULT_VIEWER_TOOL)
   const { importFiles, importing, importingLarge, feedback, clearFeedback } = useImport({
     state,
     onStateChange: setState,
   })
 
-  // 进入/切换素材时 W/L 复位为自动 min-max（R-003：默认进入时自动 min-max）
+  // 进入/切换素材时 W/L 复位为自动 min-max（R-003：默认进入时自动 min-max），
+  // 视口工具复位为平移（R-024 默认；视口变换随查看器重挂载自然归零）
   useEffect(() => {
     setWindowLevel(AUTO_WINDOW_LEVEL)
+    setViewerTool(DEFAULT_VIEWER_TOOL)
   }, [activeAssetId])
 
   /**
@@ -276,6 +282,15 @@ function App() {
   const closeCompare = (): void => setCompareOpen(false) // 退出比较但保留选中，便于再次进入
   const showCompare = compareOpen && compareAssets.length === COMPARE_SELECTION_LIMIT
 
+  /** 顶栏工具组目标（CR-009 T-002 / R-024）：DICOM/图片显示（比较/导入/3D 隐藏）；
+   *  图片素材下 window/measure 按钮呈禁用态（由 TopToolbar 依据 kind 处理） */
+  const toolGroupKind =
+    showCompare || activeAsset === undefined
+      ? null
+      : activeAsset.kind === 'dicom' || activeAsset.kind === 'image'
+        ? activeAsset.kind
+        : null
+
   /** 中央查看区（统一容器）：比较 > 查看器（DICOM/3D）> 图片预览 > 导入视图 */
   let centerView: ReactNode
   if (showCompare) {
@@ -290,6 +305,8 @@ function App() {
         onClose={closeActiveAsset}
         onSelectedSliceChange={handleDicomSliceChange}
         windowLevel={windowLevel}
+        activeTool={viewerTool}
+        onWindowLevelChange={setWindowLevel}
       />
     )
   } else if (activeAsset !== undefined && activeAsset.kind === 'model') {
@@ -342,6 +359,9 @@ function App() {
         rightOpen={rightOpen}
         onToggleLeft={() => setLeftOpen(!leftOpen)}
         onToggleRight={() => setRightOpen(!rightOpen)}
+        toolGroupKind={toolGroupKind}
+        viewerTool={viewerTool}
+        onViewerToolChange={setViewerTool}
       />
       {exportOpen ? (
         <div className="workbench__export-pop">

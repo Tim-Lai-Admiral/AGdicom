@@ -1,20 +1,31 @@
 /**
  * DICOM 查看器（CR-001 T-005 / R-003；CR-003 T-003 增强 W/L 与测量 Mock；
- * CR-009 T-001 视口化：四角元数据覆盖层 + 滚轮切片同步，中央元数据表格下线）。
+ * CR-009 T-001 视口化：四角元数据覆盖层 + 滚轮切片同步，中央元数据表格下线；
+ * CR-009 T-002 / R-024 视口工具：pan/zoom/window/rotate/measure 拖拽 + 测量迁移）。
  *
  * 应用内查看区（role="dialog"，非路由）：Canvas 灰度预览（自动 min-max 或显式窗宽窗位，
  * R-003 修改）+ 四角元数据覆盖层（R-023，视觉参照 rec/src/App.tsx Viewport，只读素材：
  * 左上患者/ID/文件名；右上模态·传输语法或去标识化 / series UID 截断 / Inst #N / M；
  * 左下 C/W（实时）+ PixelSpacing；右下 Zoom/Rot/平面 + 方向标记）+ 切片选择器
  * （多文件 series 按 InstanceNumber 排序切换；视口滚轮与滑条经 selectedAssetId
- * 共享状态双向同步，R-025）+ 测量工具（拖拽绘制 + 距离标注，Mock 非临床，R-010）。
+ * 共享状态双向同步，R-025）+ 测量工具（拖拽绘制 + 距离标注，Mock 非临床，R-010；
+ * 入口为顶栏工具组，查看器内旧“测量(模拟)/清空测量”按钮已移除，清空入口保留在
+ * 视口右上小控件）。
  * 中央元数据表格已移除：元数据唯一来源为右栏 MetadataPanel（CR-009 T-001 / R-023）。
+ *
+ * 视口工具（CR-009 T-002 / R-024）：激活工具由 App 持有（activeTool 下发）：
+ * - pan：拖拽平移视口（offset）；zoom：拖拽或 Ctrl/Cmd+滚轮缩放（zoom）；
+ * - rotate：拖拽旋转（rotateDeg）；window：拖拽调窗（横拖窗宽、竖拖窗位，
+ *   auto 首拖即转手动，经 onWindowLevelChange 上送 App）；measure：拖拽绘制测量
+ *   （既有 R-010 逻辑沿用，仅测量工具下生效）；
+ * - 变换（translate/rotate/scale）施加在“变换舞台”上（画布与测量覆盖层同组变换，
+ *   四角覆盖层不随动），右下角 Zoom/Rot 读数实时更新（R-023 预留位）。
  *
  * 四角降级口径（DicomMeta 契约 R-003 未含的字段，如实降级而非造数）：
  * - 日期时间：无日期字段 → 左上第三行以当前切片文件名占位（随切片切换，辅助识别）；
  * - SliceThickness / plane：无字段 → 左下省略厚度行；平面默认 AXL（显示 AXIAL，
  *   方向标记 R/L/A/P）；
- * - Zoom/Rot：R-024（T-002）工具状态预留 → 恒为默认 100% / 0°（Rot 0° 不显示）；
+ * - Zoom/Rot：视口工具状态驱动（默认 100% / 0°，Rot 0° 不显示）；
  * - auto W/L：真实 min/max 在解码器内部计算不外泄 → C/W 展示 App 状态值并标注“（自动）”。
  *
  * 数据流（解析范围见 R-018，聚合口径见 R-019）：
@@ -46,6 +57,7 @@ import type { MeasureLength, MeasurePoint } from './measure.ts'
 import { transferSyntaxLabel } from './metaLabels.ts'
 import { findDicomPatientSeriesGroup, sliceCountByAsset } from './seriesUtils.ts'
 import type { DicomSeriesEntry } from './seriesUtils.ts'
+import type { ViewerTool } from '../viewerTools.ts'
 
 /** 读取素材的字节（会话级 objectUrl → fetch；预览与解析共用） */
 async function loadDicomAssetBytes(objectUrl: string): Promise<ArrayBuffer> {
@@ -91,6 +103,50 @@ function truncateSeriesUid(uid: string | undefined): string | undefined {
     : uid
 }
 
+// ---- 视口工具交互常量（CR-009 T-002 / R-024；拖拽手感与滚轮缩放步长）----
+/** 缩放下限（相对原图，20%） */
+const VIEWPORT_ZOOM_MIN = 0.2
+/** 缩放上限（8 倍） */
+const VIEWPORT_ZOOM_MAX = 8
+/** Ctrl/Cmd+滚轮单档缩放系数（上滚放大、下滚缩小） */
+const VIEWPORT_ZOOM_WHEEL_FACTOR = 1.1
+/** 缩放拖拽灵敏度：每像素 0.01 倍（向上拖放大） */
+const VIEWPORT_ZOOM_DRAG_STEP = 0.01
+/** 旋转拖拽灵敏度：每像素 0.5°（向右拖顺时针） */
+const VIEWPORT_ROTATE_DRAG_STEP = 0.5
+
+/** 视口变换状态（R-024）：平移 offset / 缩放 zoom / 旋转 rotateDeg（度） */
+interface ViewportTransform {
+  zoom: number
+  rotateDeg: number
+  offsetX: number
+  offsetY: number
+}
+
+const IDENTITY_VIEWPORT: ViewportTransform = { zoom: 1, rotateDeg: 0, offsetX: 0, offsetY: 0 }
+
+/** 缩放钳制（拖拽/滚轮共用；不溢出上下限） */
+function clampViewportZoom(zoom: number): number {
+  return Math.min(VIEWPORT_ZOOM_MAX, Math.max(VIEWPORT_ZOOM_MIN, zoom))
+}
+
+/**
+ * 进行中的拖拽会话（pointerdown 建立、pointerup 结束；经 ref 存放，move 高频更新
+ * 不经 state 触发额外渲染）。各工具捕获拖拽起点与基准值，move 时按灵敏度增量更新。
+ */
+type ViewportDrag =
+  | { kind: 'measure' }
+  | { kind: 'pan'; startClientX: number; startClientY: number; baseX: number; baseY: number }
+  | { kind: 'zoom'; startClientY: number; baseZoom: number }
+  | { kind: 'rotate'; startClientX: number; baseDeg: number }
+  | {
+      kind: 'window'
+      startClientX: number
+      startClientY: number
+      baseWc: number
+      baseWw: number
+    }
+
 export interface DicomViewerProps {
   /** 当前打开的 DICOM 素材 */
   asset: Asset
@@ -105,6 +161,10 @@ export interface DicomViewerProps {
   onSelectedSliceChange?: (assetId: string) => void
   /** 窗宽窗位（R-003 修改）；缺省自动 min-max（与既有行为等价）。App 持有，右栏面板可调 */
   windowLevel?: WindowLevelState
+  /** 激活的视口工具（CR-009 T-002 / R-024；App 持有，顶栏工具组切换）。缺省平移 */
+  activeTool?: ViewerTool
+  /** 窗宽窗位变更上报（window 工具拖拽；App 持有 wc/ww，CR-003 契约）。缺省不调窗 */
+  onWindowLevelChange?: (wl: WindowLevelState) => void
 }
 
 export default function DicomViewer({
@@ -114,6 +174,8 @@ export default function DicomViewer({
   onClose,
   onSelectedSliceChange,
   windowLevel = AUTO_WINDOW_LEVEL,
+  activeTool = 'pan',
+  onWindowLevelChange,
 }: DicomViewerProps) {
   /** 本会话（本次打开）解析出的元数据，优先于持久化记录 */
   const [sessionMetas, setSessionMetas] = useState<Record<string, DicomMeta>>({})
@@ -131,12 +193,17 @@ export default function DicomViewer({
   const [previewRendered, setPreviewRendered] = useState(false)
   /** 当前预览帧尺寸（测量覆盖层 SVG viewBox 用） */
   const [previewSize, setPreviewSize] = useState<{ width: number; height: number } | null>(null)
-  /** 测量工具开关（R-010 Mock：拖拽绘制线 + 距离标注，非临床） */
-  const [measureMode, setMeasureMode] = useState(false)
+  /** 视口变换（CR-009 T-002 / R-024）：pan/zoom/rotate 工具与 Ctrl+滚轮驱动；
+   *  查看器按素材重挂载（App key）自然复位；右下角 Zoom/Rot 读数实时反映 */
+  const [viewport, setViewport] = useState<ViewportTransform>(IDENTITY_VIEWPORT)
+  /** 测量工具是否激活（R-024：入口为顶栏工具组的 activeTool；仅 DICOM） */
+  const measureMode = activeTool === 'measure'
   /** 已完成的测量线；切换素材/切片即清空，不持久化（R-010） */
   const [measures, setMeasures] = useState<MeasureEntry[]>([])
   /** 拖拽中的草稿测量线；null = 未在拖拽 */
   const [draftMeasure, setDraftMeasure] = useState<{ a: MeasurePoint; b: MeasurePoint } | null>(null)
+  /** 进行中的工具拖拽会话（pan/zoom/rotate/window/measure；见 ViewportDrag） */
+  const dragRef = useRef<ViewportDrag | null>(null)
 
   const datasetsRef = useRef(new Map<string, DataSet>())
   /** sessionMetas 的同步镜像：解析 effect 的聚合步骤需读取此前批次已解析出的元数据 */
@@ -394,7 +461,9 @@ export default function DicomViewer({
     }
   }, [onClose])
 
-  // ---- 测量工具指针交互（R-010 Mock）：工具开启且预览渲染后可拖拽，抬起落笔 ----
+  // ---- 视口工具指针交互（CR-009 T-002 / R-024）：统一 pointerdown/move/up 通路，
+  // 按激活工具解释拖拽（pan/zoom/window/rotate 平移/缩放/调窗/旋转；measure 沿用
+  // 既有 R-010 测量逻辑）。拖拽会话经 dragRef 传递，move 高频更新不经 state。----
   const canvasPointFromEvent = (event: ReactPointerEvent<HTMLCanvasElement>): MeasurePoint | null => {
     const canvas = canvasRef.current
     if (canvas === null) return null
@@ -407,26 +476,96 @@ export default function DicomViewer({
     )
   }
 
-  const handleMeasurePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>): void => {
-    if (!measureMode || !previewRendered || event.button !== 0) return
-    const point = canvasPointFromEvent(event)
-    if (point === null) return
-    setDraftMeasure({ a: point, b: point })
-    try {
-      canvasRef.current?.setPointerCapture(event.pointerId)
-    } catch {
-      // jsdom 等环境不支持 pointer capture：不影响拖拽主流程
+  const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>): void => {
+    if (!previewRendered || event.button !== 0) return
+    const capture = (): void => {
+      try {
+        canvasRef.current?.setPointerCapture(event.pointerId)
+      } catch {
+        // jsdom 等环境不支持 pointer capture：不影响拖拽主流程
+      }
+    }
+    if (activeTool === 'measure') {
+      const point = canvasPointFromEvent(event)
+      if (point === null) return
+      setDraftMeasure({ a: point, b: point })
+      dragRef.current = { kind: 'measure' }
+      capture()
+      return
+    }
+    if (activeTool === 'pan') {
+      dragRef.current = {
+        kind: 'pan',
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        baseX: viewport.offsetX,
+        baseY: viewport.offsetY,
+      }
+      capture()
+      return
+    }
+    if (activeTool === 'zoom') {
+      dragRef.current = { kind: 'zoom', startClientY: event.clientY, baseZoom: viewport.zoom }
+      capture()
+      return
+    }
+    if (activeTool === 'rotate') {
+      dragRef.current = { kind: 'rotate', startClientX: event.clientX, baseDeg: viewport.rotateDeg }
+      capture()
+      return
+    }
+    if (activeTool === 'window' && onWindowLevelChange !== undefined) {
+      // 调窗基准取当前 App 状态值（auto 时即四角展示的 40/400 口径）：首拖即转手动
+      dragRef.current = {
+        kind: 'window',
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        baseWc: windowLevel.wc,
+        baseWw: windowLevel.ww,
+      }
+      capture()
     }
   }
 
-  const handleMeasurePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>): void => {
-    if (draftMeasure === null) return
-    const point = canvasPointFromEvent(event)
-    if (point === null) return
-    setDraftMeasure({ a: draftMeasure.a, b: point })
+  const handlePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>): void => {
+    const drag = dragRef.current
+    if (drag === null) return
+    if (drag.kind === 'measure') {
+      if (draftMeasure === null) return
+      const point = canvasPointFromEvent(event)
+      if (point === null) return
+      setDraftMeasure({ a: draftMeasure.a, b: point })
+      return
+    }
+    if (drag.kind === 'pan') {
+      const offsetX = drag.baseX + (event.clientX - drag.startClientX)
+      const offsetY = drag.baseY + (event.clientY - drag.startClientY)
+      setViewport((prev) => ({ ...prev, offsetX, offsetY }))
+      return
+    }
+    if (drag.kind === 'zoom') {
+      // 向上拖放大（startY - y > 0）
+      const zoom = clampViewportZoom(drag.baseZoom + (drag.startClientY - event.clientY) * VIEWPORT_ZOOM_DRAG_STEP)
+      setViewport((prev) => ({ ...prev, zoom }))
+      return
+    }
+    if (drag.kind === 'rotate') {
+      const rotateDeg = drag.baseDeg + (event.clientX - drag.startClientX) * VIEWPORT_ROTATE_DRAG_STEP
+      setViewport((prev) => ({ ...prev, rotateDeg }))
+      return
+    }
+    // window：横拖 → 窗宽（右增），竖拖 → 窗位（上增）；auto 状态首拖即转手动
+    const ww = Math.max(1, drag.baseWw + (event.clientX - drag.startClientX))
+    const wc = drag.baseWc - (event.clientY - drag.startClientY)
+    onWindowLevelChange?.({ auto: false, wc, ww })
   }
 
-  const handleMeasurePointerUp = (event: ReactPointerEvent<HTMLCanvasElement>): void => {
+  const handlePointerUp = (event: ReactPointerEvent<HTMLCanvasElement>): void => {
+    const drag = dragRef.current
+    if (drag === null) return
+    dragRef.current = null
+    if (drag.kind !== 'measure') return // pan/zoom/rotate/window：变换已随 move 落定
+    // ---- 测量落笔（R-010 既有逻辑沿用）----
     if (draftMeasure === null) return
     const start = draftMeasure.a
     const point = canvasPointFromEvent(event) ?? draftMeasure.b
@@ -444,11 +583,11 @@ export default function DicomViewer({
     ])
   }
 
-  // ---- 视口滚轮切片（CR-009 T-001 / R-025）----
+  // ---- 视口滚轮切片与缩放（CR-009 T-001/R-025、T-002/R-024）----
   // 原生 wheel 监听挂载在视口容器（passive:false 才能 preventDefault，拦截页面滚动与
   // 浏览器缩放手势）：非 Ctrl/Cmd → 切片 ±1（上下边界钳制不溢出），经 setSelectedAssetId
-  // 与底部滑条共享同一状态实现双向同步；Ctrl/Cmd + 滚轮 → 缩放为 R-024（T-002）工具
-  // 范畴，当前预留不处理（仅拦截浏览器页面缩放，避免误触整体缩放）。
+  // 与底部滑条共享同一状态实现双向同步；Ctrl/Cmd + 滚轮 → 缩放（R-024，与切片切换
+  // 不冲突，R-025），上滚放大下滚缩小，钳制在上下限内。
   // 当前切片与有序切片经 ref 读取（监听器仅随容器挂载一次，避免闭包过期值）。
   const orderedSlicesRef = useRef(orderedSlices)
   const selectedAssetIdRef = useRef(selectedAssetId)
@@ -461,7 +600,13 @@ export default function DicomViewer({
     if (wrap === null) return
     const handleWheel = (event: WheelEvent): void => {
       event.preventDefault()
-      if (event.ctrlKey || event.metaKey) return // 缩放预留（T-002 / R-024）
+      if (event.ctrlKey || event.metaKey) {
+        // Ctrl/Cmd + 滚轮 → 缩放（R-024；不与切片切换冲突，R-025）
+        const factor =
+          event.deltaY < 0 ? VIEWPORT_ZOOM_WHEEL_FACTOR : 1 / VIEWPORT_ZOOM_WHEEL_FACTOR
+        setViewport((prev) => ({ ...prev, zoom: clampViewportZoom(prev.zoom * factor) }))
+        return
+      }
       if (event.deltaY === 0) return // 横向滚动不切切片
       const slices = orderedSlicesRef.current
       if (slices.length === 0) return
@@ -517,73 +662,82 @@ export default function DicomViewer({
 
         <div className="dicom-viewer__body">
           <section className="dicom-viewer__preview" aria-label="切片预览">
-            <div ref={canvasWrapRef} className="dicom-viewer__canvas-wrap">
-              <canvas
-                ref={canvasRef}
-                className={
-                  previewRendered
-                    ? measureMode
-                      ? 'dicom-viewer__canvas is-measuring'
-                      : 'dicom-viewer__canvas'
-                    : 'dicom-viewer__canvas is-hidden'
-                }
-                aria-label="所选切片的灰度预览"
-                onPointerDown={handleMeasurePointerDown}
-                onPointerMove={handleMeasurePointerMove}
-                onPointerUp={handleMeasurePointerUp}
-              />
-              {previewRendered && previewSize !== null && (measures.length > 0 || draftMeasure !== null) ? (
-                <svg
-                  className="dicom-viewer__measure-overlay"
-                  viewBox={`0 0 ${previewSize.width} ${previewSize.height}`}
-                  preserveAspectRatio="xMidYMid meet"
-                  aria-hidden="true"
-                >
-                  {measures.map((measure) => (
-                    <g key={measure.id}>
+            <div ref={canvasWrapRef} className="dicom-viewer__canvas-wrap" data-tool={activeTool}>
+              {/* 变换舞台（CR-009 T-002 / R-024）：pan/zoom/rotate 经 CSS transform 施加，
+                  画布与测量覆盖层同组变换；四角覆盖层/方向标记不随动（viewport 级固定） */}
+              <div
+                className="dicom-viewer__stage"
+                style={{
+                  transform: `translate(${viewport.offsetX}px, ${viewport.offsetY}px) rotate(${viewport.rotateDeg}deg) scale(${viewport.zoom})`,
+                }}
+              >
+                <canvas
+                  ref={canvasRef}
+                  className={
+                    previewRendered
+                      ? measureMode
+                        ? 'dicom-viewer__canvas is-measuring'
+                        : 'dicom-viewer__canvas'
+                      : 'dicom-viewer__canvas is-hidden'
+                  }
+                  aria-label="所选切片的灰度预览"
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                />
+                {previewRendered && previewSize !== null && (measures.length > 0 || draftMeasure !== null) ? (
+                  <svg
+                    className="dicom-viewer__measure-overlay"
+                    viewBox={`0 0 ${previewSize.width} ${previewSize.height}`}
+                    preserveAspectRatio="xMidYMid meet"
+                    aria-hidden="true"
+                  >
+                    {measures.map((measure) => (
+                      <g key={measure.id}>
+                        <line
+                          className="dicom-viewer__measure-line"
+                          x1={measure.a.x}
+                          y1={measure.a.y}
+                          x2={measure.b.x}
+                          y2={measure.b.y}
+                          vectorEffect="non-scaling-stroke"
+                        />
+                        <circle
+                          className="dicom-viewer__measure-endpoint"
+                          cx={measure.a.x}
+                          cy={measure.a.y}
+                          r={measureEndpointRadius}
+                        />
+                        <circle
+                          className="dicom-viewer__measure-endpoint"
+                          cx={measure.b.x}
+                          cy={measure.b.y}
+                          r={measureEndpointRadius}
+                        />
+                        <text
+                          className="dicom-viewer__measure-label"
+                          x={(measure.a.x + measure.b.x) / 2}
+                          y={(measure.a.y + measure.b.y) / 2 - measureLabelOffset}
+                          textAnchor="middle"
+                          fontSize={measureLabelFontSize}
+                        >
+                          {formatMeasureLength(measure.length)}
+                        </text>
+                      </g>
+                    ))}
+                    {draftMeasure !== null ? (
                       <line
-                        className="dicom-viewer__measure-line"
-                        x1={measure.a.x}
-                        y1={measure.a.y}
-                        x2={measure.b.x}
-                        y2={measure.b.y}
+                        className="dicom-viewer__measure-line is-draft"
+                        x1={draftMeasure.a.x}
+                        y1={draftMeasure.a.y}
+                        x2={draftMeasure.b.x}
+                        y2={draftMeasure.b.y}
                         vectorEffect="non-scaling-stroke"
                       />
-                      <circle
-                        className="dicom-viewer__measure-endpoint"
-                        cx={measure.a.x}
-                        cy={measure.a.y}
-                        r={measureEndpointRadius}
-                      />
-                      <circle
-                        className="dicom-viewer__measure-endpoint"
-                        cx={measure.b.x}
-                        cy={measure.b.y}
-                        r={measureEndpointRadius}
-                      />
-                      <text
-                        className="dicom-viewer__measure-label"
-                        x={(measure.a.x + measure.b.x) / 2}
-                        y={(measure.a.y + measure.b.y) / 2 - measureLabelOffset}
-                        textAnchor="middle"
-                        fontSize={measureLabelFontSize}
-                      >
-                        {formatMeasureLength(measure.length)}
-                      </text>
-                    </g>
-                  ))}
-                  {draftMeasure !== null ? (
-                    <line
-                      className="dicom-viewer__measure-line is-draft"
-                      x1={draftMeasure.a.x}
-                      y1={draftMeasure.a.y}
-                      x2={draftMeasure.b.x}
-                      y2={draftMeasure.b.y}
-                      vectorEffect="non-scaling-stroke"
-                    />
-                  ) : null}
-                </svg>
-              ) : null}
+                    ) : null}
+                  </svg>
+                ) : null}
+              </div>
               {previewMessage !== null ? (
                 <p className="dicom-viewer__preview-message" role={previewPending ? 'status' : 'alert'}>
                   {previewMessage}
@@ -624,10 +778,13 @@ export default function DicomViewer({
                   <div>{`${selectedMeta.pixelSpacing.join(' × ')} mm/px`}</div>
                 ) : null}
               </div>
-              {/* 右下：Zoom/Rot（T-002 工具状态预留：默认 100% / 0°，0° 不显示）/ 平面
+              {/* 右下：Zoom/Rot（视口工具状态实时驱动，R-024；Rot 0° 不显示）/ 平面
                   （无 plane 字段 → 默认 AXL） */}
               <div className="viewport-overlay" style={{ bottom: 10, right: 12, textAlign: 'right' }}>
-                <div>Zoom: 100%</div>
+                <div>{`Zoom: ${Math.round(viewport.zoom * 100)}%`}</div>
+                {Math.round(viewport.rotateDeg) !== 0 ? (
+                  <div>{`Rot: ${Math.round(viewport.rotateDeg)}°`}</div>
+                ) : null}
                 <div>AXIAL</div>
               </div>
               {/* 方向标记（R-023，rec Viewport 同款）：plane 默认 AXL → R/L/A/P */}
@@ -659,31 +816,24 @@ export default function DicomViewer({
               >
                 P
               </div>
-            </div>
-            <div className="dicom-viewer__tools">
-              <button
-                type="button"
-                className={
-                  measureMode ? 'dicom-viewer__tool-btn is-active' : 'dicom-viewer__tool-btn'
-                }
-                aria-pressed={measureMode}
-                disabled={!previewRendered}
-                onClick={() => setMeasureMode((value) => !value)}
-              >
-                测量（模拟）
-              </button>
-              <button
-                type="button"
-                className="dicom-viewer__tool-btn"
-                disabled={measures.length === 0}
-                onClick={() => setMeasures([])}
-              >
-                清空测量
-              </button>
+              {/* 测量小控件（CR-009 T-002 / R-024）：测量入口迁移至顶栏工具组后，
+                  查看器内旧“测量(模拟)/清空测量”按钮已移除；Mock 提示与清空入口
+                  保留为视口右上小控件（有测量或测量工具激活时显示） */}
               {measureMode || measures.length > 0 ? (
-                <span className="dicom-viewer__measure-hint" role="status">
-                  模拟测量，非临床：距离标注仅供界面演示
-                </span>
+                <div className="dicom-viewer__measure-widgets">
+                  <span className="dicom-viewer__measure-hint" role="status">
+                    模拟测量，非临床：距离标注仅供界面演示
+                  </span>
+                  <button
+                    type="button"
+                    className="dicom-viewer__measure-clear"
+                    aria-label="清空测量"
+                    disabled={measures.length === 0}
+                    onClick={() => setMeasures([])}
+                  >
+                    清空测量
+                  </button>
+                </div>
               ) : null}
             </div>
             {orderedSlices.length > 0 ? (
