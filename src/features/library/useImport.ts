@@ -8,6 +8,10 @@
  * 幽灵水合（CR-006 R-014）：classifyImportFiles 识别出的 hydrated 项在此重建 objectUrl
  * 并回写原资产记录（不新增记录、不改元数据），saveState 仍只持久化元数据。
  *
+ * 二进制持久化（CR-006 T-003 / R-016）：注册成功 / 水合成功且文件 ≤ BLOB_MAX_BYTES
+ * （20MB）时，blob 按去重键写入 IndexedDB（异步，供刷新后启动恢复）；超限文件不入库
+ * （会话态 + 重导入水合兜底）并在反馈中提示；写入失败降级为会话态并提示，不阻塞导入。
+ *
  * 异步策略：先置“导入中”再处理（setTimeout 让出一轮事件循环，使状态先渲染），
  * 大文件（≥10MB）以 importingLarge 标记供 UI 提示；本任务不读取文件内容，
  * 真正的重 IO 解析（DICOM / 3D）属于 T-005 / T-006。
@@ -16,13 +20,22 @@
  * 先完成者的结果；ImportZone 在 importing 期间忽略新事件来规避该问题。
  */
 import { useCallback, useState } from 'react'
-import type { Asset, AppState } from '../../domain/types.ts'
+import type { Asset, AppState, AssetKind } from '../../domain/types.ts'
+import { BLOB_MAX_BYTES, defaultBlobStore } from '../../store/blobStore.ts'
+import type { BlobStore } from '../../store/blobStore.ts'
 import { saveState } from '../../store/repository.ts'
-import { classifyImportFiles } from './importAssets.ts'
+import { classifyImportFiles, dedupKey } from './importAssets.ts'
 import type { ImportDuplicate, ImportHydration, ImportUnknown } from './importAssets.ts'
 
 /** 大文件阈值：≥10MB 视为需要后台处理并向用户提示 */
 export const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024
+
+/** 超过 BLOB_MAX_BYTES 未入本地二进制库的文件（会话内可用，刷新后需重导入恢复预览，R-016） */
+export interface ImportOversize {
+  fileName: string
+  fileSize: number
+  kind: AssetKind
+}
 
 /** 导入反馈：一次 importFiles 调用的结构化结果（供 UI 直接展示） */
 export interface ImportFeedback {
@@ -34,6 +47,8 @@ export interface ImportFeedback {
   duplicates: ImportDuplicate[]
   /** 类型不受支持的文件（含可读中文原因） */
   unknown: ImportUnknown[]
+  /** 超过 20MB 未入本地二进制库的文件（R-016 提示） */
+  oversize: ImportOversize[]
   /** 持久化等环节的异常消息；null 表示无异常 */
   error: string | null
 }
@@ -43,6 +58,8 @@ export interface UseImportParams {
   state: AppState
   /** 注册完成后的状态回写（App 层 setState） */
   onStateChange: (next: AppState) => void
+  /** 二进制存储（R-016）；缺省为 IndexedDB 实现（globalThis.indexedDB），测试可注入 */
+  blobStore?: BlobStore
 }
 
 export interface UseImportResult {
@@ -130,7 +147,57 @@ function hydrateGhosts(
   return { assets, tags: state.tags, reviews: state.reviews }
 }
 
-export function useImport({ state, onStateChange }: UseImportParams): UseImportResult {
+/**
+ * blob 入库结果：失败消息（多条以“；”连接）与超限未入库清单（R-016）。
+ */
+interface BlobPersistOutcome {
+  error: string | null
+  oversize: ImportOversize[]
+}
+
+/**
+ * 二进制持久化（R-016）：对本次注册 / 水合的文件按去重键写入 IndexedDB。
+ * - 文件 > BLOB_MAX_BYTES（20MB）不入库（会话态 + 重导入水合兜底），记入 oversize；
+ * - 找不到原始 File（理论上不会发生）跳过；
+ * - 保存失败逐条收集为可读消息（Promise.allSettled），绝不抛出、不阻塞导入流程；
+ * - 水合项同样入库：刷新后可自动恢复，无需再次重导入。
+ */
+async function persistBlobs(
+  created: readonly Asset[],
+  hydrated: readonly ImportHydration[],
+  files: readonly File[],
+  store: BlobStore,
+): Promise<BlobPersistOutcome> {
+  const fileByKey = buildFileIndex(files)
+  const oversize: ImportOversize[] = []
+  const saves: Array<{ key: string; file: File }> = []
+  const collect = (fileName: string, fileSize: number, kind: AssetKind): void => {
+    if (fileSize > BLOB_MAX_BYTES) {
+      oversize.push({ fileName, fileSize, kind })
+      return
+    }
+    const file = fileByKey.get(fileKey(fileName, fileSize))
+    if (file === undefined) return
+    saves.push({ key: dedupKey(fileName, fileSize, kind), file })
+  }
+  for (const asset of created) {
+    collect(asset.file.fileName, asset.file.fileSize, asset.kind)
+  }
+  for (const item of hydrated) {
+    collect(item.fileName, item.fileSize, item.kind)
+  }
+  if (saves.length === 0) return { error: null, oversize }
+  const results = await Promise.allSettled(saves.map(({ key, file }) => store.saveBlob(key, file)))
+  const failures = results
+    .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+    .map((result) => errorMessage(result.reason))
+  return {
+    error: failures.length === 0 ? null : failures.join('；'),
+    oversize,
+  }
+}
+
+export function useImport({ state, onStateChange, blobStore = defaultBlobStore }: UseImportParams): UseImportResult {
   const [importing, setImporting] = useState(false)
   const [importingLarge, setImportingLarge] = useState(false)
   const [feedback, setFeedback] = useState<ImportFeedback | null>(null)
@@ -155,6 +222,7 @@ export function useImport({ state, onStateChange }: UseImportParams): UseImportR
         nextState = hydrateGhosts(nextState, result.hydrated, files)
         if (nextState !== state) onStateChange(nextState)
         let error: string | null = null
+        let oversize: ImportOversize[] = []
         if (result.created.length > 0 || result.hydrated.length > 0) {
           try {
             saveState(nextState) // saveState 自动剥离会话字段（objectUrl）
@@ -162,12 +230,21 @@ export function useImport({ state, onStateChange }: UseImportParams): UseImportR
             // RepositorySaveError 携带可直接展示的中文提示
             error = `素材已加入本次会话，但${errorMessage(saveError)}`
           }
+          // R-016：≤20MB 文件 blob 入库（含水合项），供刷新后启动自动恢复；
+          // 失败降级为会话态并提示，不阻塞导入（persistBlobs 内部已兜底不抛出）
+          const blobOutcome = await persistBlobs(result.created, result.hydrated, files, blobStore)
+          if (blobOutcome.error !== null) {
+            const prefix = error === null ? '素材已加入本次会话，但' : ''
+            error = `${prefix}${error ?? ''}本地二进制保存失败：${blobOutcome.error}（预览仅本次会话可用，重导入同文件可恢复）`
+          }
+          oversize = blobOutcome.oversize
         }
         setFeedback({
           created: result.created,
           hydrated: result.hydrated,
           duplicates: result.duplicates,
           unknown: result.unknown,
+          oversize,
           error,
         })
       } catch (error) {
@@ -176,6 +253,7 @@ export function useImport({ state, onStateChange }: UseImportParams): UseImportR
           hydrated: [],
           duplicates: [],
           unknown: [],
+          oversize: [],
           error: `导入失败：${errorMessage(error)}`,
         })
       } finally {

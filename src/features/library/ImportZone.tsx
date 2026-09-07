@@ -2,16 +2,23 @@
  * 素材导入区（CR-001 T-003 / R-001）。
  *
  * 交互：拖拽（进入高亮、放下导入）+ 文件选择按钮；导入期间忽略新事件；
- * 反馈：成功计数 / 水合复活（已恢复预览）/ 重复提示 / 未知类型原因 / 持久化异常，可手动关闭。
+ * 反馈：成功计数 / 水合复活（已恢复预览）/ 重复提示 / 未知类型原因 / 超限未入库
+ * （>20MB，R-016）/ 持久化异常，可手动关闭。
  */
 import { useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent } from 'react'
 import { ASSET_KIND_LABELS } from '../../domain/types.ts'
+import { BLOB_MAX_BYTES } from '../../store/blobStore.ts'
 import { SUPPORTED_TYPES_HINT } from './importAssets.ts'
 import type { ImportFeedback } from './useImport.ts'
 
 /** 文件选择器接受的扩展名（与 EXTENSION_KIND_MAP 保持一致） */
 export const IMPORT_ACCEPT = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.dcm,.stl,.obj,.glb,.gltf'
+
+/** 字节数 → MB 展示（一位小数，20MB 阈值提示用） */
+function formatMb(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+}
 
 export interface ImportZoneProps {
   importing: boolean
@@ -29,12 +36,13 @@ function ImportFeedbackPanel({
   feedback: ImportFeedback
   onClear?: () => void
 }) {
-  const { created, hydrated, duplicates, unknown, error } = feedback
+  const { created, hydrated, duplicates, unknown, oversize, error } = feedback
   if (
     created.length === 0 &&
     hydrated.length === 0 &&
     duplicates.length === 0 &&
     unknown.length === 0 &&
+    oversize.length === 0 &&
     error === null
   ) {
     return null
@@ -76,6 +84,21 @@ function ImportFeedbackPanel({
               <li key={item.fileName}>{item.message}</li>
             ))}
           </ul>
+        </div>
+      ) : null}
+      {oversize.length > 0 ? (
+        <div className="import-feedback__item is-oversize">
+          <p>
+            {`以下 ${oversize.length} 个文件超过 ${formatMb(BLOB_MAX_BYTES)}，未存入本地二进制库：`}
+          </p>
+          <ul>
+            {oversize.map((item) => (
+              <li key={`${item.fileName}(${item.fileSize})`}>
+                {`${item.fileName}（${ASSET_KIND_LABELS[item.kind]}，${formatMb(item.fileSize)}）`}
+              </li>
+            ))}
+          </ul>
+          <p>刷新后预览不保留：重新导入同名文件可恢复预览（评审记录仍保留）。</p>
         </div>
       ) : null}
       {error !== null ? <p className="import-feedback__item is-error">{error}</p> : null}

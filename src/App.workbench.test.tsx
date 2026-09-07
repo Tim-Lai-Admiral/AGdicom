@@ -405,10 +405,12 @@ describe('App: 素材删除（CR-006 T-001 / R-015）', () => {
 
     // 删除后重导入同一文件：正常新增（不报重复、无幽灵残留）
     dropFiles(container, [makeFile('heart.png', 64, 'image/png')])
+    // 导入期间上一批反馈面板仍在（同文本），等待目标用列表计数（导入完成的真信号）：
+    // T-003 起导入完成前多一拍 blob 入库（失败降级也不阻塞），状态落地稍晚于旧时序
     await waitFor(() => {
-      expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
+      expect(screen.getByText('素材库（1）')).toBeTruthy()
     })
-    expect(screen.getByText('素材库（1）')).toBeTruthy()
+    expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
   })
 
   it('deletes via the inline row button on the selected row', async () => {

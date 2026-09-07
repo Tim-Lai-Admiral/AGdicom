@@ -7,6 +7,7 @@ import type { AssetFilter } from './domain/filter.ts'
 import { addAssetTag, applyReview, removeAsset, removeAssetTag, updateAssetName, updateAssetNote } from './domain/review.ts'
 import { loadState, saveState } from './store/repository.ts'
 import type { LoadIssue } from './store/repository.ts'
+import { deleteAssetBlob, restoreAssetBlobs } from './features/library/blobPersistence.ts'
 import ImportZone from './features/library/ImportZone.tsx'
 import { useImport } from './features/library/useImport.ts'
 import AssetGrid from './features/library/AssetGrid.tsx'
@@ -51,6 +52,8 @@ function App() {
   /** 左栏展开切片列表的 DICOM 素材（同一时间至多一个） */
   const [expandedDicomId, setExpandedDicomId] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  /** 启动时从本地二进制库恢复的素材数（R-016 提示）；null 表示无恢复 */
+  const [restoreNotice, setRestoreNotice] = useState<string | null>(null)
   /** 窗宽窗位（CR-003 T-003 / R-003 修改）：默认自动 min-max；右栏面板调节，中央查看器消费 */
   const [windowLevel, setWindowLevel] = useState<WindowLevelState>(AUTO_WINDOW_LEVEL)
   const { importFiles, importing, importingLarge, feedback, clearFeedback } = useImport({
@@ -62,6 +65,38 @@ function App() {
   useEffect(() => {
     setWindowLevel(AUTO_WINDOW_LEVEL)
   }, [activeAssetId])
+
+  /**
+   * 启动二进制恢复（CR-006 T-003 / R-016）：loadState 后按去重键匹配 IndexedDB 中
+   * 已入库 blob，为幽灵资产重建会话 objectUrl（刷新后预览/查看立即可用，无需重导入）。
+   * 恢复为异步：命中后以函数式 setState 合并（不覆盖期间的其他状态变更）；
+   * 存储不可用等失败不打扰用户（素材保持幽灵态，重导入可走 R-014 水合兜底）。
+   */
+  useEffect(() => {
+    let cancelled = false
+    void restoreAssetBlobs(initialLoad.state.assets).then((result) => {
+      if (cancelled) return
+      const restoredIds = Object.keys(result.objectUrls)
+      if (restoredIds.length === 0) {
+        if (result.error !== null) console.warn('本地二进制恢复不可用：', result.error)
+        return
+      }
+      setState((current) => {
+        const assets: Record<string, Asset> = { ...current.assets }
+        for (const assetId of restoredIds) {
+          const asset = assets[assetId]
+          const url = result.objectUrls[assetId]
+          if (asset === undefined || asset.objectUrl !== undefined || url === undefined) continue
+          assets[assetId] = { ...asset, objectUrl: url }
+        }
+        return { assets, tags: current.tags, reviews: current.reviews }
+      })
+      setRestoreNotice(`已从本地恢复 ${restoredIds.length} 个素材的预览（无需重新导入）`)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [initialLoad])
 
   const assets = Object.values(state.assets)
   const filteredAssets = filterAssets(assets, filter)
@@ -143,14 +178,17 @@ function App() {
    * 删除素材（CR-006 T-001 / R-015）：级联清理（资产 + 评审历史 + 标签计数重算）
    * 后，清空工作台选中/中央查看器/series 展开分组并持久化；series 分组按剩余
    * 素材即时重建（dicomAssets 为派生数据，随状态自动重算）。
+   * 二进制级联（R-016）：按去重键同步删除 IndexedDB blob（失败仅告警，不阻塞删除）。
    */
   const handleDeleteAsset = (assetId: string): void => {
+    const target = state.assets[assetId]
     const next = removeAsset(state, assetId)
     if (next === state) return
     if (activeAssetId === assetId) setActiveAssetId(null)
     setSelectedIds((current) => current.filter((id) => id !== assetId))
     if (expandedDicomId === assetId) setExpandedDicomId(null)
     commit(next, '素材已在本会话删除，但保存失败')
+    if (target !== undefined) void deleteAssetBlob(target)
   }
 
   /** 导入备份：以备份数据整体替换当前状态（导入前已经过 io.ts 深度校验与冲突确认） */
@@ -292,7 +330,7 @@ function App() {
         </div>
       ) : null}
 
-      {initialLoad.issue !== null || saveError !== null ? (
+      {initialLoad.issue !== null || saveError !== null || restoreNotice !== null ? (
         <div className="workbench__warnings">
           {initialLoad.issue !== null ? (
             <p className="app__storage-warning" role="alert">
@@ -302,6 +340,11 @@ function App() {
           {saveError !== null ? (
             <p className="app__save-warning" role="alert">
               {saveError}
+            </p>
+          ) : null}
+          {restoreNotice !== null ? (
+            <p className="app__restore-info" role="status">
+              {restoreNotice}
             </p>
           ) : null}
         </div>

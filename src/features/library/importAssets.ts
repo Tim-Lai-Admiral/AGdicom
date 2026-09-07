@@ -101,8 +101,12 @@ export function kindForFileName(fileName: string): AssetKind | null {
   return EXTENSION_KIND_MAP[extensionOf(fileName)] ?? null
 }
 
-/** 去重键：kind + fileSize + fileName（对用户可见的“同一文件”判定） */
-function dedupKey(fileName: string, fileSize: number, kind: AssetKind): string {
+/**
+ * 去重键：kind + fileSize + fileName（对用户可见的“同一文件”判定）。
+ * 同时是 IndexedDB blob 键（CR-006 T-003 / R-016）：blob 与水合索引用同一把键，
+ * 删除资产按此键 deleteBlob，启动恢复按此键匹配资产。
+ */
+export function dedupKey(fileName: string, fileSize: number, kind: AssetKind): string {
   return `${kind}\u0000${fileSize}\u0000${fileName}`
 }
 

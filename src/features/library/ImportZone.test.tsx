@@ -99,6 +99,7 @@ describe('ImportZone', () => {
           message: '“readme.txt”不是支持的素材类型。支持导入：图片（png/…）',
         },
       ],
+      oversize: [],
       error: '保存失败：本地存储容量不足',
     }
     renderZone({ feedback })
@@ -112,12 +113,30 @@ describe('ImportZone', () => {
     expect(screen.getByText('保存失败：本地存储容量不足')).toBeTruthy()
   })
 
+  it('renders the oversize hint for files above 20MB (R-016)', () => {
+    const feedback: ImportFeedback = {
+      created: [
+        makeAsset({ id: 'big-1', name: 'big-scan.dcm', kind: 'dicom', file: { fileName: 'big-scan.dcm', fileSize: 20 * 1024 * 1024 + 1, fileType: '' } }),
+      ],
+      hydrated: [],
+      duplicates: [],
+      unknown: [],
+      oversize: [{ fileName: 'big-scan.dcm', fileSize: 20 * 1024 * 1024 + 1, kind: 'dicom' }],
+      error: null,
+    }
+    renderZone({ feedback })
+    expect(screen.getByText('以下 1 个文件超过 20.0MB，未存入本地二进制库：')).toBeTruthy()
+    expect(screen.getByText('big-scan.dcm（DICOM，20.0MB）')).toBeTruthy()
+    expect(screen.getByText(/刷新后预览不保留/)).toBeTruthy()
+  })
+
   it('renders hydrated feedback alone', () => {
     const feedback: ImportFeedback = {
       created: [],
       hydrated: [{ assetId: 'ghost-1', fileName: 'aorta.stl', fileSize: 512, kind: 'model' }],
       duplicates: [],
       unknown: [],
+      oversize: [],
       error: null,
     }
     renderZone({ feedback })
@@ -132,6 +151,7 @@ describe('ImportZone', () => {
       hydrated: [],
       duplicates: [],
       unknown: [],
+      oversize: [],
       error: null,
     }
     const { rerender } = renderZone({ feedback, onClearFeedback })
