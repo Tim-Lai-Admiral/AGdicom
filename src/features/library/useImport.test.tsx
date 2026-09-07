@@ -20,7 +20,15 @@ function makeExistingAsset(): Asset {
     file: { fileName: 'aorta.stl', fileSize: 512, fileType: '' },
     createdAt: '2026-09-01T00:00:00.000Z',
     updatedAt: '2026-09-01T00:00:00.000Z',
+    objectUrl: 'blob:existing', // 非幽灵：objectUrl 可用
   }
+}
+
+/** 幽灵资产：记录存在但会话字段 objectUrl 已丢失（刷新后场景，R-014） */
+function makeGhostAsset(): Asset {
+  const asset = makeExistingAsset()
+  delete asset.objectUrl
+  return asset
 }
 
 /** jsdom 未实现 URL.createObjectURL：注入可控桩并保留原描述符以便恢复 */
@@ -121,17 +129,88 @@ describe('useImport', () => {
 
   it('reports duplicates without re-registering or saving', async () => {
     const state = createEmptyState()
-    state.assets['existing-1'] = makeExistingAsset()
+    state.assets['existing-1'] = makeExistingAsset() // 非幽灵：objectUrl 可用
     const h = setup(state)
     await act(async () => {
       await h.result.current.importFiles([makeFile('aorta.stl', 512)])
     })
     expect(h.onStateChange).not.toHaveBeenCalled()
     expect(h.result.current.feedback?.created).toHaveLength(0)
+    expect(h.result.current.feedback?.hydrated).toHaveLength(0)
     expect(h.result.current.feedback?.duplicates).toEqual([
       { fileName: 'aorta.stl', fileSize: 512, kind: 'model' },
     ])
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
+  })
+
+  it('revives a ghost asset by rebuilding its objectUrl without adding a record', async () => {
+    const state = createEmptyState()
+    state.assets['existing-1'] = makeGhostAsset()
+    const h = setup(state)
+    await act(async () => {
+      await h.result.current.importFiles([makeFile('aorta.stl', 512)])
+    })
+    expect(h.onStateChange).toHaveBeenCalledTimes(1)
+    const assets = Object.values(h.getState().assets)
+    expect(assets).toHaveLength(1) // 不新增记录
+    expect(assets[0]?.id).toBe('existing-1')
+    expect(assets[0]?.objectUrl).toBe('blob:mock-1') // objectUrl 重建，预览恢复
+    // 元数据不变：水合仅回写会话字段
+    expect(assets[0]?.createdAt).toBe('2026-09-01T00:00:00.000Z')
+    expect(assets[0]?.updatedAt).toBe('2026-09-01T00:00:00.000Z')
+    expect(h.result.current.feedback?.created).toHaveLength(0)
+    expect(h.result.current.feedback?.hydrated).toEqual([
+      { assetId: 'existing-1', fileName: 'aorta.stl', fileSize: 512, kind: 'model' },
+    ])
+    expect(h.result.current.feedback?.duplicates).toHaveLength(0)
+    // 持久化：记录仍在库，但 objectUrl 不落盘（会话字段被 saveState 剥离）
+    const stored = loadState()
+    expect(stored.issue).toBeNull()
+    expect(Object.keys(stored.state.assets)).toEqual(['existing-1'])
+    expect(Object.values(stored.state.assets)[0]?.objectUrl).toBeUndefined()
+  })
+
+  it('handles a mixed batch with a ghost revive, a duplicate and a new import', async () => {
+    const state = createEmptyState()
+    state.assets['existing-1'] = makeExistingAsset() // aorta.stl：非幽灵 → 重复
+    const ghost: Asset = {
+      id: 'ghost-1',
+      name: 'heart.png',
+      kind: 'image',
+      status: 'passed',
+      tags: ['reviewed'],
+      note: '',
+      source: '文件选择导入',
+      file: { fileName: 'heart.png', fileSize: 64, fileType: 'image/png' },
+      createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-02T00:00:00.000Z',
+      // 无 objectUrl：幽灵 → 水合
+    }
+    state.assets['ghost-1'] = ghost
+    const h = setup(state)
+    await act(async () => {
+      await h.result.current.importFiles([
+        makeFile('heart.png', 64, 'image/png'), // 幽灵 → 水合
+        makeFile('aorta.stl', 512), // 非幽灵 → 重复
+        makeFile('scan.dcm', 128), // 新建
+      ])
+    })
+    const feedback = h.result.current.feedback
+    expect(feedback?.created).toHaveLength(1)
+    expect(feedback?.hydrated).toEqual([
+      { assetId: 'ghost-1', fileName: 'heart.png', fileSize: 64, kind: 'image' },
+    ])
+    expect(feedback?.duplicates).toEqual([{ fileName: 'aorta.stl', fileSize: 512, kind: 'model' }])
+    // 水合不新增记录：ghost-1 回写原资产，仅 scan.dcm 新建
+    const assets = h.getState().assets
+    expect(Object.keys(assets)).toHaveLength(3)
+    const revived = assets['ghost-1']
+    expect(revived?.objectUrl).toBe('blob:mock-2') // 新素材先分配 blob:mock-1
+    expect(revived?.status).toBe('passed') // 元数据原样保留
+    expect(revived?.tags).toEqual(['reviewed'])
+    expect(revived?.updatedAt).toBe('2026-09-02T00:00:00.000Z')
+    const fresh = Object.values(assets).find((asset) => asset.kind === 'dicom')
+    expect(fresh?.objectUrl).toBe('blob:mock-1')
   })
 
   it('reports unknown extensions with a readable message', async () => {

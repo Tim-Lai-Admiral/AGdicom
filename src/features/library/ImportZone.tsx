@@ -2,7 +2,7 @@
  * 素材导入区（CR-001 T-003 / R-001）。
  *
  * 交互：拖拽（进入高亮、放下导入）+ 文件选择按钮；导入期间忽略新事件；
- * 反馈：成功计数 / 重复提示 / 未知类型原因 / 持久化异常，可手动关闭。
+ * 反馈：成功计数 / 水合复活（已恢复预览）/ 重复提示 / 未知类型原因 / 持久化异常，可手动关闭。
  */
 import { useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent } from 'react'
@@ -29,14 +29,32 @@ function ImportFeedbackPanel({
   feedback: ImportFeedback
   onClear?: () => void
 }) {
-  const { created, duplicates, unknown, error } = feedback
-  if (created.length === 0 && duplicates.length === 0 && unknown.length === 0 && error === null) {
+  const { created, hydrated, duplicates, unknown, error } = feedback
+  if (
+    created.length === 0 &&
+    hydrated.length === 0 &&
+    duplicates.length === 0 &&
+    unknown.length === 0 &&
+    error === null
+  ) {
     return null
   }
   return (
     <div className="import-feedback" role="status">
       {created.length > 0 ? (
         <p className="import-feedback__item is-success">成功导入 {created.length} 个素材</p>
+      ) : null}
+      {hydrated.length > 0 ? (
+        <div className="import-feedback__item is-hydrated">
+          <p>已恢复预览 {hydrated.length} 个素材：</p>
+          <ul>
+            {hydrated.map((item) => (
+              <li key={item.assetId}>
+                {item.fileName}（{ASSET_KIND_LABELS[item.kind]}）
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
       {duplicates.length > 0 ? (
         <div className="import-feedback__item is-duplicate">
