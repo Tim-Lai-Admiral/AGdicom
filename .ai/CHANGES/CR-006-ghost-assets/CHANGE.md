@@ -6,7 +6,7 @@
 id: CR-006
 title: "刷新后幽灵素材：重导入水合、资产删除能力、IndexedDB 二进制持久化（TD-001 解决）"
 change_level: L2
-status: approved
+status: completed
 parent: null
 created_by: Planner
 created_at: 2026-09-06
@@ -48,10 +48,10 @@ TD-001（refresh 后 objectUrl 无法重建）导致的用户问题：刷新后�
 
 ## Tasks
 
-- [ ] T-001: 资产删除能力（domain + 行内/评审面板 UI + 级联清理）
-- [ ] T-002: 重导入水合（去重命中幽灵 → 重建 objectUrl）
-- [ ] T-003: IndexedDB 二进制持久化（存储层 + 导入/恢复管线 + 20MB 阈值）
-- [ ] T-004: 收尾（幽灵文案统一、README/TD-001 更新、全量回归）
+- [x] T-001: 资产删除能力（domain + 行内/评审面板 UI + 级联清理）
+- [x] T-002: 重导入水合（去重命中幽灵 → 重建 objectUrl）
+- [x] T-003: IndexedDB 二进制持久化（存储层 + 导入/恢复管线 + 20MB 阈值）
+- [x] T-004: 收尾（幽灵文案统一、README/TD-001 更新、全量回归）
 
 ## Dependencies
 
@@ -63,4 +63,7 @@ TD-001（refresh 后 objectUrl 无法重建）导致的用户问题：刷新后�
 
 ## Result
 
-<!-- 合并后填写 -->
+- 2026-09-07 完成。T-001~T-004 合并至 master（PR #28~#31 按序，分支已删）；审查 PASS（REVIEW-CR006.md）。
+- TD-001 关闭（TODO.md 标记 closed）。
+- 人工确认待办：真实浏览器手动验收（三类素材删除、刷新自动恢复、>20MB 降级）；水合写 blob 越界增强已接受。
+- CURRENT 已更新（REQUIREMENTS R-014/015/016、ARCHITECTURE blob 存储层），Tag v0.3.0。

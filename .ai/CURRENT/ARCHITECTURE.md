@@ -36,10 +36,11 @@ Vite + React 19 + TypeScript 6（strict）+ Tailwind CSS v4（@tailwindcss/vite�
 ## Data and API contracts
 
 - `Asset`：id/name/kind(image|dicom|model)/status(pending|passed|rejected)/tags/note/source/file{fileName,fileSize,fileType}/dicomMeta?/createdAt/updatedAt/objectUrl?（会话级，不持久化）
-- `DicomMeta`：可选元数据字段 + sliceCount + deidentified（含 evidence）；series 按 SeriesInstanceUID 分组，无 UID 单独成组
+- `DicomMeta`：可选元数据字段 + sliceCount + deidentified（含 evidence）；series 按 SeriesInstanceUID 分组；左栏浏览按患者（姓名+ID）分组（R-012）
 - `AppState`：assets/tags/reviews 三容器；评审为追加式历史（ReviewRecord{status,comment,createdAt}）
-- 导出 JSON：`{schemaVersion: 1, exportedAt, state}`；导入深度校验，版本/结构非法拒绝
-- localStorage key：`ag-review-workbench:v1`；objectUrl 不落盘（刷新后需重导入，TD-001）
+- 导出 JSON：`{schemaVersion: 1, exportedAt, state}`（不含二进制）；导入深度校验，版本/结构非法拒绝
+- localStorage key：`ag-review-workbench:v1`（元数据/评审）；**IndexedDB**（库 `ag-review-workbench-blobs`）：文件 blob（键=dedupKey `kind\0fileSize\0fileName`，单文件 ≤20MB；对象存 ArrayBuffer 字节 + File 元数据，启动恢复重建 objectUrl；删除资产级联删 blob）
+- 幽灵水合（R-014）：去重命中且资产无 objectUrl → 重建并回写，不新增记录
 - AIProvider：`suggest(asset) → AiSuggestion{name, tags, summary}`，当前唯一实现为 Mock（确定性）
 
 ## Dependency rules
