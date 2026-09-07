@@ -6,7 +6,7 @@
 id: CR-008
 title: "左栏患者分组改为独立面板（去除逐行挂载）；中央滑动条切换切片时左栏高亮实时同步"
 change_level: L2
-status: approved
+status: completed
 parent: null
 created_by: Planner
 created_at: 2026-09-07
@@ -50,9 +50,9 @@ Human 真机反馈（2026-09-07，同患者同序列 7 文件实测）：
 
 ## Tasks
 
-- [ ] T-001: 左栏患者分组独立面板（R-021：去逐行挂载 + 分组渲染）
-- [ ] T-002: 滑动条切片高亮同步（R-022：onSelectedSliceChange → 左栏高亮）
-- [ ] T-003: 场景矩阵与手动清单更新（R-021/R-022 断言）
+- [x] T-001: 左栏患者分组独立面板（R-021：去逐行挂载 + 分组渲染）
+- [x] T-002: 滑动条切片高亮同步（R-022：onSelectedSliceChange → 左栏高亮）
+- [x] T-003: 场景矩阵与手动清单更新（R-021/R-022 断言）
 
 ## Dependencies
 
@@ -64,4 +64,6 @@ Human 真机反馈（2026-09-07，同患者同序列 7 文件实测）：
 
 ## Result
 
-<!-- 合并后填写 -->
+- 2026-09-07 完成。T-001~T-003 合并至 master（PR #37~#39 按序，分支已删）；审查 PASS（REVIEW-CR008.md）。
+- M-1 非阻塞边界（点击当前已打开素材的缩略图不重挂载查看器）→ TD-007 登记。
+- CURRENT 已更新（REQUIREMENTS R-021/R-022、DESIGN 面板化与高亮联动），Tag v0.4.1。
