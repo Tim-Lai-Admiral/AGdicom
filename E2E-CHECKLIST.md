@@ -29,9 +29,9 @@
 ## 3. DICOM 查看
 
 - [x] 点击 DICOM 卡片打开弹层；「关闭」按钮与 Esc 均可关闭 —— DicomViewer.test.tsx + App.test.tsx
-- [x] 元数据表格（模态 / SOP Class / 传输语法 / 行×列 / 像素间距 / 系列UID / 切片序号 / 患者字段 / 去标识化依据）—— DicomViewer.test.tsx「parses files…」
+- [x] 视口四角元数据覆盖层（患者/ID/文件名、模态·传输语法、Inst #N/M、C/W 与 PixelSpacing、Zoom/Rot/平面）；中央元数据表格已下线，右栏「DICOM 元数据」分组面板为唯一元数据来源 —— DicomViewer.test.tsx「parses files…」+ App.scenarioMatrix.test.tsx（CR-009 T-001 / R-023）
 - [x] 按 SeriesInstanceUID 聚合统计切片数；乱序文件按 InstanceNumber 排序（#1/#2/#3）—— 同上
-- [x] 切片切换（下拉选择 + 上一张 / 下一张，边界禁用）—— DicomViewer.test.tsx「switching / stepping」
+- [x] 切片切换（底部滑条 + 视口滚轮 + 左栏缩略图，边界钳制不溢出）—— DicomViewer.test.tsx「switches slices…」「ignores out-of-bound…」+ App.scenarioMatrix.test.tsx 滚轮↔滑条同步（CR-009 T-001 / R-025）
 - [x] Canvas 灰度预览（min-max 归一化：最小→0，最大→255）—— DicomViewer.test.tsx + decodePixel.test.ts
 - [x] 压缩传输语法（JPEG）降级「仅元数据」，不崩溃 —— DicomViewer.test.tsx
 - [x] JPEG 2000 传输语法文案精确区分（.90 无损 / .91）—— DicomViewer.test.tsx「labels JPEG 2000…」（T-010 修复）
@@ -97,6 +97,18 @@
 - [ ] （人工）缩略图：行缩略图与切片缩略图解析后显示真实像素；压缩 / 损坏文件保持占位；刷新后（blob 恢复）重新生成或保持占位，无持久化残留
 - [ ] （人工）面板交互（R-021）：点击分组面板中的切片 → 中央切换到该切片、左栏高亮跟随；面板渲染位置与展开状态不变（不搬家）；素材行不挂载「展开切片」控件；分组头 / 系列行折叠交互可用
 - [ ] （人工）高亮联动（R-022）：查看器内滑动条 / 步进切换切片 → 左栏对应缩略图高亮实时跟随；关闭查看器后高亮清理、面板与展开状态保留
+
+## 11. 视口与交互走查 · 人工清单（CR-009 T-004 / R-023~R-026）
+
+> 四角读数取值、滚轮↔滑条同步与工具切换已由自动化覆盖（`src/App.scenarioMatrix.test.tsx`
+> 及 DicomViewer / TopToolbar / ImageStage 组件测试）；以下条目涉及真机拖拽手感、视觉
+> 观感与过渡动画，jsdom 无法覆盖，留待浏览器人工复核（`npm run dev` / `npm run preview`）。
+
+- [ ] （人工）视口四角覆盖层（R-023）：打开合成 DICOM（`public/samples/dicom/`）→ 左上患者/ID/文件名、右上模态·传输语法与 Inst #N/M、左下 C/W 与 PixelSpacing、右下 Zoom/Rot/AXIAL；右栏调节窗宽窗位 → 左下 C/W 实时更新；覆盖层半透明 mono、不遮挡画布拖拽
+- [ ] （人工）视口工具组（R-024）：pan/zoom/window/rotate 拖拽手感（平移 / 缩放 / 调窗 / 旋转）与右下 Zoom/Rot 读数实时；measure 拖拽绘制测量线（明示 Mock 非临床）+ 清空可用；激活按钮视觉态与 aria-pressed 一致
+- [ ] （人工）图片素材工具（R-024）：打开 png/jpg → pan/zoom/rotate 可用（拖拽 / Ctrl+滚轮缩放），window/measure 按钮禁用且悬停有「图片素材不支持」提示
+- [ ] （人工）滚轮切片 ↔ 滑条（R-025）：DICOM 视口滚轮上下切切片（首末片钳制不溢出），底部滑条与四角 Inst 同步；滑条拖动 → 视口与 Inst 跟随；Ctrl+滚轮 = 缩放、不切切片
+- [ ] （人工）左右抽屉（R-026）：顶栏开关切换左/右栏 → 0.2s 宽度过渡滑动、内容不溢出；窄窗口下侧栏折叠不遮挡中央视口
 
 ---
 

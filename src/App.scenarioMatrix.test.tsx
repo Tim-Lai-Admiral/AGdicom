@@ -23,6 +23,11 @@
  * 面板交互与高亮联动（CR-008 T-003）：点击分组切片 → 面板不搬家（R-021：渲染位置 /
  * 组头 / 系列 / 展开状态不变，仅中央与高亮切换）；滑动条切换 → 高亮跟随（R-022 同场景
  * 断言；滑动条/点击/关闭完整三路径由 App.workbench.test.tsx 集成用例覆盖，不重复）。
+ *
+ * 视口收尾断言（CR-009 T-004）：中央无元数据表格 + 右栏 MetadataPanel 唯一元数据源
+ * （R-023，grep 口径）；滚轮 ↔ 底部滑条双向同步（R-025，App 集成一条，边界钳制与
+ * 反向连续性同测）；顶栏工具组切换冒烟（R-024，aria-pressed ↔ 查看器 data-tool 跟随，
+ * 测量小控件随工具显隐；工具行为细节由 DicomViewer/TopToolbar 组件测试覆盖，不重复）。
  */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -630,5 +635,168 @@ describe('App: 场景矩阵——面板交互与高亮联动（CR-008 T-003 / R-
     })
     expect(screen.getByRole('button', { name: '查看切片 #4' }).className).toContain('is-active')
     expect(screen.getByRole('button', { name: '查看切片 #2' }).className).not.toContain('is-active')
+  })
+})
+
+describe('App: 场景矩阵——视口收尾（CR-009 T-004 / R-023·R-024·R-025）', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    stubObjectUrlCreation()
+    generateMock.mockResolvedValue(null) // 默认降级：占位保持
+    cacheMock.mockReturnValue(undefined)
+  })
+  afterEach(() => {
+    cleanup() // vitest 未启用 globals，RTL 自动清理不生效，需手动卸载
+    vi.restoreAllMocks()
+    vi.resetAllMocks()
+    vi.unstubAllGlobals()
+    if (originalCreateObjectURL === undefined) {
+      delete (URL as { createObjectURL?: unknown }).createObjectURL
+    } else {
+      Object.defineProperty(URL, 'createObjectURL', originalCreateObjectURL)
+    }
+    localStorage.clear()
+  })
+
+  /** 向视口容器派发滚轮事件（监听器挂在 .dicom-viewer__canvas-wrap 上，R-025） */
+  function wheelViewport(deltaY: number): void {
+    const wrap = document.querySelector('.dicom-viewer__canvas-wrap')
+    if (wrap === null) throw new Error('视口容器未渲染')
+    fireEvent.wheel(wrap, { deltaY })
+  }
+
+  /** 导入并打开一个 N 切片同系列（InstanceNumber 1..N，文件名 t01..tNN）→ 中央 dialog */
+  async function openSeries(n: number): Promise<HTMLElement> {
+    const buffers = buildDicomSeriesBuffers(n, {
+      patientName: 'CHEN^WEI',
+      patientID: 'P2',
+      pixelData: gradientPixels8(8, 8, 30, 200),
+    })
+    const bytesByName: Record<string, Uint8Array<ArrayBuffer>> = {}
+    const files = buffers.map((buffer, index) => {
+      const name = `t${String(index + 1).padStart(2, '0')}.dcm`
+      bytesByName[name] = new Uint8Array(buffer)
+      return dcmFile(name, bytesByName[name])
+    })
+    stubFetchFor(bytesByName)
+    stubCanvasUnavailable()
+    const { container } = render(<App />)
+    dropFiles(container, files)
+    await waitFor(() => {
+      expect(screen.getByText(`成功导入 ${n} 个素材`)).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('button', { name: '查看“t01.dcm”的 DICOM 详情' }))
+    await waitForPatientHead('CHEN^WEI', 'P2', `1 序列 · ${n} 张`)
+    return screen.getByRole('dialog', { name: 'DICOM 详情' })
+  }
+
+  it('中央无元数据表格，右栏 MetadataPanel 为唯一元数据源（R-023 grep 断言）', async () => {
+    const dialog = await openSeries(2)
+
+    // 解析完成标志：四角 Inst 读数 + 右栏元数据行渲染（元数据已回写 App 状态）
+    await waitFor(() => {
+      expect(within(dialog).getByText('Inst #1 / 2')).toBeTruthy()
+    })
+    const right = screen.getByRole('complementary', { name: '信息面板' })
+    await waitFor(() => {
+      expect(within(right).getAllByText('SeriesInstanceUID')).toHaveLength(1)
+    })
+
+    // 中央查看器：无 <table>、无元数据面板/标题/行标签（grep 口径，中央表格已下线）
+    expect(dialog.querySelector('table')).toBeNull()
+    expect(dialog.querySelectorAll('.meta-panel')).toHaveLength(0)
+    expect(within(dialog).queryByText('DICOM 元数据')).toBeNull()
+    expect(within(dialog).queryByText('SeriesInstanceUID')).toBeNull()
+    expect(within(dialog).queryByText('切片数（按序列分组）')).toBeNull()
+
+    // 右栏：MetadataPanel 全文档唯一，元数据行标签仅出现在右栏（唯一元数据源）
+    const panels = document.querySelectorAll('.meta-panel')
+    expect(panels).toHaveLength(1)
+    expect(right.contains(panels[0] as Node)).toBe(true)
+    expect(within(right).getByText('DICOM 元数据')).toBeTruthy()
+    expect(within(right).getByRole('button', { name: /^患者信息/ })).toBeTruthy()
+    expect(within(right).getByRole('button', { name: /^序列信息/ })).toBeTruthy()
+    const uidLabels = screen.getAllByText('SeriesInstanceUID')
+    expect(uidLabels).toHaveLength(1)
+    expect(right.contains(uidLabels[0] as Node)).toBe(true)
+  })
+
+  it('滚轮 ↔ 底部滑条双向同步（R-025）：滚轮切片滑条跟随、滑条切片四角 Inst 跟随、边界钳制', async () => {
+    const dialog = await openSeries(4)
+    const slider = (): HTMLInputElement => within(dialog).getByLabelText('选择切片') as HTMLInputElement
+    await waitFor(() => {
+      expect(within(dialog).getByText('Inst #1 / 4')).toBeTruthy()
+    })
+
+    // 首片向上滚：边界钳制不溢出
+    wheelViewport(-100)
+    expect(within(dialog).getByText('Inst #1 / 4')).toBeTruthy()
+    expect(slider().value).toBe('1')
+
+    // 滚轮向下：#1 → #2 → #3，滑条值与切片读数实时同步
+    wheelViewport(100)
+    await waitFor(() => {
+      expect(within(dialog).getByText('Inst #2 / 4')).toBeTruthy()
+    })
+    expect(slider().value).toBe('2')
+    expect(within(dialog).getByText('切片 2 / 4（按 InstanceNumber 排序）')).toBeTruthy()
+    wheelViewport(100)
+    await waitFor(() => {
+      expect(within(dialog).getByText('Inst #3 / 4')).toBeTruthy()
+    })
+    expect(slider().value).toBe('3')
+
+    // 末片再向下滚：钳制不溢出
+    wheelViewport(100)
+    wheelViewport(100)
+    expect(within(dialog).getByText('Inst #4 / 4')).toBeTruthy()
+    expect(slider().value).toBe('4')
+
+    // 反向：滑条拖到 #1 → 四角 Inst 同步；再滚轮向下从 #1 连续切换到 #2（双向闭环）
+    fireEvent.change(slider(), { target: { value: '1' } })
+    await waitFor(() => {
+      expect(within(dialog).getByText('Inst #1 / 4')).toBeTruthy()
+    })
+    wheelViewport(100)
+    await waitFor(() => {
+      expect(within(dialog).getByText('Inst #2 / 4')).toBeTruthy()
+    })
+    expect(slider().value).toBe('2')
+  })
+
+  it('顶栏工具组切换冒烟（R-024）：aria-pressed 与查看器 data-tool 跟随，测量小控件随工具显隐', async () => {
+    const dialog = await openSeries(2)
+    await waitFor(() => {
+      expect(within(dialog).getByText('Inst #1 / 2')).toBeTruthy()
+    })
+
+    // 工具组：5 个工具按钮可见，默认平移激活；查看器按激活工具标注 data-tool
+    expect(screen.getByRole('group', { name: '视口工具' })).toBeTruthy()
+    for (const label of ['平移', '缩放', '窗宽窗位', '旋转', '测量（模拟）']) {
+      expect(screen.getByRole('button', { name: label })).toBeTruthy()
+    }
+    const wrap = dialog.querySelector('.dicom-viewer__canvas-wrap')
+    expect(wrap).not.toBeNull()
+    expect(wrap?.getAttribute('data-tool')).toBe('pan')
+    expect(screen.getByRole('button', { name: '平移' }).getAttribute('aria-pressed')).toBe('true')
+
+    // 切到旋转：aria-pressed 跟随（App 持有状态 → 查看器 data-tool 透传）
+    fireEvent.click(screen.getByRole('button', { name: '旋转' }))
+    expect(screen.getByRole('button', { name: '旋转' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: '平移' }).getAttribute('aria-pressed')).toBe('false')
+    expect(wrap?.getAttribute('data-tool')).toBe('rotate')
+
+    // 切到测量：Mock 提示与清空入口出现（清空禁用：尚无测量）
+    fireEvent.click(screen.getByRole('button', { name: '测量（模拟）' }))
+    expect(wrap?.getAttribute('data-tool')).toBe('measure')
+    expect(within(dialog).getByText('模拟测量，非临床：距离标注仅供界面演示')).toBeTruthy()
+    expect(
+      (within(dialog).getByRole('button', { name: '清空测量' }) as HTMLButtonElement).disabled,
+    ).toBe(true)
+
+    // 切回平移：测量小控件隐藏（无测量残留）
+    fireEvent.click(screen.getByRole('button', { name: '平移' }))
+    expect(wrap?.getAttribute('data-tool')).toBe('pan')
+    expect(within(dialog).queryByText('模拟测量，非临床：距离标注仅供界面演示')).toBeNull()
   })
 })
