@@ -75,7 +75,7 @@ branch: feature/CR-009-T-004-finish
 - **验证结果**：`scripts\verify.ps1` 全绿（38 个测试文件 / 374 用例通过，tsc + vite build
   通过）；矩阵文件定向先行（7 存量 + 3 新增全绿）。stderr 中 IndexedDB 不可用告警为 jsdom
   既有降级路径，非新增。
-- **commit**：`949462d`（test/docs）；PR：<待创建后回填>（base master，按序合并 #41→#42→#43→本 PR）
+- **commit**：`949462d`（test/docs）/ `16ecd1c`（docs）；PR：https://github.com/Tim-Lai-Admiral/AGdicom/pull/44（base master，按序合并 #41→#42→#43→#44）
 - **已知限制 / 需 Reviewer 关注**：
   - §3 两条勾选项的文字已适配 CR-009 后的现实（自动化引用同步到现存用例名），请 Reviewer
     确认口径无遗漏。
