@@ -1,7 +1,11 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { IDBFactory } from 'fake-indexeddb'
 import type { Asset, AppState } from '../../domain/types.ts'
 import { createEmptyState, loadState, STORAGE_KEY } from '../../store/repository.ts'
+import { defaultBlobStore } from '../../store/blobStore.ts'
+import type { BlobStore } from '../../store/blobStore.ts'
+import { dedupKey } from './importAssets.ts'
 import { useImport } from './useImport.ts'
 
 function makeFile(name: string, size = 32, type = ''): File {
@@ -37,14 +41,18 @@ let urlSeq = 0
 let originalCreateObjectURL: PropertyDescriptor | undefined
 
 /** 组织 hook：维护 currentState，并可同步给 hook（模拟 App 的 setState → rerender 回写） */
-function setup(initial: AppState) {
+function setup(initial: AppState, blobStore?: BlobStore) {
   let currentState = initial
   const onStateChange = vi.fn((next: AppState) => {
     currentState = next
   })
-  const utils = renderHook(({ state }: { state: AppState }) => useImport({ state, onStateChange }), {
-    initialProps: { state: initial },
-  })
+  const utils = renderHook(
+    ({ state }: { state: AppState }) =>
+      useImport({ state, onStateChange, ...(blobStore !== undefined ? { blobStore } : {}) }),
+    {
+      initialProps: { state: initial },
+    },
+  )
   return {
     ...utils,
     onStateChange,
@@ -56,6 +64,8 @@ function setup(initial: AppState) {
 describe('useImport', () => {
   beforeEach(() => {
     localStorage.clear()
+    // jsdom 无 IndexedDB：装 fake-indexeddb（每用例新库，保证隔离）
+    globalThis.indexedDB = new IDBFactory() as unknown as IDBFactory
     urlSeq = 0
     createObjectURLMock.mockReset()
     createObjectURLMock.mockImplementation(() => `blob:mock-${++urlSeq}`)
@@ -68,6 +78,7 @@ describe('useImport', () => {
   })
 
   afterEach(() => {
+    delete (globalThis as { indexedDB?: unknown }).indexedDB
     if (originalCreateObjectURL === undefined) {
       delete (URL as { createObjectURL?: unknown }).createObjectURL
     } else {
@@ -239,5 +250,72 @@ describe('useImport', () => {
     expect(feedback?.created).toHaveLength(1)
     expect(feedback?.error).toContain('保存失败')
     setItemSpy.mockRestore()
+  })
+
+  it('persists created asset blobs to IndexedDB under the dedup key (≤20MB, R-016)', async () => {
+    const h = setup(createEmptyState())
+    await act(async () => {
+      await h.result.current.importFiles([makeFile('heart.png', 64, 'image/png')], '拖拽导入')
+    })
+    const key = dedupKey('heart.png', 64, 'image')
+    await expect(defaultBlobStore.listBlobs()).resolves.toEqual([key])
+    const blob = await defaultBlobStore.loadBlob(key)
+    expect(blob?.name).toBe('heart.png')
+    expect(blob?.size).toBe(64)
+  })
+
+  it('persists hydrated ghost blobs so a refresh can auto-restore (R-016 × R-014)', async () => {
+    const state = createEmptyState()
+    state.assets['existing-1'] = makeGhostAsset()
+    const h = setup(state)
+    await act(async () => {
+      await h.result.current.importFiles([makeFile('aorta.stl', 512)])
+    })
+    expect(h.result.current.feedback?.hydrated).toHaveLength(1)
+    const key = dedupKey('aorta.stl', 512, 'model')
+    await expect(defaultBlobStore.listBlobs()).resolves.toEqual([key])
+    const blob = await defaultBlobStore.loadBlob(key)
+    expect(blob?.name).toBe('aorta.stl')
+    expect(blob?.size).toBe(512)
+  })
+
+  it('skips IndexedDB persistence for >20MB files and reports the oversize hint (R-016)', async () => {
+    const bigFile = makeFile('big-scan.dcm', 20 * 1024 * 1024 + 1)
+    const h = setup(createEmptyState())
+    await act(async () => {
+      await h.result.current.importFiles([bigFile])
+    })
+    // 注册成功（会话内可用）
+    const assets = Object.values(h.getState().assets)
+    expect(assets).toHaveLength(1)
+    expect(assets[0]?.objectUrl).toBe('blob:mock-1')
+    // 未入库 + 反馈提示
+    await expect(defaultBlobStore.listBlobs()).resolves.toEqual([])
+    const oversize = h.result.current.feedback?.oversize
+    expect(oversize).toEqual([{ fileName: 'big-scan.dcm', fileSize: 20 * 1024 * 1024 + 1, kind: 'dicom' }])
+    expect(h.result.current.feedback?.error).toBeNull()
+  })
+
+  it('degrades to session state with a notice when blob saving fails (R-016)', async () => {
+    const failingStore: BlobStore = {
+      saveBlob: vi.fn().mockRejectedValue(new Error('配额已满')),
+      loadBlob: vi.fn().mockResolvedValue(null),
+      deleteBlob: vi.fn().mockResolvedValue(undefined),
+      listBlobs: vi.fn().mockResolvedValue([]),
+    }
+    const h = setup(createEmptyState(), failingStore)
+    await act(async () => {
+      await h.result.current.importFiles([makeFile('heart.png', 64, 'image/png')], '拖拽导入')
+    })
+    // 导入不阻塞：素材已注册且 objectUrl 可用
+    const assets = Object.values(h.getState().assets)
+    expect(assets).toHaveLength(1)
+    expect(assets[0]?.objectUrl).toBe('blob:mock-1')
+    const feedback = h.result.current.feedback
+    expect(feedback?.created).toHaveLength(1)
+    expect(feedback?.error).toContain('本地二进制保存失败')
+    expect(feedback?.error).toContain('配额已满')
+    // localStorage 元数据持久化不受 blob 失败影响
+    expect(loadState().issue).toBeNull()
   })
 })
