@@ -98,7 +98,7 @@ function ImportFeedbackPanel({
               </li>
             ))}
           </ul>
-          <p>刷新后预览不保留：重新导入同名文件可恢复预览（评审记录仍保留）。</p>
+          <p>刷新后预览不保留：可重新导入同名文件恢复预览，或删除该素材（评审记录仍保留）。</p>
         </div>
       ) : null}
       {error !== null ? <p className="import-feedback__item is-error">{error}</p> : null}

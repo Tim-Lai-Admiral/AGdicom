@@ -198,7 +198,8 @@ function App() {
 
   /**
    * DICOM 查看器解析出元数据后的批量回写（T-005）：填充 Asset.dicomMeta（含按 series
-   * 分组统计的 sliceCount）并持久化，刷新后元数据表格仍可展示（预览仍需重新导入）。
+   * 分组统计的 sliceCount）并持久化，刷新后元数据表格仍可展示（≤20MB 预览经 IndexedDB
+   * 自动恢复；>20MB 预览不可用，可重新导入或删除该素材）。
    * 元数据未变化的素材不重写（避免重复保存与 updatedAt 抖动）。
    */
   const handleDicomMetasParsed = (metas: Record<string, DicomMeta>): void => {

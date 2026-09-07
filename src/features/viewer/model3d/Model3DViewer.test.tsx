@@ -110,7 +110,7 @@ describe('Model3DViewer', () => {
     render(<Model3DViewer asset={makeModelAsset(undefined)} onClose={() => {}} />)
 
     const dialog = screen.getByRole('dialog', { name: '3D 模型预览' })
-    expect(within(dialog).getByText(/刷新后需重新导入该 3D 模型文件/)).toBeTruthy()
+    expect(within(dialog).getByText(/会话失效，可重新导入或删除该素材/)).toBeTruthy()
     await new Promise((resolve) => {
       setTimeout(resolve, 0)
     })

@@ -13,9 +13,10 @@
  * 行内删除（CR-006 T-001 / R-015）：仅选中行（比较选中或工作台当前素材）显示
  * “删除”按钮，点击进入内联确认态（确认/取消），确认后回调 onDeleteAsset。
  *
- * objectUrl 说明：T-003 导入时为 image 素材创建会话级 objectUrl（URL.createObjectURL），
- * 该字段不持久化——刷新后无法从 fileName 重建（原始 File 引用不在持久化数据中），
- * 因此刷新后图片行显示占位与提示；重新导入同一文件可恢复预览。
+ * objectUrl 说明：导入时为素材创建会话级 objectUrl（URL.createObjectURL），该字段
+ * 不持久化。≤20MB 素材的文件字节已入 IndexedDB，启动时自动重建 objectUrl（CR-006 T-003）；
+ * >20MB 或本地二进制库不可用的素材刷新后无文件内容，图片行显示占位与提示
+ * （统一措辞，CR-006 T-004：可重新导入水合或删除该素材）。
  */
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -48,8 +49,8 @@ export interface AssetGridProps {
   onDeleteAsset?: (assetId: string) => void
 }
 
-/** 图片预览缺失时的占位提示（objectUrl 为会话字段，刷新后需重新导入该图片） */
-const IMAGE_PREVIEW_UNAVAILABLE = '预览不可用：刷新后需重新导入该图片'
+/** 幽灵占位提示统一措辞（CR-006 T-004）：会话文件内容未保留，可重新导入水合或删除该素材 */
+const IMAGE_PREVIEW_UNAVAILABLE = '预览不可用：会话失效，可重新导入或删除该素材'
 const IMAGE_LOAD_FAILED = '图片加载失败'
 
 /** 类型图标（纯装饰）：image=图片、dicom=扫描框、model=立方体 */

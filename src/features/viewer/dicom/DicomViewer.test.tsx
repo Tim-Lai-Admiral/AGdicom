@@ -324,9 +324,9 @@ describe('DicomViewer: 降级路径（不崩溃）', () => {
     expect(screen.getByText('CT')).toBeTruthy()
     expect(screen.getAllByText('已置空')).toHaveLength(2)
     expect(screen.getByText('1 张（本序列）')).toBeTruthy()
-    // 预览不可用：明确提示需重新导入（与 TD-001 objectUrl 会话字段限制一致）
+    // 预览不可用：统一幽灵提示（CR-006 T-004：可重新导入或删除该素材）
     expect(screen.getByRole('alert').textContent).toBe(
-      '切片预览不可用：刷新后需重新导入该 DICOM 文件',
+      '切片预览不可用：会话失效，可重新导入或删除该素材',
     )
     expect(fetchMock).not.toHaveBeenCalled()
   })

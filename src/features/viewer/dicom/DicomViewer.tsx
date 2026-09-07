@@ -12,7 +12,7 @@
  *   批量回写素材（含 sliceCount），由 App 持久化（刷新后元数据表格仍可展示）；
  * - 降级：压缩传输语法 / 解码失败 / Canvas 不可用 → 预览区显示“仅元数据”类文案；
  *   文件无法解析 → 显示解析错误；刷新后（无 objectUrl）→ 元数据来自持久化记录，
- *   预览提示需重新导入；任何路径都不崩溃。
+ *   预览提示统一为“会话失效，可重新导入或删除该素材”（CR-006 T-004）；任何路径都不崩溃。
  *
  * 展示内容仅为工程元数据，不包含任何诊断/治疗暗示。
  */
@@ -212,8 +212,8 @@ export default function DicomViewer({
       // 刷新后（objectUrl 为会话字段）：元数据可来自持久化记录，预览不可用
       setPreviewMessage(
         targetMeta !== undefined
-          ? '切片预览不可用：刷新后需重新导入该 DICOM 文件'
-          : '元数据与切片预览不可用：刷新后需重新导入该 DICOM 文件',
+          ? '切片预览不可用：会话失效，可重新导入或删除该素材'
+          : '元数据与切片预览不可用：会话失效，可重新导入或删除该素材',
       )
       return
     }
@@ -373,7 +373,7 @@ export default function DicomViewer({
       ? '正在解析该 DICOM 文件的元数据…'
       : (sessionErrors[selectedAsset.id] ??
         (selectedAsset.objectUrl === undefined
-          ? '暂无可展示的元数据：刷新后需重新导入该 DICOM 文件'
+          ? '暂无可展示的元数据：会话失效，可重新导入或删除该素材'
           : '该文件暂无可展示的元数据'))
 
   return (

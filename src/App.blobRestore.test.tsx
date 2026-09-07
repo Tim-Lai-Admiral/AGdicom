@@ -85,7 +85,7 @@ describe('App 启动二进制恢复（R-016）', () => {
     ) as HTMLImageElement
     expect(stageImg).not.toBeNull()
     expect(stageImg.src).toBe('blob:mock-1')
-    expect(screen.queryByText('图片预览不可用：刷新后需重新导入该图片')).toBeNull()
+    expect(screen.queryByText('图片预览不可用：会话失效，可重新导入或删除该素材')).toBeNull()
     // 恢复不落盘：objectUrl 仍为会话字段
     const raw: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}')
     expect(
