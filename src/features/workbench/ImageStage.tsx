@@ -8,7 +8,8 @@
 import { useEffect, useState } from 'react'
 import type { Asset } from '../../domain/types.ts'
 
-const PREVIEW_UNAVAILABLE = '图片预览不可用：刷新后需重新导入该图片'
+// 幽灵占位提示统一措辞（CR-006 T-004，与 AssetGrid/CompareView 一致）
+const PREVIEW_UNAVAILABLE = '图片预览不可用：会话失效，可重新导入或删除该素材'
 const LOAD_FAILED = '图片加载失败'
 
 export default function ImageStage({ asset }: { asset: Asset }) {

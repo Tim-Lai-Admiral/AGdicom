@@ -11,7 +11,7 @@
  * 尺寸自适应），卸载或几何体更换时完整释放 renderer / controls / 材质。
  *
  * 降级：WebGL 不可用（含测试环境）→ 显示提示而非白屏；文件损坏 / 为空 → 错误 + 重试；
- * 刷新后无会话文件内容 → 提示重新导入。任何路径都不崩溃。
+ * 刷新后无会话文件内容 → 提示统一为“会话失效，可重新导入或删除该素材”（CR-006 T-004）。任何路径都不崩溃。
  * 展示内容仅为几何网格预览，不包含任何诊断/治疗暗示。
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -242,7 +242,7 @@ export default function Model3DViewer({ asset, onClose }: Model3DViewerProps) {
 
           {asset.objectUrl === undefined && status === 'idle' ? (
             <div className="model3d-viewer__overlay" role="alert">
-              <p>该素材没有可用的文件内容：刷新后需重新导入该 3D 模型文件</p>
+              <p>该素材没有可用的文件内容：会话失效，可重新导入或删除该素材</p>
             </div>
           ) : null}
 
