@@ -5,19 +5,25 @@
  * seriesUtils 的 groupDicomByPatient / findDicomPatientGroup）→ series 行
  * （组内 series 按 SeriesInstanceUID 升序，复用 groupDicomBySeries 的分组结果；
  * 同患者内缺 UID 的文件聚合为单个“未知系列”，文案“未知系列（N 个文件）”）→
- * 切片缩略图（按 InstanceNumber 排序、缺失按文件名；ThumbSVG 风格的占位示意 SVG，
- * 非像素解码）。
+ * 切片缩略图（按 InstanceNumber 排序、缺失按文件名）：已解析且像素可解码的切片
+ * 显示真实首帧像素（sliceThumb 生成的会话级 dataURL，R-017），未生成/生成失败时
+ * 回退 ThumbSVG 风格的占位示意 SVG（非像素解码）。
  * 患者组默认折叠（open 由 App 层 expandedDicomId 控制）；series 行默认折叠，
  * 当前在中央查看器打开的素材所属 series 自动展开（含患者组头 is-active 高亮、
  * 当前切片缩略图 is-active）。点击切片缩略图 → onOpenSlice(sliceAssetId)：
  * App 以该切片素材为当前素材打开中央 DICOM 查看器。
  *
- * 无元数据（刚导入尚未解析 / 刷新后未打开查看器）时显示占位提示，不崩溃。
+ * 缩略图生成（R-017，按需懒生成）：series 行展开后，对其中已解析（dicomMeta 存在）
+ * 且有会话 objectUrl 的切片自动生成首帧缩略图；会话级缓存由 sliceThumb 承担
+ * （不持久化、不入导出）。无元数据（刚导入尚未解析 / 刷新后未打开查看器）时显示
+ * 占位提示，不崩溃。
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Asset } from '../../domain/types.ts'
 import { findDicomPatientGroup, groupDicomByPatient } from '../viewer/dicom/seriesUtils.ts'
 import type { DicomSeriesEntry } from '../viewer/dicom/seriesUtils.ts'
+import { generateSliceThumb, getCachedSliceThumb } from '../viewer/dicom/sliceThumb.ts'
+import type { SliceThumbSource } from '../viewer/dicom/sliceThumb.ts'
 
 /** 切片占位缩略图（ThumbSVG 风格：0~1 的相对位置 t 决定示意形态） */
 function SliceThumb({ t }: { t: number }) {
@@ -89,6 +95,64 @@ export default function DicomSeriesExpansion({
     )
   }, [activeSeriesKey])
 
+  // ---- 切片真实缩略图（R-017）：展开中的 series 自动生成，有缓存即像素，否则占位 ----
+  const [sliceThumbs, setSliceThumbs] = useState<Record<string, string>>({})
+  const sliceThumbsRef = useRef(sliceThumbs)
+  const putSliceThumb = (assetId: string, dataUrl: string): void => {
+    sliceThumbsRef.current = { ...sliceThumbsRef.current, [assetId]: dataUrl }
+    setSliceThumbs(sliceThumbsRef.current)
+  }
+  /** 面板内素材 ID → 素材（取切片的会话 objectUrl 作为生成字节来源） */
+  const assetById = new Map<string, Asset>()
+  for (const a of dicomAssets) assetById.set(a.id, a)
+  /**
+   * 展开中的 series 内、可生成缩略图的切片（已解析 + 有会话 objectUrl，按需懒生成）；
+   * 键编码 id + objectUrl：objectUrl 恢复（blob 水合）或变化时重新触发。
+   */
+  const visibleThumbTargets: SliceThumbSource[] = []
+  if (open && patientGroup !== undefined) {
+    for (const series of patientGroup.series) {
+      if (!openSeriesKeys.has(series.key)) continue
+      for (const slice of series.slices) {
+        const target = assetById.get(slice.assetId)
+        if (
+          target === undefined ||
+          target.dicomMeta === undefined ||
+          target.objectUrl === undefined
+        ) {
+          continue
+        }
+        visibleThumbTargets.push({ id: target.id, objectUrl: target.objectUrl })
+      }
+    }
+  }
+  const visibleThumbKey = visibleThumbTargets
+    .map((target) => `${target.id}:${target.objectUrl ?? ''}`)
+    .join('|')
+  useEffect(() => {
+    let cancelled = false
+    let cacheHit = false
+    for (const target of visibleThumbTargets) {
+      if (sliceThumbsRef.current[target.id] !== undefined) continue
+      const cached = getCachedSliceThumb(target.id)
+      if (cached !== undefined) {
+        // 其他入口（素材行缩略图）已生成过：直接采用会话缓存，不再生成
+        cacheHit = true
+        sliceThumbsRef.current = { ...sliceThumbsRef.current, [target.id]: cached }
+        continue
+      }
+      void generateSliceThumb(target).then((dataUrl) => {
+        if (cancelled || dataUrl === null) return
+        putSliceThumb(target.id, dataUrl)
+      })
+    }
+    if (cacheHit) setSliceThumbs(sliceThumbsRef.current)
+    return () => {
+      cancelled = true
+    }
+    // oxlint 不启用 exhaustive-deps：visibleThumbKey 编码目标集合（含 objectUrl 变化）
+  }, [visibleThumbKey])
+
   const toggleSeries = (key: string): void => {
     setOpenSeriesKeys((prev) => {
       const next = new Set(prev)
@@ -158,6 +222,9 @@ export default function DicomSeriesExpansion({
                       {series.slices.map((slice, index) => {
                         const t = series.sliceCount > 1 ? (index + 1) / series.sliceCount : 0.5
                         const active = slice.assetId === activeSliceAssetId
+                        // 真实像素（会话缓存/本组件已生成）优先；未生成/失败 → 占位 SVG
+                        const thumbUrl =
+                          sliceThumbs[slice.assetId] ?? getCachedSliceThumb(slice.assetId)
                         return (
                           <button
                             key={slice.assetId}
@@ -169,7 +236,16 @@ export default function DicomSeriesExpansion({
                             aria-label={`查看切片 #${slice.instanceNumber ?? index + 1}`}
                             onClick={() => onOpenSlice(slice.assetId)}
                           >
-                            <SliceThumb t={t} />
+                            {thumbUrl !== undefined ? (
+                              <img
+                                className="dicom-expand__thumb-img"
+                                src={thumbUrl}
+                                alt=""
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <SliceThumb t={t} />
+                            )}
                             <span className="dicom-expand__thumb-index" aria-hidden="true">
                               {slice.instanceNumber ?? index + 1}
                             </span>

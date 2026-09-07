@@ -17,11 +17,15 @@
  * 不持久化。≤20MB 素材的文件字节已入 IndexedDB，启动时自动重建 objectUrl（CR-006 T-003）；
  * >20MB 或本地二进制库不可用的素材刷新后无文件内容，图片行显示占位与提示
  * （统一措辞，CR-006 T-004：可重新导入水合或删除该素材）。
+ * DICOM 行缩略图（CR-007 T-002 / R-017）：素材解析后（dicomMeta 存在）经
+ * sliceThumb 生成真实首帧 dataURL（会话级缓存，不持久化、不入导出），生成失败
+ * 或无会话字节时保持类型图标占位。
  */
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Asset, AssetKind } from '../../domain/types.ts'
 import { ASSET_KIND_LABELS } from '../../domain/types.ts'
+import { generateSliceThumb, getCachedSliceThumb } from '../viewer/dicom/sliceThumb.ts'
 import StatusDot from './StatusDot.tsx'
 
 export interface AssetGridProps {
@@ -102,7 +106,12 @@ function RowGlyph({ kind }: { kind: AssetKind }) {
   )
 }
 
-/** 行缩略图：image 渲染 objectUrl，缺失 / 加载失败 / 其他类型显示类型占位（title 附提示） */
+/**
+ * 行缩略图：image 渲染 objectUrl；dicom 已解析且像素可解码时渲染真实首帧
+ * （sliceThumb 会话级 dataURL，R-017；该素材解析后自动生成），未生成/生成失败
+ * （压缩/解码失败/会话失效）回退类型占位；缺失 / 加载失败 / 其他类型显示类型占位
+ * （title 附提示）。
+ */
 function RowThumb({
   asset,
   broken,
@@ -115,6 +124,31 @@ function RowThumb({
   onImageError: () => void
 }) {
   const title = hint ?? undefined
+  /** dicom 行真实首帧缩略图；null = 未生成 / 生成失败 → RowGlyph 占位 */
+  const [dicomThumb, setDicomThumb] = useState<string | null>(() =>
+    asset.kind === 'dicom' ? (getCachedSliceThumb(asset.id) ?? null) : null,
+  )
+  const objectUrl = asset.objectUrl
+  const parsed = asset.dicomMeta !== undefined
+  // 行缩略图生成（R-017）：该素材已解析（dicomMeta 存在）且有会话 objectUrl 时生成；
+  // 会话缓存由 sliceThumb 承担（失败为确定性结果，不重复重试）。objectUrl 恢复
+  // （blob 水合）/变化时重新评估。
+  useEffect(() => {
+    if (asset.kind !== 'dicom' || objectUrl === undefined || !parsed) {
+      setDicomThumb(null)
+      return
+    }
+    let cancelled = false
+    const cached = getCachedSliceThumb(asset.id) ?? null
+    setDicomThumb(cached)
+    if (cached !== null) return
+    void generateSliceThumb(asset).then((dataUrl) => {
+      if (!cancelled && dataUrl !== null) setDicomThumb(dataUrl)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [asset, objectUrl, parsed])
   if (asset.kind === 'image' && asset.objectUrl !== undefined && !broken) {
     return (
       <div className="sidebar-thumb asset-row__thumb" title={title}>
@@ -123,6 +157,17 @@ function RowThumb({
           src={asset.objectUrl}
           alt={`素材“${asset.name}”的图片预览`}
           onError={onImageError}
+        />
+      </div>
+    )
+  }
+  if (asset.kind === 'dicom' && dicomThumb !== null) {
+    return (
+      <div className="sidebar-thumb asset-row__thumb" title={title}>
+        <img
+          className="asset-row__img"
+          src={dicomThumb}
+          alt={`素材“${asset.name}”的切片缩略图`}
         />
       </div>
     )
