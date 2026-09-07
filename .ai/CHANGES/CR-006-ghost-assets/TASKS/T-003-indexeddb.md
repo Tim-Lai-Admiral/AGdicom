@@ -87,8 +87,8 @@ branch: feature/CR-006-T-003-indexeddb
 **Commit / PR**
 
 - 分支 `feature/CR-006-T-003-indexeddb`（基于 T-002 分支，含 T-001/T-002 提交链）
-- commit：见 Builder 报告
-- PR：`gh pr create --base master`（body 注明链：**按序合并 #28 → #29 → 本 PR**）
+- commit：`694b436` feat: IndexedDB 二进制持久化（R-016）
+- PR：https://github.com/Tim-Lai-Admiral/AGdicom/pull/30（body 注明链：**按序合并 #28 → #29 → 本 PR**）
 
 **已知限制 / 需 Reviewer 关注点**
 
