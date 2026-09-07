@@ -35,6 +35,8 @@
 | R-018 | DicomViewer 只解析所属 series（∪ 未归类文件） | active | CR-007 |
 | R-019 | 同患者缺 UID 文件聚合"未知系列"（InstanceNumber→文件名排序） | active | CR-007 |
 | R-020 | 流程：批量导入任务卡须含场景矩阵测试 | active | CR-007 |
+| R-021 | 左栏独立"患者分组"面板（一次渲染全部组；切片点击不移动面板） | active | CR-008 |
+| R-022 | 中央切片切换（滑动条等）实时更新左栏高亮（onSelectedSliceChange） | active | CR-008 |
 
 ## Requirements
 
