@@ -31,6 +31,10 @@
 | R-014 | 重导入水合：去重命中幽灵资产重建 objectUrl，不新增记录 | active | CR-006 |
 | R-015 | 资产删除（行内+评审面板，级联清理评审/元数据/blob） | active | CR-006 |
 | R-016 | IndexedDB 二进制持久化（≤20MB 入库、启动恢复、删除级联删 blob、失败降级） | active | CR-006 |
+| R-017 | DICOM 真实缩略图（行/切片首帧像素，会话级；未解析占位） | active | CR-007 |
+| R-018 | DicomViewer 只解析所属 series（∪ 未归类文件） | active | CR-007 |
+| R-019 | 同患者缺 UID 文件聚合"未知系列"（InstanceNumber→文件名排序） | active | CR-007 |
+| R-020 | 流程：批量导入任务卡须含场景矩阵测试 | active | CR-007 |
 
 ## Requirements
 
