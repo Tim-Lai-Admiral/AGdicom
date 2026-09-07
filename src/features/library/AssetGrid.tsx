@@ -10,6 +10,8 @@
  * 管理，同时作为“在中央查看该图片”）；dicom 行主体可点击打开 DICOM 查看器
  * （onOpenDicom，T-005 接入；未提供时保持不可交互）；model 行主体可点击打开
  * 3D 模型查看器（onOpenModel，T-006 接入；未提供时保持不可交互）。
+ * 行内删除（CR-006 T-001 / R-015）：仅选中行（比较选中或工作台当前素材）显示
+ * “删除”按钮，点击进入内联确认态（确认/取消），确认后回调 onDeleteAsset。
  *
  * objectUrl 说明：T-003 导入时为 image 素材创建会话级 objectUrl（URL.createObjectURL），
  * 该字段不持久化——刷新后无法从 fileName 重建（原始 File 引用不在持久化数据中），
@@ -36,6 +38,14 @@ export interface AssetGridProps {
    * （如左栏 DICOM series/切片展开区）；未提供时不渲染。
    */
   renderExtras?: (asset: Asset) => ReactNode
+  /**
+   * 工作台当前素材（中央查看区联动，CR-006 T-001）：与 selectedIds 一样视为
+   * “选中行”，共同决定行内删除按钮的显隐；缺省时仅按 selectedIds 判断。
+   */
+  activeAssetId?: string | null
+  /** 删除素材（R-015，二次确认由行内确认态完成，级联清理与持久化由上层负责）；
+   *  未提供时行内不渲染删除入口（既有调用方不受影响） */
+  onDeleteAsset?: (assetId: string) => void
 }
 
 /** 图片预览缺失时的占位提示（objectUrl 为会话字段，刷新后需重新导入该图片） */
@@ -126,27 +136,38 @@ function RowThumb({
 function AssetRow({
   asset,
   selected,
+  active,
   onToggleSelect,
   onOpenDicom,
   onOpenModel,
   renderExtras,
+  onDelete,
 }: {
   asset: Asset
   selected: boolean
+  /** 工作台当前素材（与 selected 共同决定删除按钮显隐） */
+  active: boolean
   onToggleSelect: (assetId: string) => void
   onOpenDicom?: (assetId: string) => void
   onOpenModel?: (assetId: string) => void
   renderExtras?: (asset: Asset) => ReactNode
+  onDelete?: (assetId: string) => void
 }) {
   const isImage = asset.kind === 'image'
   const isDicomOpenable = asset.kind === 'dicom' && onOpenDicom !== undefined
   const isModelOpenable = asset.kind === 'model' && onOpenModel !== undefined
   const [imgFailed, setImgFailed] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const objectUrl = asset.objectUrl
   // objectUrl 变化（如重新导入后）时复位加载失败状态
   useEffect(() => {
     setImgFailed(false)
   }, [objectUrl])
+  // 行不再处于选中态（取消比较选中 / 切走工作台素材）时复位删除确认，避免残留确认态
+  const canDelete = onDelete !== undefined && (selected || active)
+  useEffect(() => {
+    if (!canDelete) setConfirmingDelete(false)
+  }, [canDelete])
   const previewBroken = asset.kind === 'image' && (objectUrl === undefined || imgFailed)
   const previewHint = previewBroken
     ? imgFailed
@@ -213,6 +234,41 @@ function AssetRow({
       ) : (
         <div className="asset-row__main">{rowContent}</div>
       )}
+      {/* 行内删除（CR-006 T-001 / R-015）：仅选中行显示；内联二次确认（确认/取消） */}
+      {canDelete ? (
+        <span className="asset-row__actions">
+          {confirmingDelete ? (
+            <>
+              <span className="asset-row__confirm-text">确认删除？</span>
+              <button
+                type="button"
+                className="asset-row__confirm-yes"
+                aria-label={`确认删除“${asset.name}”`}
+                onClick={() => onDelete?.(asset.id)}
+              >
+                确认
+              </button>
+              <button
+                type="button"
+                className="asset-row__confirm-no"
+                aria-label={`取消删除“${asset.name}”`}
+                onClick={() => setConfirmingDelete(false)}
+              >
+                取消
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="asset-row__delete"
+              aria-label={`删除素材 ${asset.name}`}
+              onClick={() => setConfirmingDelete(true)}
+            >
+              删除
+            </button>
+          )}
+        </span>
+      ) : null}
       {renderExtras !== undefined ? renderExtras(asset) : null}
     </li>
   )
@@ -225,6 +281,8 @@ export default function AssetGrid({
   onOpenDicom,
   onOpenModel,
   renderExtras,
+  activeAssetId,
+  onDeleteAsset,
 }: AssetGridProps) {
   return (
     <ul className="asset-list">
@@ -233,10 +291,12 @@ export default function AssetGrid({
           key={asset.id}
           asset={asset}
           selected={selectedIds.includes(asset.id)}
+          active={activeAssetId === asset.id}
           onToggleSelect={onToggleSelect}
           onOpenDicom={onOpenDicom}
           onOpenModel={onOpenModel}
           renderExtras={renderExtras}
+          onDelete={onDeleteAsset}
         />
       ))}
     </ul>

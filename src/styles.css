@@ -423,6 +423,60 @@ button.asset-row__main:hover {
   text-overflow: ellipsis;
 }
 
+/* 行内删除（CR-006 T-001 / R-015）：仅选中行显示，位于行主体下方的紧凑操作条 */
+.asset-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px 4px 58px; /* 38px 缩略图 + 间距：与行主体文本起始位置对齐 */
+}
+
+.asset-row__delete,
+.asset-row__confirm-yes,
+.asset-row__confirm-no {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 1.4;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.asset-row__delete {
+  color: var(--color-text-muted);
+}
+
+.asset-row__delete:hover {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.asset-row__confirm-text {
+  font-size: 10px;
+  color: var(--color-danger);
+  white-space: nowrap;
+}
+
+.asset-row__confirm-yes {
+  color: #fff;
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.asset-row__confirm-yes:hover {
+  filter: brightness(0.92);
+}
+
+.asset-row__confirm-no {
+  color: var(--color-text-muted);
+}
+
+.asset-row__confirm-no:hover {
+  color: var(--color-text);
+}
+
 /* --- 图片比较视图（CR-003 T-002：嵌入中央查看区，position 锚定最近定位祖先） --- */
 .compare-overlay {
   position: absolute;
@@ -1302,6 +1356,60 @@ button.asset-row__main:hover {
 .review-panel__tag-chip:hover {
   border-color: var(--color-primary);
   color: var(--color-primary);
+}
+
+/* --- 删除素材（CR-006 T-001 / R-015）：面板末尾危险区，内联二次确认 --- */
+.review-panel__danger {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.625rem 0.75rem;
+}
+
+.review-panel__danger-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-danger);
+}
+
+.review-panel__danger-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.review-panel__danger-button,
+.review-panel__danger-confirm,
+.review-panel__danger-cancel {
+  align-self: flex-start;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0.35rem 0.9rem;
+  font-size: 0.8125rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.review-panel__danger-button:hover {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.review-panel__danger-confirm {
+  border-color: var(--color-danger);
+  background: var(--color-danger);
+  color: #fff;
+}
+
+.review-panel__danger-confirm:hover {
+  filter: brightness(0.92);
+}
+
+.review-panel__danger-cancel:hover {
+  background: var(--color-bg);
 }
 
 /* --- AI 建议区（CR-002 T-008 / R-006）：嵌入评审面板，明示 Mock 生成 --- */

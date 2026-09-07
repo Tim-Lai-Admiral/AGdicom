@@ -19,10 +19,20 @@ function makeAsset(overrides: Partial<Asset> = {}): Asset {
   }
 }
 
-function setup(assets: Asset[], selectedIds: readonly string[] = []) {
+function setup(
+  assets: Asset[],
+  selectedIds: readonly string[] = [],
+  extra: { activeAssetId?: string | null; onDeleteAsset?: (assetId: string) => void } = {},
+) {
   const onToggleSelect = vi.fn()
   const utils = render(
-    <AssetGrid assets={assets} selectedIds={selectedIds} onToggleSelect={onToggleSelect} />,
+    <AssetGrid
+      assets={assets}
+      selectedIds={selectedIds}
+      onToggleSelect={onToggleSelect}
+      activeAssetId={extra.activeAssetId}
+      onDeleteAsset={extra.onDeleteAsset}
+    />,
   )
   return { ...utils, onToggleSelect }
 }
@@ -122,6 +132,65 @@ it('renders status as display-only: no inline status button and no review button
     expect(screen.queryByRole('button', { name: /当前状态：待评审/ })).toBeNull()
     // 行内无“评审”按钮（评审经选中 → 右栏）
     expect(screen.queryByRole('button', { name: /评审/ })).toBeNull()
+  })
+
+  it('hides the inline delete button on idle rows and when onDeleteAsset is not provided', () => {
+    // 未提供删除回调：行内不渲染删除入口（既有调用方不受影响）
+    setup([makeAsset({ id: 'a1' })], ['a1'])
+    expect(screen.queryByRole('button', { name: '删除素材 heart.png' })).toBeNull()
+
+    // 提供回调但行未被选中（未比较选中、非工作台当前素材）：不显示
+    setup([makeAsset({ id: 'a1' })], [], { onDeleteAsset: vi.fn() })
+    expect(screen.queryByRole('button', { name: '删除素材 heart.png' })).toBeNull()
+  })
+
+  it('shows the inline delete button on the selected row (compare-selected or active) with the required aria-label', () => {
+    const onDeleteAsset = vi.fn()
+    // 比较选中（image）行 → 选中行
+    setup(
+      [makeAsset({ id: 'a1' }), makeAsset({ id: 'a2', name: 'lung.png' })],
+      ['a1'],
+      { onDeleteAsset },
+    )
+    expect(screen.getByRole('button', { name: '删除素材 heart.png' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '删除素材 lung.png' })).toBeNull()
+
+    // 工作台当前素材（activeAssetId）行 → 选中行（dicom/model 行经此获得删除入口）
+    cleanup()
+    render(
+      <AssetGrid
+        assets={[makeAsset({ id: 'a3', name: 'scan.dcm', kind: 'dicom' })]}
+        selectedIds={[]}
+        onToggleSelect={vi.fn()}
+        activeAssetId="a3"
+        onDeleteAsset={onDeleteAsset}
+      />,
+    )
+    expect(screen.getByRole('button', { name: '删除素材 scan.dcm' })).toBeTruthy()
+  })
+
+  it('deletes after the inline confirm and cancels without deleting', () => {
+    const onDeleteAsset = vi.fn()
+    setup([makeAsset({ id: 'a1' }), makeAsset({ id: 'a2', name: 'lung.png' })], ['a1'], {
+      onDeleteAsset,
+    })
+    // 二次确认：点击“删除”先进入确认态，不直接删除
+    fireEvent.click(screen.getByRole('button', { name: '删除素材 heart.png' }))
+    expect(onDeleteAsset).not.toHaveBeenCalled()
+    expect(screen.getByText('确认删除？')).toBeTruthy()
+
+    // 取消：回到普通态，未删除
+    fireEvent.click(screen.getByRole('button', { name: '取消删除“heart.png”' }))
+    expect(onDeleteAsset).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: '删除素材 heart.png' })).toBeTruthy()
+
+    // 确认：回调删除
+    fireEvent.click(screen.getByRole('button', { name: '删除素材 heart.png' }))
+    fireEvent.click(screen.getByRole('button', { name: '确认删除“heart.png”' }))
+    expect(onDeleteAsset).toHaveBeenCalledTimes(1)
+    expect(onDeleteAsset).toHaveBeenCalledWith('a1')
+    // 其他行不受影响
+    expect(screen.getByRole('button', { name: '选择“lung.png”加入比较' })).toBeTruthy()
   })
 })
 

@@ -151,4 +151,42 @@ describe('ReviewPanel', () => {
     expect(items).toHaveLength(3)
     expect(items[0]?.textContent).toContain('复审判定为不通过') // 最新在前
   })
+
+  it('hides the delete entry when onDeleteAsset is not provided (CR-006 T-001)', () => {
+    setup()
+    expect(screen.queryByRole('button', { name: '删除素材' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '确认删除' })).toBeNull()
+  })
+
+  it('deletes only after the inline confirm; cancel keeps the asset (CR-006 T-001 / R-015)', () => {
+    const onDeleteAsset = vi.fn()
+    setup({ onDeleteAsset })
+    // 入口存在且默认非确认态
+    fireEvent.click(screen.getByRole('button', { name: '删除素材' }))
+    expect(onDeleteAsset).not.toHaveBeenCalled()
+    expect(
+      screen.getByText(/确定删除“heart.png”？其评审历史与标签引用将一并清除/),
+    ).toBeTruthy()
+
+    // 取消：回到入口态，未删除
+    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+    expect(onDeleteAsset).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: '删除素材' })).toBeTruthy()
+
+    // 确认：删除回调触发一次
+    fireEvent.click(screen.getByRole('button', { name: '删除素材' }))
+    fireEvent.click(screen.getByRole('button', { name: '确认删除' }))
+    expect(onDeleteAsset).toHaveBeenCalledTimes(1)
+  })
+
+  it('resets the delete confirmation when switching to another asset', () => {
+    const onDeleteAsset = vi.fn()
+    const { props, rerender } = setup({ onDeleteAsset })
+    fireEvent.click(screen.getByRole('button', { name: '删除素材' }))
+    expect(screen.getByRole('button', { name: '确认删除' })).toBeTruthy()
+    // 切换素材：确认态复位，不把上一素材的确认带到下一素材
+    rerender(<ReviewPanel {...props} asset={makeAsset({ id: 'asset-2', name: 'lung.png' })} />)
+    expect(screen.queryByRole('button', { name: '确认删除' })).toBeNull()
+    expect(screen.getByRole('button', { name: '删除素材' })).toBeTruthy()
+  })
 })

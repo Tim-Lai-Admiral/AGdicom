@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import type { Asset, AssetStatus, AppState, DicomMeta } from './domain/types.ts'
 import { collectTagNames, DEFAULT_ASSET_FILTER, filterAssets } from './domain/filter.ts'
 import type { AssetFilter } from './domain/filter.ts'
-import { addAssetTag, applyReview, removeAssetTag, updateAssetName, updateAssetNote } from './domain/review.ts'
+import { addAssetTag, applyReview, removeAsset, removeAssetTag, updateAssetName, updateAssetNote } from './domain/review.ts'
 import { loadState, saveState } from './store/repository.ts'
 import type { LoadIssue } from './store/repository.ts'
 import ImportZone from './features/library/ImportZone.tsx'
@@ -137,6 +137,20 @@ function App() {
     const next = updateAssetName(state, assetId, name)
     if (next === state) return
     commit(next, '命名已在本会话更新，但保存失败')
+  }
+
+  /**
+   * 删除素材（CR-006 T-001 / R-015）：级联清理（资产 + 评审历史 + 标签计数重算）
+   * 后，清空工作台选中/中央查看器/series 展开分组并持久化；series 分组按剩余
+   * 素材即时重建（dicomAssets 为派生数据，随状态自动重算）。
+   */
+  const handleDeleteAsset = (assetId: string): void => {
+    const next = removeAsset(state, assetId)
+    if (next === state) return
+    if (activeAssetId === assetId) setActiveAssetId(null)
+    setSelectedIds((current) => current.filter((id) => id !== assetId))
+    if (expandedDicomId === assetId) setExpandedDicomId(null)
+    commit(next, '素材已在本会话删除，但保存失败')
   }
 
   /** 导入备份：以备份数据整体替换当前状态（导入前已经过 io.ts 深度校验与冲突确认） */
@@ -318,6 +332,8 @@ function App() {
                     onOpenDicom={selectAsset}
                     onOpenModel={selectAsset}
                     renderExtras={renderCardExtras}
+                    activeAssetId={activeAssetId}
+                    onDeleteAsset={handleDeleteAsset}
                   />
                 ) : (
                   <p className="library__empty">没有符合当前筛选条件的素材：可调整上方筛选条件</p>
@@ -376,6 +392,7 @@ function App() {
                 }
                 onSaveNote={(note) => handleSaveNote(activeAsset.id, note)}
                 onAcceptAiName={(name) => handleRenameAsset(activeAsset.id, name)}
+                onDeleteAsset={() => handleDeleteAsset(activeAsset.id)}
                 onClose={closeActiveAsset}
               />
             ) : null}

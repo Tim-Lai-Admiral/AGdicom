@@ -10,7 +10,8 @@
  *   全局标签库（注册表 ∪ 实际使用）一键复用；
  * - 备注：独立保存（不追加评审历史）；
  * - AI 建议：内嵌 AiPanel（CR-002 T-008 / R-006，Mock 生成，采纳命名/标签或忽略）；
- * - 评审历史：ReviewHistory 只读列表（最新在前）。
+ * - 评审历史：ReviewHistory 只读列表（最新在前）；
+ * - 删除素材：面板末尾入口 + 内联二次确认（CR-006 T-001 / R-015）。
  *
  * 交互与可访问性：Esc 关闭；可折叠为仅标题栏（aria-expanded）；
  * 保存成功以 role="status" 文案反馈并数秒后自动消失。
@@ -46,6 +47,9 @@ export interface ReviewPanelProps {
   onSaveNote: (note: string) => void
   /** 采纳 AI 命名建议：重命名素材（持久化由上层完成；缺省时命名建议仅展示） */
   onAcceptAiName?: (name: string) => void
+  /** 删除素材（CR-006 T-001 / R-015，二次确认由面板内联确认态完成，
+   *  级联清理与持久化由上层负责）；缺省时不渲染删除入口（既有调用方不受影响） */
+  onDeleteAsset?: () => void
   /** 关闭面板（“关闭”按钮与 Esc 键均触发） */
   onClose: () => void
 }
@@ -59,6 +63,7 @@ export default function ReviewPanel({
   onSubmitReview,
   onSaveNote,
   onAcceptAiName,
+  onDeleteAsset,
   onClose,
 }: ReviewPanelProps) {
   const [collapsed, setCollapsed] = useState(false)
@@ -67,6 +72,7 @@ export default function ReviewPanel({
   const [draftNote, setDraftNote] = useState(asset.note)
   const [newTag, setNewTag] = useState('')
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
 
   // 切换素材时重置草稿（素材 ID 变化才重置，草稿字段本身不是依赖）
@@ -75,6 +81,7 @@ export default function ReviewPanel({
     setDraftNote(asset.note)
     setDraftComment('')
     setNewTag('')
+    setConfirmingDelete(false)
     // 仅在素材切换时重置
   }, [asset.id])
   // 外部状态/备注变更（如评审保存后）同步到草稿，面板显示不落伍
@@ -315,6 +322,45 @@ export default function ReviewPanel({
           </section>
 
           <ReviewHistory history={history} />
+
+          {/* 删除素材入口（CR-006 T-001 / R-015）：置于面板末尾避免误触；
+              内联二次确认（确认/取消），确认后由上层级联清理并持久化 */}
+          {onDeleteAsset !== undefined ? (
+            <section className="review-panel__danger" aria-label="删除素材">
+              <h3 className="review-panel__section-title">删除素材</h3>
+              {confirmingDelete ? (
+                <>
+                  <p className="review-panel__danger-hint">
+                    确定删除“{asset.name}”？其评审历史与标签引用将一并清除，此操作不可撤销。
+                  </p>
+                  <div className="review-panel__danger-actions">
+                    <button
+                      type="button"
+                      className="review-panel__danger-confirm"
+                      onClick={onDeleteAsset}
+                    >
+                      确认删除
+                    </button>
+                    <button
+                      type="button"
+                      className="review-panel__danger-cancel"
+                      onClick={() => setConfirmingDelete(false)}
+                    >
+                      取消
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="review-panel__danger-button"
+                  onClick={() => setConfirmingDelete(true)}
+                >
+                  删除素材
+                </button>
+              )}
+            </section>
+          ) : null}
         </div>
       ) : null}
     </aside>
