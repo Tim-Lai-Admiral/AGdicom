@@ -53,3 +53,16 @@ branch: feature/CR-009-T-002-tools
 ## Definition of done
 
 - [ ] 验收通过；PR（body 写概要）；Reviewer 审查
+
+## Builder result
+
+- Implementation summary: 顶栏视口工具组（`role=group`，5 个图标按钮：平移/缩放/窗宽窗位/旋转/测量（模拟），aria-pressed；DICOM/图片激活显示，图片下 window/measure 禁用）+ `viewerTools.ts`（ViewerTool 类型）；App 持有 viewerTool 状态并下发；DicomViewer 统一指针通路（pan 拖拽平移 / zoom 拖拽缩放 + Ctrl+滚轮 0.2-8 倍 / rotate 拖拽旋转 / window 拖拽调窗 auto→manual 上送 / measure 沿用 R-010）；变换舞台 `.dicom-viewer__stage`（四角覆盖层不随动，右下 Zoom/Rot 实时）；移除查看器内"测量(模拟)/清空测量"按钮 → 清空测量为视口右上小控件；测试：TopToolbar 4 例 + DicomViewer 工具行为 5 例，R-010 测量断言沿用
+- Files changed: viewerTools.ts（新）、TopToolbar.tsx、App.tsx、DicomViewer.tsx、styles.css、TopToolbar.test.tsx（新）、DicomViewer.test.tsx
+- Tests run and result: `scripts\verify.ps1` 全绿（存量 + 新增）；lint 0 error
+- Commit / PR: `14b6252`；PR 由协调者创建（按序合并 #41 → 本 PR）
+- Known limitations:
+  1. rotate 激活时测量落点换算失真（clientToImagePoint 基于 getBoundingClientRect，旋转下外接矩形导致——R-010 既有逻辑未改，建议记 TODO）
+  2. window 拖拽 auto 态以展示口径 40/400 为基准转手动
+  3. 图片素材 pan/zoom/rotate 按钮可切换但 ImageStage 未接入（属 T-003）
+  4. 调窗拖拽每次 move 上送重解码（与右栏 W/L 面板性能特征一致）
+- 需 Reviewer 关注: 工具状态与四角读数联动、measure 旋转失真（建议登记 TODO）、图片禁用态语义
