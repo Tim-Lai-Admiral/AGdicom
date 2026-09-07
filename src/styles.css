@@ -570,7 +570,15 @@ button.asset-row__main:hover {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg);
-  overflow: hidden;
+  overflow: hidden; /* 窗格变换（pan/zoom/rotate）裁剪 */
+  position: relative; /* 视口右上小控件定位祖先 */
+  touch-action: none; /* 指针拖拽 */
+  user-select: none;
+  cursor: grab; /* 比较窗格无工具组：默认拖拽平移 */
+}
+
+.compare-pane__viewport:active {
+  cursor: grabbing;
 }
 
 .compare-pane__img {
@@ -601,6 +609,64 @@ button.asset-row__main:hover {
   .compare-pane__viewport {
     height: 40vh;
   }
+}
+
+/* --- 图片视口变换（CR-009 T-003 / R-024 图片子集）：ImageStage 与 CompareView
+   窗格共用：变换舞台（CSS transform，与 DICOM 变换舞台同口径）+ 视口右上
+   小控件（放大/缩小/旋转 90°/重置 + mono 缩放读数，与 DICOM 测量小控件同语言） --- */
+.image-viewport__stage {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center;
+}
+
+.image-viewport__controls {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.image-viewport__ctl {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border-strong, rgba(255, 255, 255, 0.13));
+  border-radius: var(--radius-sm);
+  background: rgba(16, 20, 26, 0.85);
+  color: var(--text-primary, #e2e6f0);
+  cursor: pointer;
+}
+
+.image-viewport__ctl:hover {
+  border-color: var(--accent, #00c4d8);
+  color: var(--accent, #00c4d8);
+}
+
+.image-viewport__ctl--text {
+  width: auto;
+  padding: 0 0.55rem;
+  font-size: 0.75rem;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.image-viewport__zoom {
+  font-family: var(--font-mono-data, ui-monospace, monospace);
+  font-size: 0.75rem;
+  color: var(--text-secondary, #8a94a8);
+  min-width: 3.2em;
+  text-align: right;
+  user-select: none;
 }
 
 /* --- DICOM 查看器（CR-001 T-005 / R-003）：CR-003 T-002 起嵌入中央查看区 --- */
@@ -1829,10 +1895,14 @@ button.asset-row__main:hover {
   min-height: 0;
 }
 
-/* 左栏：素材列表（rec SeriesSidebar 结构：分组小标题 + 行列表） */
+/* 左栏：素材列表（rec SeriesSidebar 结构：分组小标题 + 行列表）。
+   R-026 抽屉：width 0.2s ease 过渡（顶栏开关驱动）；收起（is-closed）宽度归零、
+   边框与溢出裁剪同步，内容不溢出。子元素 min-width 锁定展开宽度：过渡期间
+   内容不重排、由容器裁剪滑出；收起态配合 aria-hidden + inert（App 侧标记）。 */
 .workbench__left {
+  --drawer-width: 17.5rem;
   flex: 0 0 auto;
-  width: 17.5rem;
+  width: var(--drawer-width);
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -1840,6 +1910,17 @@ button.asset-row__main:hover {
   overflow-x: hidden;
   background: var(--panel, #0b0e16);
   border-right: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+  transition: width 0.2s ease;
+}
+
+.workbench__left > * {
+  min-width: var(--drawer-width);
+}
+
+.workbench__left.is-closed {
+  width: 0;
+  overflow: hidden;
+  border-right-width: 0;
 }
 
 .workbench__left-head {
@@ -1897,16 +1978,28 @@ button.asset-row__main:hover {
   font-size: 0.875rem;
 }
 
-/* 右栏：信息面板（元数据分组 / 评审） */
+/* 右栏：信息面板（元数据分组 / 评审）。R-026 抽屉：与左栏同一 width 过渡口径 */
 .workbench__right {
+  --drawer-width: 20rem;
   flex: 0 0 auto;
-  width: 20rem;
+  width: var(--drawer-width);
   min-width: 0;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
   background: var(--panel, #0b0e16);
   border-left: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+  transition: width 0.2s ease;
+}
+
+.workbench__right > * {
+  min-width: var(--drawer-width);
+}
+
+.workbench__right.is-closed {
+  width: 0;
+  overflow: hidden;
+  border-left-width: 0;
 }
 
 .workbench__right-empty {
@@ -1942,14 +2035,22 @@ button.asset-row__main:hover {
   background: var(--accent-dim, rgba(0, 196, 216, 0.15));
 }
 
-/* 窄屏：侧栏收窄；折叠（顶栏开关）后宽度归零不溢出 */
+/* 窄屏：侧栏收窄（抽屉过渡宽度随之变化）；折叠（顶栏开关）后宽度归零不溢出 */
 @media (max-width: 64rem) {
   .workbench__left {
-    width: 14rem;
+    --drawer-width: 14rem;
   }
 
   .workbench__right {
-    width: 17rem;
+    --drawer-width: 17rem;
+  }
+}
+
+/* 偏好减少动效：抽屉宽度过渡关闭（仍保留开合功能） */
+@media (prefers-reduced-motion: reduce) {
+  .workbench__left,
+  .workbench__right {
+    transition: none;
   }
 }
 
@@ -1962,13 +2063,31 @@ button.asset-row__main:hover {
   margin: 0;
 }
 
+/* 视口容器（CR-009 T-003 / R-024）：变换裁剪 + 指针拖拽 + 光标随激活工具切换 */
 .image-stage__canvas {
+  position: relative; /* 视口右上小控件定位祖先 */
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+}
+
+.image-stage__canvas[data-tool='pan'] {
+  cursor: grab;
+}
+.image-stage__canvas[data-tool='pan']:active {
+  cursor: grabbing;
+}
+.image-stage__canvas[data-tool='zoom'] {
+  cursor: zoom-in;
+}
+.image-stage__canvas[data-tool='rotate'] {
+  cursor: ew-resize;
 }
 
 .image-stage__img {

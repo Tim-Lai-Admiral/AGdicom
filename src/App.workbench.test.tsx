@@ -2,7 +2,8 @@
  * 工作台布局测试（CR-003 T-002 / UI-001；T-004 补充功能入口链路）。
  *
  * 覆盖任务卡 Test requirements：
- * - 布局切换：四区（顶栏/左栏/中央/右栏）齐全；左/右栏面板开关（折叠后不溢出）；
+ * - 布局切换：四区（顶栏/左栏/中央/右栏）齐全；左/右栏抽屉开合（CR-009 T-003 /
+ *   R-026：收起不卸载做宽度过渡动画，is-closed + aria-hidden/inert 标记，不溢出）；
  *   中央查看区按状态切换（导入视图 / 图片预览 / DICOM 查看器）；
  * - 左栏 DICOM 患者分组独立面板（CR-008 T-001 / R-021）：面板一次渲染全部患者组，
  *   患者组 → series → 切片缩略图（复用 seriesUtils 数据）；选中素材时对应患者组
@@ -54,17 +55,25 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
     const right = screen.getByRole('complementary', { name: '信息面板' })
     expect(within(right).getByText(/在左栏选择素材/)).toBeTruthy()
 
-    // 折叠左栏：素材列表从 DOM 移除（折叠不溢出）；再展开恢复
+    // 折叠左栏（CR-009 T-003 / R-026 抽屉）：面板保留挂载做宽度过渡动画，
+    // 收起态以 is-closed 类 + aria-hidden/inert 标记（内容不溢出，由 CSS 裁剪）
+    const leftAside = screen.getByRole('complementary', { name: '素材列表' })
     fireEvent.click(screen.getByRole('button', { name: '切换左栏素材列表' }))
-    expect(screen.queryByText('素材库（0）')).toBeNull()
+    expect(leftAside.className).toContain('is-closed')
+    expect(leftAside.getAttribute('aria-hidden')).toBe('true')
+    expect(leftAside.getAttribute('inert')).toBe('')
     fireEvent.click(screen.getByRole('button', { name: '切换左栏素材列表' }))
-    expect(screen.getByText('素材库（0）')).toBeTruthy()
+    expect(leftAside.className).not.toContain('is-closed')
+    expect(leftAside.getAttribute('aria-hidden')).toBe('false')
 
-    // 折叠右栏：信息面板移除；再展开恢复
+    // 折叠右栏：同款抽屉行为（保留挂载 + is-closed + aria-hidden/inert）
+    const rightAside = screen.getByRole('complementary', { name: '信息面板' })
     fireEvent.click(screen.getByRole('button', { name: '切换右栏信息面板' }))
-    expect(screen.queryByRole('complementary', { name: '信息面板' })).toBeNull()
+    expect(rightAside.className).toContain('is-closed')
+    expect(rightAside.getAttribute('aria-hidden')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: '切换右栏信息面板' }))
-    expect(screen.getByRole('complementary', { name: '信息面板' })).toBeTruthy()
+    expect(rightAside.className).not.toContain('is-closed')
+    expect(rightAside.getAttribute('aria-hidden')).toBe('false')
   })
 
   it('shows the image preview in the center and the review panel on the right, and returns to the import view', async () => {

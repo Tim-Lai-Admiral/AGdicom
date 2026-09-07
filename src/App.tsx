@@ -53,6 +53,7 @@ function App() {
    *  素材时清理（null = 无高亮） */
   const [activeSliceAssetId, setActiveSliceAssetId] = useState<string | null>(null)
   const [rightTab, setRightTab] = useState<RightTab>('review')
+  /** 左/右栏抽屉开合（CR-003 T-002；CR-009 T-003 / R-026：收起不卸载，宽度过渡动画） */
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
   const [exportOpen, setExportOpen] = useState(false)
@@ -322,7 +323,8 @@ function App() {
       </Suspense>
     )
   } else if (activeAsset !== undefined && activeAsset.kind === 'image') {
-    centerView = <ImageStage asset={activeAsset} />
+    // 图片查看器（CR-009 T-003 / R-024）：按顶栏激活工具解释拖拽（pan/zoom/rotate）
+    centerView = <ImageStage asset={activeAsset} activeTool={viewerTool} />
   } else {
     centerView = (
       <div className="workbench__viewport-empty">
@@ -390,105 +392,115 @@ function App() {
       ) : null}
 
       <div className="workbench__body">
-        {leftOpen ? (
-          <aside className="workbench__left" aria-label="素材列表">
-            <header className="workbench__left-head">
-              <h2 className="workbench__library-title">素材库（{assets.length}）</h2>
-            </header>
-            {assets.length === 0 ? (
-              <p className="library__empty">
-                尚无素材：点击顶栏“导入”选择文件，或将文件拖到中央导入区，导入后素材保存在本地浏览器中
-              </p>
-            ) : (
-              <div className="workbench__left-body">
-                {hasImages ? (
-                  <p className="library__select-hint">
-                    {`点击图片行可选择两张图片进行并排比较（已选 ${selectedIds.length}/${COMPARE_SELECTION_LIMIT}）`}
-                  </p>
-                ) : null}
-                {filteredAssets.length > 0 ? (
-                  <AssetGrid
-                    assets={filteredAssets}
-                    selectedIds={selectedIds}
-                    onToggleSelect={handleToggleSelect}
-                    onOpenDicom={selectAsset}
-                    onOpenModel={selectAsset}
-                    activeAssetId={activeAssetId}
-                    onDeleteAsset={handleDeleteAsset}
-                  />
-                ) : (
-                  <p className="library__empty">没有符合当前筛选条件的素材：可调整上方筛选条件</p>
-                )}
-                {dicomAssets.length > 0 ? (
-                  <PatientGroupPanel
-                    dicomAssets={dicomAssets}
-                    activeSliceAssetId={activeSliceAssetId}
-                    openGroupKeys={openGroupKeys}
-                    onToggleGroup={toggleGroupOpen}
-                    onOpenGroup={openGroup}
-                    onOpenSlice={selectAsset}
-                  />
-                ) : null}
-              </div>
-            )}
-          </aside>
-        ) : null}
+        {/* 左栏抽屉（CR-009 T-003 / R-026）：收起不卸载（width 0.2s ease 过渡动画），
+            收起态以 is-closed 类 + aria-hidden + inert 标记（内容裁剪不溢出、
+            不可聚焦）；展开态内容与既有契约一致 */}
+        <aside
+          className={leftOpen ? 'workbench__left' : 'workbench__left is-closed'}
+          aria-label="素材列表"
+          aria-hidden={!leftOpen}
+          inert={!leftOpen}
+        >
+          <header className="workbench__left-head">
+            <h2 className="workbench__library-title">素材库（{assets.length}）</h2>
+          </header>
+          {assets.length === 0 ? (
+            <p className="library__empty">
+              尚无素材：点击顶栏“导入”选择文件，或将文件拖到中央导入区，导入后素材保存在本地浏览器中
+            </p>
+          ) : (
+            <div className="workbench__left-body">
+              {hasImages ? (
+                <p className="library__select-hint">
+                  {`点击图片行可选择两张图片进行并排比较（已选 ${selectedIds.length}/${COMPARE_SELECTION_LIMIT}）`}
+                </p>
+              ) : null}
+              {filteredAssets.length > 0 ? (
+                <AssetGrid
+                  assets={filteredAssets}
+                  selectedIds={selectedIds}
+                  onToggleSelect={handleToggleSelect}
+                  onOpenDicom={selectAsset}
+                  onOpenModel={selectAsset}
+                  activeAssetId={activeAssetId}
+                  onDeleteAsset={handleDeleteAsset}
+                />
+              ) : (
+                <p className="library__empty">没有符合当前筛选条件的素材：可调整上方筛选条件</p>
+              )}
+              {dicomAssets.length > 0 ? (
+                <PatientGroupPanel
+                  dicomAssets={dicomAssets}
+                  activeSliceAssetId={activeSliceAssetId}
+                  openGroupKeys={openGroupKeys}
+                  onToggleGroup={toggleGroupOpen}
+                  onOpenGroup={openGroup}
+                  onOpenSlice={selectAsset}
+                />
+              ) : null}
+            </div>
+          )}
+        </aside>
 
         <main className="workbench__viewport" aria-label="查看区">
           {centerView}
         </main>
 
-        {rightOpen ? (
-          <aside className="workbench__right" aria-label="信息面板">
-            {activeAsset === undefined ? (
-              <p className="workbench__right-empty">
-                在左栏选择素材：DICOM 显示元数据分组，其余素材显示评审面板；顶栏按钮可折叠本面板。
-              </p>
-            ) : null}
-            {activeAsset !== undefined && activeAsset.kind === 'dicom' ? (
-              <div className="workbench__right-tabs">
-                <button
-                  type="button"
-                  className={rightTab === 'meta' ? 'workbench__tab is-active' : 'workbench__tab'}
-                  aria-pressed={rightTab === 'meta'}
-                  onClick={() => setRightTab('meta')}
-                >
-                  元数据
-                </button>
-                <button
-                  type="button"
-                  className={rightTab === 'review' ? 'workbench__tab is-active' : 'workbench__tab'}
-                  aria-pressed={rightTab === 'review'}
-                  onClick={() => setRightTab('review')}
-                >
-                  评审
-                </button>
-              </div>
-            ) : null}
-            {showMetaPanel && activeAsset !== undefined ? (
-              <>
-                <WindowLevelPanel windowLevel={windowLevel} onChange={setWindowLevel} />
-                <MetadataPanel asset={activeAsset} />
-              </>
-            ) : null}
-            {(showReviewPanel || showDicomReview) && activeAsset !== undefined ? (
-              <ReviewPanel
-                asset={activeAsset}
-                history={state.reviews[activeAsset.id]}
-                tagNames={tagNames}
-                onAddTag={(tagName) => handleAddTag(activeAsset.id, tagName)}
-                onRemoveTag={(tagName) => handleRemoveTag(activeAsset.id, tagName)}
-                onSubmitReview={(status, comment) =>
-                  handleSubmitReview(activeAsset.id, status, comment)
-                }
-                onSaveNote={(note) => handleSaveNote(activeAsset.id, note)}
-                onAcceptAiName={(name) => handleRenameAsset(activeAsset.id, name)}
-                onDeleteAsset={() => handleDeleteAsset(activeAsset.id)}
-                onClose={closeActiveAsset}
-              />
-            ) : null}
-          </aside>
-        ) : null}
+        {/* 右栏抽屉（CR-009 T-003 / R-026）：同左栏，收起不卸载、宽度过渡动画 */}
+        <aside
+          className={rightOpen ? 'workbench__right' : 'workbench__right is-closed'}
+          aria-label="信息面板"
+          aria-hidden={!rightOpen}
+          inert={!rightOpen}
+        >
+          {activeAsset === undefined ? (
+            <p className="workbench__right-empty">
+              在左栏选择素材：DICOM 显示元数据分组，其余素材显示评审面板；顶栏按钮可折叠本面板。
+            </p>
+          ) : null}
+          {activeAsset !== undefined && activeAsset.kind === 'dicom' ? (
+            <div className="workbench__right-tabs">
+              <button
+                type="button"
+                className={rightTab === 'meta' ? 'workbench__tab is-active' : 'workbench__tab'}
+                aria-pressed={rightTab === 'meta'}
+                onClick={() => setRightTab('meta')}
+              >
+                元数据
+              </button>
+              <button
+                type="button"
+                className={rightTab === 'review' ? 'workbench__tab is-active' : 'workbench__tab'}
+                aria-pressed={rightTab === 'review'}
+                onClick={() => setRightTab('review')}
+              >
+                评审
+              </button>
+            </div>
+          ) : null}
+          {showMetaPanel && activeAsset !== undefined ? (
+            <>
+              <WindowLevelPanel windowLevel={windowLevel} onChange={setWindowLevel} />
+              <MetadataPanel asset={activeAsset} />
+            </>
+          ) : null}
+          {(showReviewPanel || showDicomReview) && activeAsset !== undefined ? (
+            <ReviewPanel
+              asset={activeAsset}
+              history={state.reviews[activeAsset.id]}
+              tagNames={tagNames}
+              onAddTag={(tagName) => handleAddTag(activeAsset.id, tagName)}
+              onRemoveTag={(tagName) => handleRemoveTag(activeAsset.id, tagName)}
+              onSubmitReview={(status, comment) =>
+                handleSubmitReview(activeAsset.id, status, comment)
+              }
+              onSaveNote={(note) => handleSaveNote(activeAsset.id, note)}
+              onAcceptAiName={(name) => handleRenameAsset(activeAsset.id, name)}
+              onDeleteAsset={() => handleDeleteAsset(activeAsset.id)}
+              onClose={closeActiveAsset}
+            />
+          ) : null}
+        </aside>
       </div>
     </div>
   )
