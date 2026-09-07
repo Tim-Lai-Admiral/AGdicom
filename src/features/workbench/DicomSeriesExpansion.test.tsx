@@ -143,6 +143,28 @@ describe('DicomSeriesExpansion', () => {
     expect(screen.getByText('2 序列 · 2 张')).toBeTruthy()
   })
 
+  it('renders the aggregated unknown-series row as 未知系列（N 个文件）(R-019)', () => {
+    const assets = [
+      asset('u1', {
+        patientName: 'CHEN^WEI',
+        patientID: 'P2',
+        seriesInstanceUID: undefined,
+        instanceNumber: 2,
+      }),
+      asset('u2', {
+        patientName: 'CHEN^WEI',
+        patientID: 'P2',
+        seriesInstanceUID: undefined,
+        instanceNumber: 1,
+      }),
+    ]
+    renderExpansion(assets, 'u1')
+    // 同患者无 UID 文件聚合为单个“未知系列”（2 个文件），当前切片所在系列自动展开
+    expect(screen.getByText('未知系列（2 个文件）')).toBeTruthy()
+    expect(screen.getByText('1 序列 · 2 张')).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: /^查看切片/ })).toHaveLength(2)
+  })
+
   it('shows the placeholder when the asset has no parsed metadata', () => {
     const assets = chenAssets()
     // 未解析素材（独立 ID、无 dicomMeta）不属于任何患者组 → 占位提示
