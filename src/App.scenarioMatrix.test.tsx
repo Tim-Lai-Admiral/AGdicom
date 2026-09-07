@@ -9,15 +9,16 @@
  * ④ 混合患者 → 组间隔离、组内已知系列+未知系列共存、持久化分组按 R-012 排序、跨患者解析隔离；
  * ⑤ 空批次 / 失败文件 → 不崩溃、降级提示、分组只含可解析切片。
  *
- * 断言口径（任务卡增量事实）：
- * - 左栏患者组数/系列数/切片数：`.dicom-expand__patient-head`（N 序列 · N 张）+ series 行；
+ * 断言口径（CR-008 T-001 场景矩阵适配）：
+ * - 左栏患者分组独立面板（R-021）一次渲染全部患者组头（`.dicom-panel__group-head`，
+ *   N 序列 · N 张），series 行仅渲染在展开组内（当前素材所属组自动展开）；
  * - 未知系列聚合：series 行文案「未知系列（N 个文件）」；
  * - 解析范围：mock fetch 调用集合（objectUrl → 文件名还原后比较）；
  * - 缩略图占位↔像素：sliceThumb 模块 mock（jsdom 无 canvas；同时隔离缩略图请求，
  *   使 fetch 调用集合恰为 DicomViewer 解析范围；生成器自身行为由 sliceThumb.test.ts 覆盖）。
  *
- * 患者组间排序（R-012 组间码点升序）的 UI 一次只展示当前素材所属组，组间排序经
- * 持久化元数据 + groupDicomByPatient（产品同一实现）在真实导入数据上断言（④）。
+ * 患者组间排序（R-012 组间码点升序）：面板渲染全部患者组头后可直接断言 UI 排序，
+ * 并经持久化元数据 + groupDicomByPatient（产品同一实现）在真实导入数据上双重断言（④）。
  */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -102,17 +103,27 @@ function stubCanvasUnavailable(): void {
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
 }
 
-/** 左栏当前患者组头（一次只展示一个组） */
-function patientHead(): HTMLElement {
-  const head = document.querySelector('.dicom-expand__patient-head')
-  if (head === null) throw new Error('左栏患者组头未渲染')
+/** 左栏患者组头（按患者姓名定位；面板渲染全部组头，DOM 顺序 = R-012 组间排序） */
+function groupHeadByName(name: string): HTMLElement {
+  const head = Array.from(
+    document.querySelectorAll('.dicom-panel__group-head'),
+  ).find((el) => el.querySelector('.dicom-panel__group-name')?.textContent === name)
+  if (head === undefined) throw new Error(`左栏患者组头未渲染：${name}`)
   return head as HTMLElement
 }
 
-/** 左栏 series 行 UID 文案集合（DOM 顺序 = 组内系列排序；同时规避查看器元数据表格同文案歧义） */
+/** 左栏全部组头姓名集合（DOM 顺序 = 面板渲染顺序 = R-012 组间排序） */
+function groupHeadNames(): string[] {
+  return Array.from(
+    document.querySelectorAll('.dicom-panel__group-name'),
+    (el) => el.textContent,
+  )
+}
+
+/** 左栏 series 行 UID 文案集合（DOM 顺序 = 组间排序 + 组内系列排序；同时规避查看器元数据表格同文案歧义） */
 function seriesUidTexts(): string[] {
   return Array.from(
-    document.querySelectorAll('.dicom-expand__series-uid'),
+    document.querySelectorAll('.dicom-panel__series-uid'),
     (el) => el.textContent,
   )
 }
@@ -129,20 +140,19 @@ async function waitForSliceThumbs(count: number): Promise<HTMLElement[]> {
   return thumbs
 }
 
-/** 等待首次解析完成：患者组头出现（元数据已回写）后断言层级与计数 */
+/** 等待首次解析完成：指定患者组头出现（元数据已回写）后断言层级与计数 */
 async function waitForPatientHead(name: string, id: string, count: string): Promise<HTMLElement> {
   await waitFor(() => {
-    const head = patientHead()
-    expect(within(head).getByText(name)).toBeTruthy()
+    const head = groupHeadByName(name)
     expect(within(head).getByText(id)).toBeTruthy()
     expect(within(head).getByText(count)).toBeTruthy()
   })
-  return patientHead()
+  return groupHeadByName(name)
 }
 
 /** 全部 DICOM 行缩略图目标（含行/切片两个入口）的生成请求挂起，返回统一放行器 */
 function holdThumbGeneration(): () => void {
-  // 行缩略图（AssetGrid）与切片缩略图（DicomSeriesExpansion）会对同一素材 id 各调用一次
+  // 行缩略图（AssetGrid）与切片缩略图（PatientGroupPanel）会对同一素材 id 各调用一次
   // 生成：必须逐次登记 resolver（数组），放行时全部 resolve，两个入口才能同时拿到像素。
   const resolvers: Array<(value: string | null) => void> = []
   generateMock.mockImplementation(
@@ -211,16 +221,19 @@ describe('App: 批量导入场景矩阵（CR-007 T-003 / R-020）', () => {
     ])
 
     // 左栏层级：1 患者组 → 1 系列（UID 行）→ 10 切片，按 InstanceNumber 升序 #1..#10
-    expect(screen.getAllByRole('button', { name: /Series/ })).toHaveLength(1)
-    expect(seriesUidTexts()).toEqual([FIXTURE_SERIES_INSTANCE_UID])
+    // （分组头经 onOpenGroup 自动展开，series 行随展开组渲染，滞后一拍 → waitFor）
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /Series/ })).toHaveLength(1)
+      expect(seriesUidTexts()).toEqual([FIXTURE_SERIES_INSTANCE_UID])
+    })
     const thumbs = await waitForSliceThumbs(10)
     expect(thumbs.map((thumb) => thumb.getAttribute('aria-label'))).toEqual(
       Array.from({ length: 10 }, (_, index) => `查看切片 #${index + 1}`),
     )
 
     // 缩略图占位（生成挂起）：切片缩略图 = 占位 SVG，行缩略图 = 类型图标，无像素 img
-    expect(document.querySelectorAll('.dicom-expand__thumb svg')).toHaveLength(10)
-    expect(document.querySelectorAll('.dicom-expand__thumb-img')).toHaveLength(0)
+    expect(document.querySelectorAll('.dicom-panel__thumb svg')).toHaveLength(10)
+    expect(document.querySelectorAll('.dicom-panel__thumb-img')).toHaveLength(0)
     expect(document.querySelectorAll('.asset-row__glyph')).toHaveLength(10)
     expect(document.querySelectorAll('.asset-row__img')).toHaveLength(0)
     expect(generateMock).toHaveBeenCalled()
@@ -230,11 +243,11 @@ describe('App: 批量导入场景矩阵（CR-007 T-003 / R-020）', () => {
       releaseThumbs()
     })
     await waitFor(() => {
-      expect(document.querySelectorAll('.dicom-expand__thumb-img')).toHaveLength(10)
+      expect(document.querySelectorAll('.dicom-panel__thumb-img')).toHaveLength(10)
     })
     expect(document.querySelectorAll('.asset-row__img')).toHaveLength(10)
-    expect(document.querySelector('.dicom-expand__thumb svg')).toBeNull()
-    const pixel = document.querySelector('.dicom-expand__thumb-img') as HTMLImageElement
+    expect(document.querySelector('.dicom-panel__thumb svg')).toBeNull()
+    const pixel = document.querySelector('.dicom-panel__thumb-img') as HTMLImageElement
     expect(pixel.getAttribute('src')).toBe('data:image/png;base64,frame')
 
     // 聚合切片数回写并持久化（T-001 断言口径：本系列全批 10 张）
@@ -282,9 +295,12 @@ describe('App: 批量导入场景矩阵（CR-007 T-003 / R-020）', () => {
     ])
 
     // 左栏：10 个 series 行按 UID 码点升序（uid-1 < uid-10 < uid-2 …），各 1 张
-    expect(seriesUidTexts()).toEqual([
-      'uid-1', 'uid-10', 'uid-2', 'uid-3', 'uid-4', 'uid-5', 'uid-6', 'uid-7', 'uid-8', 'uid-9',
-    ])
+    // （分组头经 onOpenGroup 自动展开，series 行随展开组渲染，滞后一拍 → waitFor）
+    await waitFor(() => {
+      expect(seriesUidTexts()).toEqual([
+        'uid-1', 'uid-10', 'uid-2', 'uid-3', 'uid-4', 'uid-5', 'uid-6', 'uid-7', 'uid-8', 'uid-9',
+      ])
+    })
     // 激活系列（uid-1）自动展开显示自己的 #1；手动展开 uid-2 行显示它自己的 #2（各自切片正确）
     await waitForSliceThumbs(1)
     expect(screen.getByRole('button', { name: '查看切片 #1' })).toBeTruthy()
@@ -348,8 +364,11 @@ describe('App: 批量导入场景矩阵（CR-007 T-003 / R-020）', () => {
     ])
 
     // 左栏：单一「未知系列（10 个文件）」聚合行（不再 10 系列）→ 10 切片按 InstanceNumber 升序
-    expect(screen.getAllByRole('button', { name: /Series/ })).toHaveLength(1)
-    expect(seriesUidTexts()).toEqual(['未知系列（10 个文件）'])
+    // （分组头经 onOpenGroup 自动展开，series 行随展开组渲染，均滞后一拍 → waitFor）
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /Series/ })).toHaveLength(1)
+      expect(seriesUidTexts()).toEqual(['未知系列（10 个文件）'])
+    })
     const thumbs = await waitForSliceThumbs(10)
     expect(thumbs.map((thumb) => thumb.getAttribute('aria-label'))).toEqual(
       Array.from({ length: 10 }, (_, index) => `查看切片 #${index + 1}`),
@@ -393,13 +412,18 @@ describe('App: 批量导入场景矩阵（CR-007 T-003 / R-020）', () => {
     // 打开患者甲 a1：本组只含甲的 4 个文件（跨患者不污染计数），已知系列在前、未知系列最后
     fireEvent.click(screen.getByRole('button', { name: '查看“a1.dcm”的 DICOM 详情' }))
     await waitForPatientHead('ADAMS^J', 'PA', '2 序列 · 4 张')
-    expect(seriesUidTexts()).toEqual(['uid-A', '未知系列（2 个文件）'])
+    // 当前素材所属组自动展开（R-021 联动），series 行随展开组渲染（滞后一拍 → waitFor）
+    await waitFor(() => {
+      expect(seriesUidTexts()).toEqual(['uid-A', '未知系列（2 个文件）'])
+    })
+    // 面板一次渲染全部患者组头（R-021）：DOM 顺序 = R-012 组间码点升序，未知患者组末尾
+    expect(groupHeadNames()).toEqual(['ADAMS^J', 'BROWN^ANN', '未知患者'])
     // 已知系列（激活）自动展开 #1/#2；展开未知系列后合计 4 张切片
     await waitForSliceThumbs(2)
     fireEvent.click(screen.getByRole('button', { name: /Series.*未知系列/ }))
     expect(screen.getAllByRole('button', { name: /^查看切片/ })).toHaveLength(4)
 
-    // 组间排序（R-012）经持久化元数据 + 产品同一分组实现在真实导入数据上断言：
+    // 组间排序（R-012）经持久化元数据 + 产品同一分组实现在真实导入数据上断言（与 UI 顺序互证）：
     // ADAMS^J < BROWN^ANN（码点升序），未知患者组末尾
     const dicomEntries = Object.values(loadState().state.assets)
       .filter((asset): asset is Asset & { dicomMeta: DicomMeta } => asset.dicomMeta !== undefined)
@@ -496,8 +520,8 @@ describe('App: 场景矩阵——空批次与失败文件（CR-007 T-003 / R-020
     await waitForSliceThumbs(3)
 
     // 缩略图降级：有效切片生成失败（mock → null）保持占位 SVG；损坏行（无元数据）保持类型图标
-    expect(document.querySelectorAll('.dicom-expand__thumb svg')).toHaveLength(3)
-    expect(document.querySelectorAll('.dicom-expand__thumb-img')).toHaveLength(0)
+    expect(document.querySelectorAll('.dicom-panel__thumb svg')).toHaveLength(3)
+    expect(document.querySelectorAll('.dicom-panel__thumb-img')).toHaveLength(0)
     expect(document.querySelectorAll('.asset-row__glyph')).toHaveLength(5)
     expect(document.querySelectorAll('.asset-row__img')).toHaveLength(0)
 

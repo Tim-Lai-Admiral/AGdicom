@@ -4,8 +4,9 @@
  * 覆盖任务卡 Test requirements：
  * - 布局切换：四区（顶栏/左栏/中央/右栏）齐全；左/右栏面板开关（折叠后不溢出）；
  *   中央查看区按状态切换（导入视图 / 图片预览 / DICOM 查看器）；
- * - 左栏 DICOM 患者组展开：患者组 → series → 切片缩略图（复用 seriesUtils 数据），
- *   选中素材时对应患者组自动展开并高亮，点击切片切换；
+ * - 左栏 DICOM 患者分组独立面板（CR-008 T-001 / R-021）：面板一次渲染全部患者组，
+ *   患者组 → series → 切片缩略图（复用 seriesUtils 数据）；选中素材时对应患者组
+ *   自动展开并高亮，点击切片仅切换中央查看器与高亮（面板停留原位、展开状态不变）；
  * - 折叠交互：右栏信息面板与顶栏开关联动；
  * - T-004：右栏评审全链路（状态/标签/备注/历史/AI 建议）与顶栏导出/导入入口回环。
  */
@@ -142,20 +143,26 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
     fireEvent.click(within(right).getByRole('button', { name: '元数据' }))
     expect(within(right).getByText('DICOM 元数据')).toBeTruthy()
 
-    // 左栏患者组两级展开（CR-005 T-002 / R-012）：选中 s1 时其患者组面板自动展开；
-    // 3 个文件姓名/ID 均空 → 单一“未知患者”组；同 series → 1 行 3 切片，
-    // 当前素材所在 series 自动展开并高亮（患者组头 is-active + 缩略图 is-active）
+    // 左栏患者分组独立面板（CR-008 T-001 / R-021）：素材行无“展开切片”控件，
+    // 面板仅渲染一次；选中 s1 后其患者组自动展开：3 个文件姓名/ID 均空 → 单一
+    // “未知患者”组；同 series → 1 行 3 切片，当前素材所在 series 自动展开并高亮
+    // （分组头 is-active + 缩略图 is-active）
     await waitFor(() => {
       expect(screen.getByText('未知患者')).toBeTruthy()
       expect(screen.getAllByRole('button', { name: /^查看切片/ })).toHaveLength(3)
     })
+    expect(document.querySelectorAll('.dicom-panel')).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: '展开切片' })).toBeNull()
+    expect(screen.getByText('未知患者').closest('button')?.className).toContain('is-active')
     const activeThumbs = screen.getAllByRole('button', { name: /^查看切片/ })
     expect((activeThumbs[0] as HTMLElement).className).toContain('is-active')
 
-    // 关闭中央查看器 → 回到导入视图（左栏患者组面板保持展开状态）
+    // 关闭中央查看器 → 回到导入视图（分组面板展开状态保持：面板与素材行解耦）
     fireEvent.click(within(dialog).getByRole('button', { name: '关闭' }))
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.getByText('将图片 / DICOM / 3D 模型文件拖到此处')).toBeTruthy()
+    expect(screen.getByText('未知患者')).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: /^查看切片/ })).toHaveLength(3)
 
     // series 行可折叠：收起后缩略图隐藏，再展开恢复（series → 切片层级）
     const seriesToggle = screen.getByRole('button', { name: /Series/ })
@@ -165,12 +172,18 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
     const thumbs = screen.getAllByRole('button', { name: /^查看切片/ })
     expect(thumbs).toHaveLength(3)
 
-    // 点击切片缩略图：以该切片素材打开中央查看器（切片 1 / 3）
-    fireEvent.click(thumbs[0] as HTMLElement)
+    // 点击分组面板中的切片缩略图：中央打开该切片（切片 2 / 3）；面板停留原位
+    // （仍在左栏素材列表下方，分组头与全部切片缩略图保持不变，高亮跟随）
+    fireEvent.click(thumbs[1] as HTMLElement)
     const sliceDialog = screen.getByRole('dialog', { name: 'DICOM 详情' })
     await waitFor(() => {
-      expect(within(sliceDialog).getByText('切片 1 / 3（按 InstanceNumber 排序）')).toBeTruthy()
+      expect(within(sliceDialog).getByText('切片 2 / 3（按 InstanceNumber 排序）')).toBeTruthy()
     })
+    expect(screen.getByText('未知患者')).toBeTruthy()
+    const leftColumn = screen.getByRole('complementary', { name: '素材列表' })
+    expect(within(leftColumn).getAllByRole('button', { name: /^查看切片/ })).toHaveLength(3)
+    const highlightThumbs = screen.getAllByRole('button', { name: /^查看切片/ })
+    expect((highlightThumbs[1] as HTMLElement).className).toContain('is-active')
   })
 
   it('shows the W/L panel in the right column for a DICOM asset (CR-003 T-003 / R-003 修改)', async () => {
@@ -436,7 +449,7 @@ describe('App: 素材删除（CR-006 T-001 / R-015）', () => {
     expect(Object.keys(loadState().state.assets)).toHaveLength(1)
   })
 
-  it('deleting the active DICOM asset closes the viewer and clears the expanded series group', async () => {
+  it('deleting the active DICOM asset closes the viewer; the decoupled panel keeps the remaining slice visible', async () => {
     // 2 切片同 series：患者分组 → series → 切片层级由剩余素材即时重建
     const buffers = buildDicomSeriesBuffers(2, {
       patientName: '',
@@ -476,12 +489,15 @@ describe('App: 素材删除（CR-006 T-001 / R-015）', () => {
       expect(screen.getAllByRole('button', { name: /^查看切片/ })).toHaveLength(2)
     })
 
-    // 行内删除当前 DICOM 素材：中央查看器关闭、展开的 series 分组被清空、列表同步
+    // 行内删除当前 DICOM 素材：中央查看器关闭、列表同步；分组面板与素材行解耦
+    // （CR-008 T-001 / R-021）：面板展开状态不随删除清理，剩余素材的分组
+    // （1 组 1 系列 1 切片）仍展示
     fireEvent.click(screen.getByRole('button', { name: '删除素材 s1.dcm' }))
     fireEvent.click(screen.getByRole('button', { name: '确认删除“s1.dcm”' }))
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.getByText('素材库（1）')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /^查看切片/ })).toBeNull()
+    expect(screen.getByText('未知患者')).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: /^查看切片/ })).toHaveLength(1)
     expect(Object.keys(loadState().state.assets)).toHaveLength(1)
   })
 })

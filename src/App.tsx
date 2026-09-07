@@ -22,7 +22,7 @@ import ExportImport from './features/review/ExportImport.tsx'
 import TopToolbar from './features/workbench/TopToolbar.tsx'
 import MetadataPanel from './features/workbench/MetadataPanel.tsx'
 import WindowLevelPanel from './features/workbench/WindowLevelPanel.tsx'
-import DicomSeriesExpansion from './features/workbench/DicomSeriesExpansion.tsx'
+import PatientGroupPanel from './features/workbench/PatientGroupPanel.tsx'
 import ImageStage from './features/workbench/ImageStage.tsx'
 
 /** 读取异常的可提示文案（T-002 仓储契约的 UI 呈现） */
@@ -49,8 +49,8 @@ function App() {
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
   const [exportOpen, setExportOpen] = useState(false)
-  /** 左栏展开切片列表的 DICOM 素材（同一时间至多一个） */
-  const [expandedDicomId, setExpandedDicomId] = useState<string | null>(null)
+  /** 分组面板中处于展开态的患者组键（面板级状态；点击切片不改变，CR-008 T-001 / R-021） */
+  const [openGroupKeys, setOpenGroupKeys] = useState<ReadonlySet<string>>(() => new Set())
   const [saveError, setSaveError] = useState<string | null>(null)
   /** 启动时从本地二进制库恢复的素材数（R-016 提示）；null 表示无恢复 */
   const [restoreNotice, setRestoreNotice] = useState<string | null>(null)
@@ -125,13 +125,27 @@ function App() {
   }
 
   /** 选中素材（工作台）：中央查看区 + 右栏面板联动（DICOM → 元数据分组，其余 → 评审）；
-   *  DICOM 同时自动展开其患者分组面板（CR-005 T-002 / R-012：选中素材时对应患者组自动展开） */
+   *  患者分组面板的展开联动由面板自身完成（当前切片所属分组自动展开，幂等） */
   const selectAsset = (assetId: string): void => {
     setActiveAssetId(assetId)
     setRightOpen(true)
     const asset = state.assets[assetId]
     setRightTab(asset !== undefined && asset.kind === 'dicom' ? 'meta' : 'review')
-    if (asset !== undefined && asset.kind === 'dicom') setExpandedDicomId(assetId)
+  }
+
+  /** 分组面板：切换患者组展开/折叠（分组头点击；面板级状态，与素材行解耦） */
+  const toggleGroupOpen = (groupKey: string): void => {
+    setOpenGroupKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(groupKey)) next.delete(groupKey)
+      else next.add(groupKey)
+      return next
+    })
+  }
+
+  /** 分组面板：当前切片所属患者组自动展开（幂等；不折叠其他组） */
+  const openGroup = (groupKey: string): void => {
+    setOpenGroupKeys((prev) => (prev.has(groupKey) ? prev : new Set([...prev, groupKey])))
   }
 
   /** 关闭中央查看区：回到导入视图（查看器“关闭”/Esc 与评审面板“关闭”/Esc 共用） */
@@ -176,8 +190,9 @@ function App() {
 
   /**
    * 删除素材（CR-006 T-001 / R-015）：级联清理（资产 + 评审历史 + 标签计数重算）
-   * 后，清空工作台选中/中央查看器/series 展开分组并持久化；series 分组按剩余
-   * 素材即时重建（dicomAssets 为派生数据，随状态自动重算）。
+   * 后，清空工作台选中/中央查看器并持久化；患者分组面板由剩余素材即时重建
+   * （dicomAssets 为派生数据，随状态自动重算；面板展开状态与素材行解耦，
+   * CR-008 T-001 / R-021，无需随删除清理）。
    * 二进制级联（R-016）：按去重键同步删除 IndexedDB blob（失败仅告警，不阻塞删除）。
    */
   const handleDeleteAsset = (assetId: string): void => {
@@ -186,7 +201,6 @@ function App() {
     if (next === state) return
     if (activeAssetId === assetId) setActiveAssetId(null)
     setSelectedIds((current) => current.filter((id) => id !== assetId))
-    if (expandedDicomId === assetId) setExpandedDicomId(null)
     commit(next, '素材已在本会话删除，但保存失败')
     if (target !== undefined) void deleteAssetBlob(target)
   }
@@ -281,27 +295,6 @@ function App() {
     )
   }
 
-  /** 左栏卡片附加内容：DICOM 素材的 series/切片展开区（T-002 验收 ②） */
-  const renderCardExtras = (asset: Asset): ReactNode => {
-    if (asset.kind !== 'dicom') return null
-    return (
-      <DicomSeriesExpansion
-        asset={asset}
-        dicomAssets={dicomAssets}
-        open={expandedDicomId === asset.id}
-        activeSliceAssetId={
-          activeAsset !== undefined && activeAsset.kind === 'dicom' ? activeAsset.id : null
-        }
-        onToggle={() => {
-          setExpandedDicomId(expandedDicomId === asset.id ? null : asset.id)
-        }}
-        onOpenSlice={(sliceAssetId) => {
-          selectAsset(sliceAssetId)
-        }}
-      />
-    )
-  }
-
   const showReviewPanel = activeAsset !== undefined && activeAsset.kind !== 'dicom'
   const showMetaPanel =
     activeAsset !== undefined && activeAsset.kind === 'dicom' && rightTab === 'meta'
@@ -375,13 +368,26 @@ function App() {
                     onToggleSelect={handleToggleSelect}
                     onOpenDicom={selectAsset}
                     onOpenModel={selectAsset}
-                    renderExtras={renderCardExtras}
                     activeAssetId={activeAssetId}
                     onDeleteAsset={handleDeleteAsset}
                   />
                 ) : (
                   <p className="library__empty">没有符合当前筛选条件的素材：可调整上方筛选条件</p>
                 )}
+                {dicomAssets.length > 0 ? (
+                  <PatientGroupPanel
+                    dicomAssets={dicomAssets}
+                    activeSliceAssetId={
+                      activeAsset !== undefined && activeAsset.kind === 'dicom'
+                        ? activeAsset.id
+                        : null
+                    }
+                    openGroupKeys={openGroupKeys}
+                    onToggleGroup={toggleGroupOpen}
+                    onOpenGroup={openGroup}
+                    onOpenSlice={selectAsset}
+                  />
+                ) : null}
               </div>
             )}
           </aside>

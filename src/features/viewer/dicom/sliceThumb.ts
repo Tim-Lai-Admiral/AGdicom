@@ -3,7 +3,7 @@
  *
  * 职责：素材会话字节（objectUrl）→ fetch → parseDicomFile → decodeDicomFrame 首帧
  * → canvas.toDataURL（PNG），供素材行缩略图（AssetGrid）与切片缩略图
- * （DicomSeriesExpansion）渲染真实首帧像素。
+ * （PatientGroupPanel）渲染真实首帧像素。
  *
  * 降级契约（R-017）：未解析 / 压缩传输语法 / 解码失败 / canvas 不可用 → 返回 null，
  * 调用方回退 SVG 占位，任何路径不崩溃。解析 / 像素解码复用查看器同一套实现
