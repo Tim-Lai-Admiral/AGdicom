@@ -45,6 +45,11 @@ function App() {
   const [compareOpen, setCompareOpen] = useState(false)
   /** 工作台当前素材（中央查看区 + 右栏联动）；null = 导入视图（T-002 布局壳） */
   const [activeAssetId, setActiveAssetId] = useState<string | null>(null)
+  /** 左栏分组面板高亮数据源（CR-008 T-002 / R-022）：中央查看器当前选中的切片素材 ID。
+   *  点击左栏切片/素材行（selectAsset）设置；查看器内滑动条等路径切换切片经
+   *  onSelectedSliceChange 跟随更新；关闭查看器 / 切换到非 DICOM 素材 / 删除对应
+   *  素材时清理（null = 无高亮） */
+  const [activeSliceAssetId, setActiveSliceAssetId] = useState<string | null>(null)
   const [rightTab, setRightTab] = useState<RightTab>('review')
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
@@ -125,12 +130,14 @@ function App() {
   }
 
   /** 选中素材（工作台）：中央查看区 + 右栏面板联动（DICOM → 元数据分组，其余 → 评审）；
-   *  患者分组面板的展开联动由面板自身完成（当前切片所属分组自动展开，幂等） */
+   *  左栏分组面板高亮随选中设置/清理（CR-008 T-002 / R-022）；患者分组面板的展开
+   *  联动由面板自身完成（当前切片所属分组自动展开，幂等） */
   const selectAsset = (assetId: string): void => {
     setActiveAssetId(assetId)
     setRightOpen(true)
     const asset = state.assets[assetId]
     setRightTab(asset !== undefined && asset.kind === 'dicom' ? 'meta' : 'review')
+    setActiveSliceAssetId(asset !== undefined && asset.kind === 'dicom' ? assetId : null)
   }
 
   /** 分组面板：切换患者组展开/折叠（分组头点击；面板级状态，与素材行解耦） */
@@ -148,9 +155,11 @@ function App() {
     setOpenGroupKeys((prev) => (prev.has(groupKey) ? prev : new Set([...prev, groupKey])))
   }
 
-  /** 关闭中央查看区：回到导入视图（查看器“关闭”/Esc 与评审面板“关闭”/Esc 共用） */
+  /** 关闭中央查看区：回到导入视图（查看器“关闭”/Esc 与评审面板“关闭”/Esc 共用）；
+   *  左栏分组面板高亮同步清理（CR-008 T-002 / R-022 验收：关闭查看器 → 高亮清理） */
   const closeActiveAsset = (): void => {
     setActiveAssetId(null)
+    setActiveSliceAssetId(null)
   }
 
   /** 评审面板：添加标签（含自建，注册表合并由 addAssetTag 完成）并持久化 */
@@ -199,7 +208,13 @@ function App() {
     const target = state.assets[assetId]
     const next = removeAsset(state, assetId)
     if (next === state) return
-    if (activeAssetId === assetId) setActiveAssetId(null)
+    if (activeAssetId === assetId) {
+      setActiveAssetId(null)
+      setActiveSliceAssetId(null)
+    } else if (activeSliceAssetId === assetId) {
+      // 被删除的是当前高亮切片（查看器内部已切到它但未作为 activeAsset）：清理高亮
+      setActiveSliceAssetId(null)
+    }
     setSelectedIds((current) => current.filter((id) => id !== assetId))
     commit(next, '素材已在本会话删除，但保存失败')
     if (target !== undefined) void deleteAssetBlob(target)
@@ -208,6 +223,15 @@ function App() {
   /** 导入备份：以备份数据整体替换当前状态（导入前已经过 io.ts 深度校验与冲突确认） */
   const handleImportState = (incoming: AppState): void => {
     commit(incoming, '导入已在本会话生效，但保存失败')
+  }
+
+  /**
+   * DICOM 查看器当前切片变化（CR-008 T-002 / R-022）：查看器内滑动条等任意路径
+   * 切换切片时更新左栏分组面板高亮数据源（初始选择与点击左栏切片路径已由
+   * selectAsset 覆盖；查看器侧对同一素材 ID 去重，不会重复回调）。
+   */
+  const handleDicomSliceChange = (assetId: string): void => {
+    setActiveSliceAssetId(assetId)
   }
 
   /**
@@ -264,6 +288,7 @@ function App() {
         dicomAssets={dicomAssets}
         onMetasParsed={handleDicomMetasParsed}
         onClose={closeActiveAsset}
+        onSelectedSliceChange={handleDicomSliceChange}
         windowLevel={windowLevel}
       />
     )
@@ -377,11 +402,7 @@ function App() {
                 {dicomAssets.length > 0 ? (
                   <PatientGroupPanel
                     dicomAssets={dicomAssets}
-                    activeSliceAssetId={
-                      activeAsset !== undefined && activeAsset.kind === 'dicom'
-                        ? activeAsset.id
-                        : null
-                    }
+                    activeSliceAssetId={activeSliceAssetId}
                     openGroupKeys={openGroupKeys}
                     onToggleGroup={toggleGroupOpen}
                     onOpenGroup={openGroup}

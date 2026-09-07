@@ -362,6 +362,68 @@ describe('DicomViewer: 切片切换与预览', () => {
   })
 })
 
+describe('DicomViewer: 切片变化上报（CR-008 T-002 / R-022）', () => {
+  it('reports the initial selection and slider changes via onSelectedSliceChange (deduplicated)', async () => {
+    const { assets, files } = buildThreeSliceSeries()
+    stubFetchFor(files)
+    stubCanvasContext()
+    const onSelectedSliceChange = vi.fn()
+
+    render(
+      <DicomViewer
+        asset={assets[0]}
+        dicomAssets={assets}
+        onMetasParsed={vi.fn()}
+        onClose={vi.fn()}
+        onSelectedSliceChange={onSelectedSliceChange}
+      />,
+    )
+
+    // 初始选择：挂载后立即上报一次（打开的素材 = phantom-003.dcm → d3）
+    expect(onSelectedSliceChange).toHaveBeenCalledTimes(1)
+    expect(onSelectedSliceChange).toHaveBeenLastCalledWith('d3')
+
+    // 滑动条切换 → 上报新切片素材 ID（滑动条 1..N 按 InstanceNumber 排序，#1 → d1）
+    // （滑动条在解析完成、series 分组建成后才渲染，需等待）
+    fireEvent.change(await screen.findByLabelText('选择切片'), { target: { value: '1' } })
+    await waitFor(() => {
+      expect(screen.getByText('切片 1 / 3（按 InstanceNumber 排序）')).toBeTruthy()
+    })
+    expect(onSelectedSliceChange).toHaveBeenCalledTimes(2)
+    expect(onSelectedSliceChange).toHaveBeenLastCalledWith('d1')
+
+    // 同值 change 与低于 min 的值（jsdom 钳制到 min，仍选中 #1）→ 未发生切片切换，
+    // 不重复上报（同一素材 ID 去重）
+    fireEvent.change(screen.getByLabelText('选择切片'), { target: { value: '1' } })
+    fireEvent.change(screen.getByLabelText('选择切片'), { target: { value: '0' } })
+    expect(onSelectedSliceChange).toHaveBeenCalledTimes(2)
+    expect(onSelectedSliceChange).toHaveBeenLastCalledWith('d1')
+
+    // 切回 #3：真实切换 → 恰好一次回调
+    fireEvent.change(screen.getByLabelText('选择切片'), { target: { value: '3' } })
+    await waitFor(() => {
+      expect(screen.getByText('切片 3 / 3（按 InstanceNumber 排序）')).toBeTruthy()
+    })
+    expect(onSelectedSliceChange).toHaveBeenCalledTimes(3)
+    expect(onSelectedSliceChange).toHaveBeenLastCalledWith('d3')
+  })
+
+  it('stays functional without the optional callback (not provided)', async () => {
+    // 缺省（未传 onSelectedSliceChange）：挂载与滑动条切换均不报错
+    const { assets, files } = buildThreeSliceSeries()
+    stubFetchFor(files)
+    stubCanvasContext()
+
+    render(
+      <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
+    )
+    fireEvent.change(await screen.findByLabelText('选择切片'), { target: { value: '2' } })
+    await waitFor(() => {
+      expect(screen.getByText('切片 2 / 3（按 InstanceNumber 排序）')).toBeTruthy()
+    })
+  })
+})
+
 describe('DicomViewer: 降级路径（不崩溃）', () => {
   it('shows metadata-only fallback for a compressed transfer syntax', async () => {
     const compressed = buildDicomFile({

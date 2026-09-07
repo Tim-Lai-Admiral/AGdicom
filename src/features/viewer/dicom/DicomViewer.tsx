@@ -14,7 +14,10 @@
  *   批量回写素材（含 sliceCount），由 App 持久化（刷新后元数据表格仍可展示）；
  * - 降级：压缩传输语法 / 解码失败 / Canvas 不可用 → 预览区显示“仅元数据”类文案；
  *   文件无法解析 → 显示解析错误；刷新后（无 objectUrl）→ 元数据来自持久化记录，
- *   预览提示统一为“会话失效，可重新导入或删除该素材”（CR-006 T-004）；任何路径都不崩溃。
+ *   预览提示统一为“会话失效，可重新导入或删除该素材”（CR-006 T-004）；任何路径都不崩溃；
+ * - 当前切片变化（初始选择 / 滑动条等任意 selectedAssetId 变化路径）经
+ *   onSelectedSliceChange 上报切片素材 ID，供 App 更新左栏分组面板高亮
+ *   （CR-008 T-002 / R-022；同一素材 ID 不重复回调）。
  *
  * 展示内容仅为工程元数据，不包含任何诊断/治疗暗示。
  */
@@ -75,6 +78,9 @@ export interface DicomViewerProps {
   onMetasParsed: (metas: Record<string, DicomMeta>) => void
   /** 关闭查看器（“关闭”按钮与 Esc 键均触发） */
   onClose: () => void
+  /** 当前切片变化上报（CR-008 T-002 / R-022）：selectedAssetId 变化（含初始选择、
+   *  滑动条切换等任意路径）时回传切片素材 ID；同一 ID 不重复回调。缺省不上报 */
+  onSelectedSliceChange?: (assetId: string) => void
   /** 窗宽窗位（R-003 修改）；缺省自动 min-max（与既有行为等价）。App 持有，右栏面板可调 */
   windowLevel?: WindowLevelState
 }
@@ -84,6 +90,7 @@ export default function DicomViewer({
   dicomAssets,
   onMetasParsed,
   onClose,
+  onSelectedSliceChange,
   windowLevel = AUTO_WINDOW_LEVEL,
 }: DicomViewerProps) {
   /** 本会话（本次打开）解析出的元数据，优先于持久化记录 */
@@ -121,6 +128,21 @@ export default function DicomViewer({
   useEffect(() => {
     onMetasParsedRef.current = onMetasParsed
   }, [onMetasParsed])
+
+  // ---- 当前切片变化上报（CR-008 T-002 / R-022）：selectedAssetId 变化（含初始选择、
+  // 滑动条切换等任意路径）即回调 onSelectedSliceChange；经 ref 读取最新回调（避免因
+  // 回调身份变化重复触发）并以 reportedSliceIdRef 去重（同一素材 ID 不重复回调）----
+  const onSelectedSliceChangeRef = useRef(onSelectedSliceChange)
+  useEffect(() => {
+    onSelectedSliceChangeRef.current = onSelectedSliceChange
+  }, [onSelectedSliceChange])
+  const reportedSliceIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (onSelectedSliceChangeRef.current === undefined) return
+    if (reportedSliceIdRef.current === selectedAssetId) return
+    reportedSliceIdRef.current = selectedAssetId
+    onSelectedSliceChangeRef.current(selectedAssetId)
+  }, [selectedAssetId])
 
   // ---- 派生：已知元数据 / series 分组 / 当前切片 / 解析范围（R-018 / R-019）----
   // 已知元数据：本会话解析结果优先于持久化记录；患者分组语义下的 series 分组
