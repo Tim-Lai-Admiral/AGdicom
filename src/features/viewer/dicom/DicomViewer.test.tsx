@@ -90,6 +90,47 @@ function buildThreeSliceSeries() {
   }
 }
 
+/** 持久化元数据（模拟此前会话已解析回写；仅含分组/排序所需字段） */
+function persistedMeta(overrides: Partial<DicomMeta>): DicomMeta {
+  return {
+    sliceCount: 1,
+    deidentified: false,
+    ...overrides,
+  }
+}
+
+/** 同患者（CHEN^WEI / P2）两个已归类系列 × 各 3 切片：持久化元数据 + 会话 objectUrl */
+function buildTwoClassifiedSeries() {
+  const files: Record<string, Uint8Array> = {}
+  const assets: Asset[] = []
+  for (const uid of ['uid-A', 'uid-B'] as const) {
+    const buffers = buildDicomSeriesBuffers(3, {
+      seriesInstanceUID: uid,
+      patientName: 'CHEN^WEI',
+      patientID: 'P2',
+    })
+    for (let i = 1; i <= 3; i += 1) {
+      const id = `${uid === 'uid-A' ? 'a' : 'b'}${i}`
+      files[`blob:${id}`] = new Uint8Array(buffers[i - 1])
+      assets.push(
+        makeDicomAsset({
+          id,
+          name: `${id}.dcm`,
+          file: { fileName: `${id}.dcm`, fileSize: 512, fileType: 'application/dicom' },
+          objectUrl: `blob:${id}`,
+          dicomMeta: persistedMeta({
+            seriesInstanceUID: uid,
+            instanceNumber: i,
+            patientName: 'CHEN^WEI',
+            patientID: 'P2',
+          }),
+        }),
+      )
+    }
+  }
+  return { files, assets }
+}
+
 describe('DicomViewer: 元数据与 series 聚合', () => {
   it('parses files, shows the metadata table and the grouped slice count', async () => {
     const { assets, files } = buildThreeSliceSeries()
@@ -157,6 +198,111 @@ describe('DicomViewer: 元数据与 series 聚合', () => {
       expect(meta.deidentified).toBe(true)
       expect(meta.seriesInstanceUID).toBeDefined()
       expect(meta.modality).toBe('CT')
+    }
+  })
+})
+
+describe('DicomViewer: 解析范围（R-018 / R-019）', () => {
+  it("parses only the opened asset's series files and skips other classified series", async () => {
+    const { assets, files } = buildTwoClassifiedSeries()
+    const onMetasParsed = vi.fn()
+    const fetchMock = stubFetchFor(files)
+    stubCanvasContext()
+
+    render(
+      <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={onMetasParsed} onClose={vi.fn()} />,
+    )
+    // 打开 a1（uid-A 系列）：只解析 a1~a3，不解析已归类为 uid-B 系列的 b1~b3
+    await waitFor(() => {
+      expect(onMetasParsed).toHaveBeenCalledTimes(1)
+    })
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual(['blob:a1', 'blob:a2', 'blob:a3'])
+    const metas = onMetasParsed.mock.calls[0][0] as Record<string, DicomMeta>
+    expect(Object.keys(metas).sort()).toEqual(['a1', 'a2', 'a3'])
+    for (const meta of Object.values(metas)) {
+      expect(meta.sliceCount).toBe(3)
+    }
+    expect(await screen.findByText('3 张（本序列）')).toBeTruthy()
+  })
+
+  it('parses the whole aggregated unknown series (missing UID) of the same patient', async () => {
+    const files: Record<string, Uint8Array> = {}
+    const assets: Asset[] = []
+    for (let i = 1; i <= 3; i += 1) {
+      const id = `u${i}`
+      files[`blob:${id}`] = new Uint8Array(
+        buildDicomFile({
+          seriesInstanceUID: null,
+          patientName: 'CHEN^WEI',
+          patientID: 'P2',
+          instanceNumber: String(i),
+        }),
+      )
+      assets.push(
+        makeDicomAsset({
+          id,
+          name: `${id}.dcm`,
+          file: { fileName: `${id}.dcm`, fileSize: 512, fileType: 'application/dicom' },
+          objectUrl: `blob:${id}`,
+          dicomMeta: persistedMeta({
+            seriesInstanceUID: undefined,
+            instanceNumber: i,
+            patientName: 'CHEN^WEI',
+            patientID: 'P2',
+          }),
+        }),
+      )
+    }
+    const onMetasParsed = vi.fn()
+    stubFetchFor(files)
+    stubCanvasContext()
+
+    // 打开 #2：所属“未知系列”= 同患者全部无 UID 文件 → 3 个全部解析并按 InstanceNumber 排序
+    render(
+      <DicomViewer asset={assets[1]} dicomAssets={assets} onMetasParsed={onMetasParsed} onClose={vi.fn()} />,
+    )
+    await waitFor(() => {
+      expect(onMetasParsed).toHaveBeenCalledTimes(1)
+    })
+    const metas = onMetasParsed.mock.calls[0][0] as Record<string, DicomMeta>
+    expect(Object.keys(metas).sort()).toEqual(['u1', 'u2', 'u3'])
+    for (const meta of Object.values(metas)) {
+      expect(meta.sliceCount).toBe(3)
+    }
+    expect(await screen.findByText('3 张（本序列）')).toBeTruthy()
+    expect((await screen.findByLabelText('选择切片') as HTMLInputElement).value).toBe('2')
+    expect(await screen.findByText('切片 2 / 3（按 InstanceNumber 排序）')).toBeTruthy()
+  })
+
+  it('still parses not-yet-classified files on open (fresh import behavior), then converges', async () => {
+    // 刚导入、尚无元数据的 2 个同系列文件：保持“打开即解析”（归属在解析出元数据后归类）
+    const buffers = buildDicomSeriesBuffers(2, { patientName: 'CHEN^WEI', patientID: 'P2' })
+    const assets = buffers.map((_buffer, index) =>
+      makeDicomAsset({
+        id: `f${index + 1}`,
+        name: `f${index + 1}.dcm`,
+        file: { fileName: `f${index + 1}.dcm`, fileSize: 512, fileType: 'application/dicom' },
+        objectUrl: `blob:f${index + 1}`,
+      }),
+    )
+    const files = {
+      'blob:f1': new Uint8Array(buffers[0]),
+      'blob:f2': new Uint8Array(buffers[1]),
+    }
+    const onMetasParsed = vi.fn()
+    stubFetchFor(files)
+    stubCanvasContext()
+
+    render(
+      <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={onMetasParsed} onClose={vi.fn()} />,
+    )
+    await waitFor(() => {
+      expect(onMetasParsed).toHaveBeenCalledTimes(1)
+    })
+    const metas = onMetasParsed.mock.calls[0][0] as Record<string, DicomMeta>
+    expect(Object.keys(metas).sort()).toEqual(['f1', 'f2'])
+    for (const meta of Object.values(metas)) {
+      expect(meta.sliceCount).toBe(2)
     }
   })
 })

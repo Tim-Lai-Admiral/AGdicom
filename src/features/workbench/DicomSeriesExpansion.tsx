@@ -1,10 +1,12 @@
 /**
- * 左栏 DICOM 患者分组展开区（CR-005 T-002 / R-012）。
+ * 左栏 DICOM 患者分组展开区（CR-005 T-002 / R-012；CR-007 T-001 / R-019）。
  *
  * DICOM 素材行下方可展开为两级层级：患者组头（PatientName + PatientID，复用
  * seriesUtils 的 groupDicomByPatient / findDicomPatientGroup）→ series 行
- * （组内 series 按 SeriesInstanceUID 升序，复用 groupDicomBySeries 的分组结果）→
- * 切片缩略图（按 InstanceNumber 排序；ThumbSVG 风格的占位示意 SVG，非像素解码）。
+ * （组内 series 按 SeriesInstanceUID 升序，复用 groupDicomBySeries 的分组结果；
+ * 同患者内缺 UID 的文件聚合为单个“未知系列”，文案“未知系列（N 个文件）”）→
+ * 切片缩略图（按 InstanceNumber 排序、缺失按文件名；ThumbSVG 风格的占位示意 SVG，
+ * 非像素解码）。
  * 患者组默认折叠（open 由 App 层 expandedDicomId 控制）；series 行默认折叠，
  * 当前在中央查看器打开的素材所属 series 自动展开（含患者组头 is-active 高亮、
  * 当前切片缩略图 is-active）。点击切片缩略图 → onOpenSlice(sliceAssetId)：
@@ -62,7 +64,9 @@ export default function DicomSeriesExpansion({
 }: DicomSeriesExpansionProps) {
   const entries: DicomSeriesEntry[] = []
   for (const a of dicomAssets) {
-    if (a.dicomMeta !== undefined) entries.push({ assetId: a.id, meta: a.dicomMeta })
+    if (a.dicomMeta !== undefined) {
+      entries.push({ assetId: a.id, meta: a.dicomMeta, fileName: a.file.fileName })
+    }
   }
   const patientGroup = open
     ? findDicomPatientGroup(groupDicomByPatient(entries), asset.id)
@@ -143,7 +147,9 @@ export default function DicomSeriesExpansion({
                       className="dicom-expand__series-uid"
                       title={series.seriesInstanceUID ?? undefined}
                     >
-                      {series.seriesInstanceUID === null ? '未提供 UID' : series.seriesInstanceUID}
+                      {series.seriesInstanceUID === null
+                        ? `未知系列（${series.sliceCount} 个文件）`
+                        : series.seriesInstanceUID}
                     </span>
                     <span className="dicom-expand__series-count">{series.sliceCount} 张</span>
                   </button>

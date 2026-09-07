@@ -5,10 +5,12 @@
  * （多文件 series 按 InstanceNumber 排序切换）+ Canvas 灰度预览（自动 min-max 或
  * 显式窗宽窗位，R-003 修改）+ 测量工具（拖拽绘制 + 距离标注，Mock 非临床，R-010）。
  *
- * 数据流：
- * - 打开时对素材库中所有含会话 objectUrl 的 DICOM 素材异步逐个解析（每个文件间让出
- *   事件循环，大 series 不阻塞界面），dicom-parser 数据集留在会话缓存供像素解码；
- * - 解析完成后按 SeriesInstanceUID 聚合统计切片数（seriesUtils），经 onMetasParsed
+ * 数据流（解析范围见 R-018，聚合口径见 R-019）：
+ * - 打开时解析“所属 series 的文件集合”（按患者分组语义匹配，含缺 UID 聚合出的
+ *   “未知系列”）∪ 尚无元数据、无法归类的文件（可能属于当前 series，保持“打开即
+ *   解析”行为；解析出元数据后即纳入分组并去重，不再重复解析），每个文件间让出
+ *   事件循环，大 series 不阻塞界面，dicom-parser 数据集留在会话缓存供像素解码；
+ * - 解析完成后按患者分组内的 series 聚合统计切片数（seriesUtils），经 onMetasParsed
  *   批量回写素材（含 sliceCount），由 App 持久化（刷新后元数据表格仍可展示）；
  * - 降级：压缩传输语法 / 解码失败 / Canvas 不可用 → 预览区显示“仅元数据”类文案；
  *   文件无法解析 → 显示解析错误；刷新后（无 objectUrl）→ 元数据来自持久化记录，
@@ -27,7 +29,7 @@ import type { WindowLevelState } from './windowLevel.ts'
 import { clientToImagePoint, formatMeasureLength, measureLength } from './measure.ts'
 import type { MeasureLength, MeasurePoint } from './measure.ts'
 import { DEID_EVIDENCE_LABELS, sopClassLabel, transferSyntaxLabel } from './metaLabels.ts'
-import { findDicomSeriesGroup, groupDicomBySeries, sliceCountByAsset } from './seriesUtils.ts'
+import { findDicomPatientSeriesGroup, sliceCountByAsset } from './seriesUtils.ts'
 import type { DicomSeriesEntry } from './seriesUtils.ts'
 
 /** 读取素材的字节（会话级 objectUrl → fetch；预览与解析共用） */
@@ -108,6 +110,8 @@ export default function DicomViewer({
   const [draftMeasure, setDraftMeasure] = useState<{ a: MeasurePoint; b: MeasurePoint } | null>(null)
 
   const datasetsRef = useRef(new Map<string, DataSet>())
+  /** sessionMetas 的同步镜像：解析 effect 的聚合步骤需读取此前批次已解析出的元数据 */
+  const sessionMetasRef = useRef<Record<string, DicomMeta>>({})
   const completedIdsRef = useRef(new Set<string>())
   const nextMeasureIdRef = useRef(1)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -118,13 +122,53 @@ export default function DicomViewer({
     onMetasParsedRef.current = onMetasParsed
   }, [onMetasParsed])
 
-  // ---- 批量解析：所有含会话 objectUrl 且未解析过的 DICOM 素材 ----
-  // parseKey（素材 ID + objectUrl）变化时重新入队；解析完成的素材记入 completedIdsRef 去重。
-  const parseKey = dicomAssets.map((a) => `${a.id}:${a.objectUrl ?? ''}`).join('|')
+  // ---- 派生：已知元数据 / series 分组 / 当前切片 / 解析范围（R-018 / R-019）----
+  // 已知元数据：本会话解析结果优先于持久化记录；患者分组语义下的 series 分组
+  // （同患者内缺 UID 文件聚合为单个“未知系列”）同时决定切片切换与解析范围。
+  const assetById = new Map<string, Asset>()
+  for (const a of dicomAssets) assetById.set(a.id, a)
+  const selectedAsset = assetById.get(selectedAssetId) ?? asset
+  const selectedMeta = sessionMetas[selectedAsset.id] ?? selectedAsset.dicomMeta
+
+  const knownEntries: DicomSeriesEntry[] = []
+  const knownMetaIds = new Set<string>()
+  for (const a of dicomAssets) {
+    const meta = sessionMetas[a.id] ?? a.dicomMeta
+    if (meta !== undefined) {
+      knownMetaIds.add(a.id)
+      knownEntries.push({ assetId: a.id, meta, fileName: a.file.fileName })
+    }
+  }
+  const currentGroup = findDicomPatientSeriesGroup(knownEntries, asset.id)
+  const orderedSlices = currentGroup?.slices ?? []
+  const selectedSliceIndex = Math.max(
+    0,
+    orderedSlices.findIndex((slice) => slice.assetId === selectedAssetId),
+  )
+
+  // 解析范围（R-018）：所属 series 的文件集合（含聚合后的“未知系列”）∪ 尚无元数据、
+  // 无法归类的文件——后者可能属于当前 series，保持“打开即解析”的既有行为，解析出
+  // 元数据后即纳入分组；已归入其他 series 的文件不会被解析，跨 series 互不污染。
+  const seriesAssetIds = new Set<string>([asset.id])
+  if (currentGroup !== undefined) {
+    for (const slice of currentGroup.slices) seriesAssetIds.add(slice.assetId)
+  }
+  const parseScopeIds: string[] = []
+  for (const a of dicomAssets) {
+    if (seriesAssetIds.has(a.id) || !knownMetaIds.has(a.id)) parseScopeIds.push(a.id)
+  }
+  // parseKey（范围内素材 ID + objectUrl）变化时重新入队；解析完成的素材记入
+  // completedIdsRef 去重（引导解析完成后范围收敛，不重复解析）。
+  const parseKey = parseScopeIds
+    .map((id) => `${id}:${assetById.get(id)?.objectUrl ?? ''}`)
+    .join('|')
+
+  // ---- 批量解析：解析范围内含会话 objectUrl 且未解析过的 DICOM 素材 ----
   useEffect(() => {
     let cancelled = false
+    const scopeIds = new Set(parseScopeIds)
     const queue = dicomAssets.filter(
-      (a) => a.objectUrl !== undefined && !completedIdsRef.current.has(a.id),
+      (a) => scopeIds.has(a.id) && a.objectUrl !== undefined && !completedIdsRef.current.has(a.id),
     )
     if (queue.length === 0) {
       setParseProgress(null)
@@ -155,17 +199,20 @@ export default function DicomViewer({
         if (cancelled) return
         setParseProgress({ done, total: queue.length })
       }
-      // 全部完成：合并持久化元数据按 series 聚合，为每个解析出的 meta 回写切片数
+      // 全部完成：按最终已知元数据（本批次 ∪ 此前批次 ∪ 持久化）做患者分组聚合
+      // （R-019：同患者缺 UID 文件聚合为“未知系列”），为本批次解析出的素材回写
+      // 所属 series 的切片数（R-018：回写口径收敛到所属 series 的分组统计）。
       const entries: DicomSeriesEntry[] = []
       for (const a of dicomAssets) {
-        const meta = metas[a.id] ?? a.dicomMeta
-        if (meta !== undefined) entries.push({ assetId: a.id, meta })
+        const meta = metas[a.id] ?? sessionMetasRef.current[a.id] ?? a.dicomMeta
+        if (meta !== undefined) entries.push({ assetId: a.id, meta, fileName: a.file.fileName })
       }
       const counts = sliceCountByAsset(entries)
       const updates: Record<string, DicomMeta> = {}
       for (const [id, meta] of Object.entries(metas)) {
         updates[id] = { ...meta, sliceCount: counts[id] ?? meta.sliceCount }
       }
+      sessionMetasRef.current = { ...sessionMetasRef.current, ...updates }
       setSessionMetas((prev) => ({ ...prev, ...updates }))
       if (Object.keys(errors).length > 0) setSessionErrors((prev) => ({ ...prev, ...errors }))
       if (Object.keys(partials).length > 0) {
@@ -177,26 +224,8 @@ export default function DicomViewer({
     return () => {
       cancelled = true
     }
+    // oxlint 不启用 exhaustive-deps：parseKey 已编码范围集合，asset 随 key 重挂载稳定
   }, [parseKey])
-
-  // ---- 派生：series 分组 / 当前切片 ----
-  const assetById = new Map<string, Asset>()
-  for (const a of dicomAssets) assetById.set(a.id, a)
-  const selectedAsset = assetById.get(selectedAssetId) ?? asset
-  const selectedMeta = sessionMetas[selectedAsset.id] ?? selectedAsset.dicomMeta
-
-  const seriesEntries: DicomSeriesEntry[] = []
-  for (const a of dicomAssets) {
-    const meta = sessionMetas[a.id] ?? a.dicomMeta
-    if (meta !== undefined) seriesEntries.push({ assetId: a.id, meta })
-  }
-  const groups = groupDicomBySeries(seriesEntries)
-  const currentGroup = findDicomSeriesGroup(groups, asset.id)
-  const orderedSlices = currentGroup?.slices ?? []
-  const selectedSliceIndex = Math.max(
-    0,
-    orderedSlices.findIndex((slice) => slice.assetId === selectedAssetId),
-  )
 
   // ---- 预览：解码所选切片并绘制到 Canvas（失败/不支持 → 降级文案） ----
   useEffect(() => {
