@@ -37,6 +37,10 @@
 | R-020 | 流程：批量导入任务卡须含场景矩阵测试 | active | CR-007 |
 | R-021 | 左栏独立"患者分组"面板（一次渲染全部组；切片点击不移动面板） | active | CR-008 |
 | R-022 | 中央切片切换（滑动条等）实时更新左栏高亮（onSelectedSliceChange） | active | CR-008 |
+| R-023 | DICOM 视口四角元数据（中央表格下线；右栏为元数据唯一来源） | active | CR-009 |
+| R-024 | 顶栏工具组 pan/zoom/window/rotate/measure（测量迁移；图片子集） | active | CR-009 |
+| R-025 | 滚轮滚动切片与滑动条双向同步（Ctrl+滚轮缩放） | active | CR-009 |
+| R-026 | 左右侧栏抽屉滑动动画 | active | CR-009 |
 
 ## Requirements
 
