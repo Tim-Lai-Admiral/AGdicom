@@ -1,42 +1,70 @@
 /**
- * 图片并排比较视图（CR-001 T-004 / R-002）。
+ * 图片并排比较视图（CR-001 T-004 / R-002；CR-009 T-003 / R-024 窗格独立变换）。
  *
  * 应用内视图状态（非路由）：由上层在选中两张图片时渲染于工作台中央查看区
  * （CR-003 T-002 布局壳 / T-004 归位）；两张图片等尺寸并排（等分栅格 +
  * object-fit: contain）；“退出比较”按钮与 Esc 键均可退出。
  * objectUrl 缺失或加载失败时显示占位与提示，不影响另一侧。
+ *
+ * 窗格视口变换（CR-009 T-003 / R-024）：比较视图隐藏顶栏工具组（R-024 契约），
+ * 每个窗格经共享 imageViewport 模块独立持有一份变换：默认拖拽平移、滚轮缩放、
+ * 窗格右上按钮（放大/缩小/旋转 90°/重置）；两侧互不影响，切换素材即复位。
  */
 import { useEffect, useRef, useState } from 'react'
 import type { Asset } from '../../domain/types.ts'
+import {
+  ImageViewportControls,
+  imageViewportTransformCss,
+  useImageViewportTransform,
+} from '../viewer/imageViewport.tsx'
 
 // 幽灵占位提示统一措辞（CR-006 T-004，与 AssetGrid/ImageStage 一致）
 const PREVIEW_UNAVAILABLE = '图片预览不可用：会话失效，可重新导入或删除该素材'
 const LOAD_FAILED = '图片加载失败'
 
-/** 单侧图片窗格：等分宽度 + 等高视口；名称置于图下 */
+/** 单侧图片窗格：等分宽度 + 等高视口；名称置于图下；窗格独立视口变换 */
 function ComparePane({ asset }: { asset: Asset }) {
   const [failed, setFailed] = useState(false)
   const objectUrl = asset.objectUrl
+  /** 视口容器（滚轮缩放宿主 + 拖拽解释区；比较窗格无工具组，按 pan 解释拖拽） */
+  const viewportRef = useRef<HTMLDivElement>(null)
+  const viewport = useImageViewportTransform(viewportRef, null)
+  // reset 为 useCallback([]) 稳定引用，可安全作为 effect 依赖
+  const { reset } = viewport
+
   // objectUrl 变化（如重新导入后）时复位加载失败状态
   useEffect(() => {
     setFailed(false)
   }, [objectUrl])
+  // 切换素材即复位该窗格视图（两侧互不影响）
+  useEffect(() => {
+    reset()
+  }, [asset.id, reset])
+
+  const imageReady = objectUrl !== undefined && !failed
 
   return (
     <figure className="compare-pane">
-      <div className="compare-pane__viewport">
-        {objectUrl === undefined || failed ? (
+      <div ref={viewportRef} className="compare-pane__viewport" {...viewport.pointerHandlers}>
+        {imageReady ? (
+          <div
+            className="image-viewport__stage"
+            style={{ transform: imageViewportTransformCss(viewport.transform) }}
+          >
+            <img
+              className="compare-pane__img"
+              src={objectUrl}
+              alt={`素材“${asset.name}”的图片预览`}
+              onError={() => setFailed(true)}
+              draggable={false}
+            />
+          </div>
+        ) : (
           <p className="compare-pane__placeholder">
             {failed ? LOAD_FAILED : PREVIEW_UNAVAILABLE}
           </p>
-        ) : (
-          <img
-            className="compare-pane__img"
-            src={objectUrl}
-            alt={`素材“${asset.name}”的图片预览`}
-            onError={() => setFailed(true)}
-          />
         )}
+        {imageReady ? <ImageViewportControls api={viewport} /> : null}
       </div>
       <figcaption className="compare-pane__name" title={asset.name}>
         {asset.name}
