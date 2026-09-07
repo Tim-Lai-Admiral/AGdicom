@@ -6,6 +6,7 @@ import { AUTO_WINDOW_LEVEL } from './windowLevel.ts'
 import {
   buildDicomFile,
   buildDicomSeriesBuffers,
+  FIXTURE_SERIES_INSTANCE_UID,
   gradientPixels8,
   JPEG_BASELINE_TRANSFER_SYNTAX_UID,
 } from './__fixtures__/buildDicomFile.ts'
@@ -132,7 +133,7 @@ function buildTwoClassifiedSeries() {
 }
 
 describe('DicomViewer: 元数据与 series 聚合', () => {
-  it('parses files, shows the metadata table and the grouped slice count', async () => {
+  it('parses files, shows the viewport corner overlays and the grouped slice count', async () => {
     const { assets, files } = buildThreeSliceSeries()
     const onMetasParsed = vi.fn()
     const onClose = vi.fn()
@@ -144,32 +145,34 @@ describe('DicomViewer: 元数据与 series 聚合', () => {
     )
 
     const dialog = screen.getByRole('dialog', { name: 'DICOM 详情' })
-    expect(within(dialog).getByText('phantom-003.dcm')).toBeTruthy()
+    expect(dialog.querySelector('.dicom-viewer__file')?.textContent).toBe('phantom-003.dcm')
 
-    // 解析完成后：元数据表格（可读中文标签）
+    // 解析完成后：四角覆盖层（CR-009 T-001 / R-023，合成样本字段；打开的是 #3 切片）
     await waitFor(() => {
-      expect(within(dialog).getByText('CT')).toBeTruthy()
+      expect(within(dialog).getByText('CT · 去标识化')).toBeTruthy()
     })
-    expect(within(dialog).getByText('Explicit VR Little Endian（无压缩）')).toBeTruthy()
-    expect(within(dialog).getByText('8 × 8')).toBeTruthy()
-    expect(within(dialog).getByText('0.5 × 0.5 mm')).toBeTruthy()
+    // 左上：去标识化样本 → 姓名/ID“已置空”占位 + 当前切片文件名（第三行占位；
+    // 打开文件名同时显示在头部 .dicom-viewer__file，此处按覆盖层结构精确定位）
+    expect(within(dialog).getAllByText(/已置空/)).toHaveLength(2)
+    const topLeft = dialog.querySelector('.dicom-viewer__canvas-wrap .viewport-overlay')
+    expect(topLeft?.textContent).toContain('phantom-003.dcm')
+    // 右上：series UID 截断（title 留全文）+ Inst #N / M（按 InstanceNumber 排序分组）
+    expect(within(dialog).getByText(`${FIXTURE_SERIES_INSTANCE_UID.slice(0, 20)}…`)).toBeTruthy()
+    expect(within(dialog).getByText('Inst #3 / 3')).toBeTruthy()
+    // 左下：C/W（auto 默认状态值 + “（自动）”标注）+ PixelSpacing
+    expect(within(dialog).getByText('C: +40 W: 400（自动）')).toBeTruthy()
+    expect(within(dialog).getByText('0.5 × 0.5 mm/px')).toBeTruthy()
+    // 右下：Zoom/Rot 预留默认 + 平面默认 AXL；方向标记 R/L/A/P
+    expect(within(dialog).getByText('Zoom: 100%')).toBeTruthy()
+    expect(within(dialog).getByText('AXIAL')).toBeTruthy()
+    const orients = Array.from(dialog.querySelectorAll('.dicom-viewer__orient')).map(
+      (el) => el.textContent,
+    )
+    expect(orients).toEqual(['R', 'L', 'A', 'P'])
 
-    // 去标识化：标记 + 结构化依据 + 患者字段“已置空”
-    expect(within(dialog).getAllByText('已置空')).toHaveLength(2)
-    expect(within(dialog).getByText('是', { selector: '.dicom-viewer__deid-yes' })).toBeTruthy()
-    expect(
-      within(dialog).getByText('PatientIdentityRemoved（0012,0062）标记为 YES'),
-    ).toBeTruthy()
-    expect(
-      within(dialog).getByText(/包含 DeidentificationMethod（0012,0063）字段/),
-    ).toBeTruthy()
-    expect(within(dialog).getByText(/患者字段（姓名 \/ ID）均为空/)).toBeTruthy()
-    expect(
-      within(dialog).getByText(/Synthetic phantom; identity removed/),
-    ).toBeTruthy()
-
-    // series 聚合：按 SeriesInstanceUID 分组统计切片数
-    expect(within(dialog).getByText('3 张（本序列）')).toBeTruthy()
+    // 中央无元数据表格（R-023：元数据唯一来源为右栏 MetadataPanel）
+    expect(within(dialog).queryByText('元数据')).toBeNull()
+    expect(dialog.querySelector('table')).toBeNull()
 
     // 切片滑动条：按 InstanceNumber 排序映射 1..N，初始落在打开的切片（#3）
     const slider = within(dialog).getByLabelText('选择切片') as HTMLInputElement
@@ -200,6 +203,47 @@ describe('DicomViewer: 元数据与 series 聚合', () => {
       expect(meta.modality).toBe('CT')
     }
   })
+
+  it('shows real patient/ID and the transfer syntax label for a non-deidentified sample', async () => {
+    // 默认 fixture：DOE^JOHN / PID-001、无去标识化标记 → 右上展示传输语法可读标签
+    const assets = [makeDicomAsset({ objectUrl: 'blob:c1' })]
+    stubFetchFor({ 'blob:c1': new Uint8Array(buildDicomFile()) })
+    stubCanvasContext()
+
+    render(
+      <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('CT · Explicit VR Little Endian（无压缩）')).toBeTruthy()
+    })
+    expect(screen.getByText('DOE^JOHN')).toBeTruthy()
+    expect(screen.getByText('ID: PID-001')).toBeTruthy()
+    expect(screen.getByText('Inst #1 / 1')).toBeTruthy()
+  })
+
+  it('updates the C/W corner readout in real time when windowLevel changes', async () => {
+    const assets = [makeDicomAsset({ objectUrl: 'blob:cw' })]
+    stubFetchFor({ 'blob:cw': new Uint8Array(buildDicomFile()) })
+    stubCanvasContext()
+    const props = {
+      asset: assets[0],
+      dicomAssets: assets,
+      onMetasParsed: vi.fn(),
+      onClose: vi.fn(),
+    }
+
+    // 默认 auto（min-max）：展示 App 状态值并标注“（自动）”
+    const { rerender } = render(<DicomViewer {...props} windowLevel={AUTO_WINDOW_LEVEL} />)
+    await waitFor(() => {
+      expect(screen.getByText('C: +40 W: 400（自动）')).toBeTruthy()
+    })
+
+    // 手动 W/L（右栏调节后回传 App 状态）：四角实时更新为真实 wc/ww
+    rerender(<DicomViewer {...props} windowLevel={{ auto: false, wc: -600, ww: 1500 }} />)
+    expect(screen.getByText('C: -600 W: 1500')).toBeTruthy()
+    rerender(<DicomViewer {...props} windowLevel={{ auto: false, wc: 60, ww: 160 }} />)
+    expect(screen.getByText('C: +60 W: 160')).toBeTruthy()
+  })
 })
 
 describe('DicomViewer: 解析范围（R-018 / R-019）', () => {
@@ -222,7 +266,8 @@ describe('DicomViewer: 解析范围（R-018 / R-019）', () => {
     for (const meta of Object.values(metas)) {
       expect(meta.sliceCount).toBe(3)
     }
-    expect(await screen.findByText('3 张（本序列）')).toBeTruthy()
+    // 四角 Inst 读数反映分组切片数（打开的是 a1 = #1 / 3）
+    expect(await screen.findByText('Inst #1 / 3')).toBeTruthy()
   })
 
   it('parses the whole aggregated unknown series (missing UID) of the same patient', async () => {
@@ -269,7 +314,7 @@ describe('DicomViewer: 解析范围（R-018 / R-019）', () => {
     for (const meta of Object.values(metas)) {
       expect(meta.sliceCount).toBe(3)
     }
-    expect(await screen.findByText('3 张（本序列）')).toBeTruthy()
+    expect(await screen.findByText('Inst #2 / 3')).toBeTruthy()
     expect((await screen.findByLabelText('选择切片') as HTMLInputElement).value).toBe('2')
     expect(await screen.findByText('切片 2 / 3（按 InstanceNumber 排序）')).toBeTruthy()
   })
@@ -329,7 +374,7 @@ describe('DicomViewer: 切片切换与预览', () => {
     await waitFor(() => {
       expect(screen.getByText('切片 1 / 3（按 InstanceNumber 排序）')).toBeTruthy()
     })
-    expect(screen.getByText('#1')).toBeTruthy()
+    expect(screen.getByText('Inst #1 / 3')).toBeTruthy()
     const calls = putImageData.mock.calls as unknown as Array<[ImageData]>
     const lastImage = calls[calls.length - 1][0]
     expect(lastImage.width).toBe(8)
@@ -358,6 +403,89 @@ describe('DicomViewer: 切片切换与预览', () => {
     fireEvent.change(screen.getByLabelText('选择切片'), { target: { value: '0' } })
     fireEvent.change(screen.getByLabelText('选择切片'), { target: { value: '5' } })
     expect(screen.getByText('切片 3 / 3（按 InstanceNumber 排序）')).toBeTruthy()
+    expect((screen.getByLabelText('选择切片') as HTMLInputElement).value).toBe('3')
+  })
+})
+
+describe('DicomViewer: 视口滚轮与滑条双向同步（R-025）', () => {
+  /** 向视口容器派发滚轮事件（监听器挂在 .dicom-viewer__canvas-wrap 上） */
+  function wheelViewport(deltaY: number, ctrlKey = false): void {
+    const wrap = document.querySelector('.dicom-viewer__canvas-wrap')
+    if (wrap === null) throw new Error('视口容器未渲染')
+    fireEvent.wheel(wrap, { deltaY, ctrlKey })
+  }
+
+  it('moves slices with the wheel (non-Ctrl) and keeps the slider in sync both ways', async () => {
+    const { assets, files } = buildThreeSliceSeries()
+    stubFetchFor(files)
+    stubCanvasContext()
+    const onSelectedSliceChange = vi.fn()
+
+    render(
+      <DicomViewer
+        asset={assets[0]}
+        dicomAssets={assets}
+        onMetasParsed={vi.fn()}
+        onClose={vi.fn()}
+        onSelectedSliceChange={onSelectedSliceChange}
+      />,
+    )
+
+    // 打开的是 #3：滚轮向下（deltaY > 0）→ 已在末片，钳制不溢出
+    await screen.findByText('Inst #3 / 3')
+    const slider = () => screen.getByLabelText('选择切片') as HTMLInputElement
+    wheelViewport(100)
+    expect(screen.getByText('Inst #3 / 3')).toBeTruthy()
+    expect(slider().value).toBe('3')
+
+    // 滚轮向上：#3 → #2 → #1（滑条与切片计数随滚轮同步）
+    wheelViewport(-100)
+    await waitFor(() => {
+      expect(screen.getByText('Inst #2 / 3')).toBeTruthy()
+    })
+    expect(slider().value).toBe('2')
+    wheelViewport(-100)
+    await waitFor(() => {
+      expect(screen.getByText('Inst #1 / 3')).toBeTruthy()
+    })
+    expect(slider().value).toBe('1')
+    expect(screen.getByText('切片 1 / 3（按 InstanceNumber 排序）')).toBeTruthy()
+
+    // 首片再向上滚：边界钳制不溢出
+    wheelViewport(-100)
+    expect(screen.getByText('Inst #1 / 3')).toBeTruthy()
+    expect(slider().value).toBe('1')
+
+    // 滚轮切换经 selectedAssetId 通路上报（左栏高亮跟随，同一 ID 去重）
+    await waitFor(() => {
+      expect(onSelectedSliceChange).toHaveBeenLastCalledWith('d1')
+    })
+
+    // 反向同步：滑条拖到 #3 后，滚轮向上一步回到 #2（滑条 → 滚轮方向一致）
+    fireEvent.change(slider(), { target: { value: '3' } })
+    await waitFor(() => {
+      expect(screen.getByText('Inst #3 / 3')).toBeTruthy()
+    })
+    wheelViewport(-100)
+    await waitFor(() => {
+      expect(screen.getByText('Inst #2 / 3')).toBeTruthy()
+    })
+    expect(slider().value).toBe('2')
+  })
+
+  it('does not change slices on Ctrl+wheel (zoom reserved for T-002 / R-024)', async () => {
+    const { assets, files } = buildThreeSliceSeries()
+    stubFetchFor(files)
+    stubCanvasContext()
+
+    render(
+      <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
+    )
+    await screen.findByText('Inst #3 / 3')
+    // Ctrl/Cmd + 滚轮：缩放为 T-002 工具范畴，当前预留 → 切片不变化
+    wheelViewport(100, true)
+    wheelViewport(-100, true)
+    expect(screen.getByText('Inst #3 / 3')).toBeTruthy()
     expect((screen.getByLabelText('选择切片') as HTMLInputElement).value).toBe('3')
   })
 })
@@ -441,11 +569,10 @@ describe('DicomViewer: 降级路径（不崩溃）', () => {
     render(
       <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
     )
-    // 元数据仍完整展示（压缩只影响像素预览）
+    // 元数据仍经四角覆盖层展示（压缩只影响像素预览；去标识化样本右上展示去标识化标记）
     await waitFor(() => {
-      expect(screen.getByText('JPEG 压缩（仅元数据）')).toBeTruthy()
+      expect(screen.getByText('CT · 去标识化')).toBeTruthy()
     })
-    expect(screen.getByText('CT')).toBeTruthy()
     // 预览区显示降级文案，不崩溃
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toContain('仅元数据')
@@ -455,12 +582,8 @@ describe('DicomViewer: 降级路径（不崩溃）', () => {
 
   it('labels JPEG 2000 transfer syntaxes precisely instead of generic JPEG text', async () => {
     // T-005 Minor ②：1.2.840.10008.1.2.4 家族需区分 JPEG 与 JPEG 2000（.90 无损 / .91）
-    const jpeg2000 = buildDicomFile({
-      transferSyntax: '1.2.840.10008.1.2.4.90',
-      patientName: '',
-      patientID: '',
-      patientIdentityRemoved: 'YES',
-    })
+    // 非去标识化样本（默认患者字段）→ 右上角展示传输语法可读标签
+    const jpeg2000 = buildDicomFile({ transferSyntax: '1.2.840.10008.1.2.4.90' })
     const assets = [
       makeDicomAsset({
         id: 'j2',
@@ -476,7 +599,7 @@ describe('DicomViewer: 降级路径（不崩溃）', () => {
       <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
     )
     await waitFor(() => {
-      expect(screen.getByText('JPEG 2000 无损压缩（仅元数据）')).toBeTruthy()
+      expect(screen.getByText('CT · JPEG 2000 无损压缩（仅元数据）')).toBeTruthy()
     })
   })
 
@@ -528,10 +651,10 @@ describe('DicomViewer: 降级路径（不崩溃）', () => {
     render(
       <DicomViewer asset={assets[0]} dicomAssets={assets} onMetasParsed={vi.fn()} onClose={vi.fn()} />,
     )
-    // 持久化元数据仍展示
-    expect(screen.getByText('CT')).toBeTruthy()
-    expect(screen.getAllByText('已置空')).toHaveLength(2)
-    expect(screen.getByText('1 张（本序列）')).toBeTruthy()
+    // 持久化元数据仍经四角覆盖层展示（去标识化 → 右上展示去标识化标记）
+    expect(screen.getByText('CT · 去标识化')).toBeTruthy()
+    expect(screen.getAllByText(/已置空/)).toHaveLength(2)
+    expect(screen.getByText('Inst #1 / 1')).toBeTruthy()
     // 预览不可用：统一幽灵提示（CR-006 T-004：可重新导入或删除该素材）
     expect(screen.getByRole('alert').textContent).toBe(
       '切片预览不可用：会话失效，可重新导入或删除该素材',

@@ -218,7 +218,8 @@ describe('App: 批量导入场景矩阵（CR-007 T-003 / R-020）', () => {
     fireEvent.click(screen.getByRole('button', { name: '查看“a01.dcm”的 DICOM 详情' }))
     const dialog = screen.getByRole('dialog', { name: 'DICOM 详情' })
     await waitForPatientHead('CHEN^WEI', 'P2', '1 序列 · 10 张')
-    expect(within(dialog).getByText('10 张（本序列）')).toBeTruthy()
+    // CR-009 T-001：四角 Inst 读数反映分组切片数（打开的是 a01 = #1 / 10）
+    expect(within(dialog).getByText('Inst #1 / 10')).toBeTruthy()
     expectFetched(fetchMock, [
       'a01.dcm', 'a02.dcm', 'a03.dcm', 'a04.dcm', 'a05.dcm',
       'a06.dcm', 'a07.dcm', 'a08.dcm', 'a09.dcm', 'a10.dcm',

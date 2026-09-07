@@ -125,7 +125,8 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
     fireEvent.click(screen.getByRole('button', { name: '查看“s1.dcm”的 DICOM 详情' }))
     const dialog = screen.getByRole('dialog', { name: 'DICOM 详情' })
     await waitFor(() => {
-      expect(within(dialog).getByText('CT')).toBeTruthy()
+      // CR-009 T-001：中央视口四角元数据（R-023）——去标识化样本右上为“CT · 去标识化”
+      expect(within(dialog).getByText('CT · 去标识化')).toBeTruthy()
     })
 
     const right = screen.getByRole('complementary', { name: '信息面板' })
