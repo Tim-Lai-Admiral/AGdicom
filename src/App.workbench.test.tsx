@@ -354,3 +354,132 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
     }
   })
 })
+
+describe('App: 素材删除（CR-006 T-001 / R-015）', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+  afterEach(() => {
+    cleanup() // vitest 未启用 globals，RTL 自动清理不生效，需手动卸载
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+    localStorage.clear()
+  })
+
+  it('deletes via the review panel entry with inline confirm, cascades cleanup and allows re-import', async () => {
+    const { container } = render(<App />)
+    dropFiles(container, [makeFile('heart.png', 64, 'image/png')])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
+    })
+
+    // 选中图片：中央预览 + 右栏评审面板；先留评审历史与标签，验证级联清理
+    fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
+    expect(screen.getByText('heart.png', { selector: '.image-stage__name' })).toBeTruthy()
+    const right = screen.getByRole('complementary', { name: '信息面板' })
+    fireEvent.click(within(right).getByRole('radio', { name: '通过' }))
+    fireEvent.click(within(right).getByRole('button', { name: '保存评审' }))
+    fireEvent.change(within(right).getByLabelText('新建标签名'), { target: { value: '心脏' } })
+    fireEvent.click(within(right).getByRole('button', { name: '添加标签' }))
+    expect(Object.keys(loadState().state.reviews)).toHaveLength(1)
+
+    // 取消：不删除（二次确认语义）
+    fireEvent.click(within(right).getByRole('button', { name: '删除素材' }))
+    fireEvent.click(within(right).getByRole('button', { name: '取消' }))
+    expect(within(right).getByRole('button', { name: '删除素材' })).toBeTruthy()
+    expect(screen.getByText('heart.png', { selector: '.image-stage__name' })).toBeTruthy()
+
+    // 确认删除：中央回导入视图、列表清空、右栏回到空提示
+    fireEvent.click(within(right).getByRole('button', { name: '删除素材' }))
+    fireEvent.click(within(right).getByRole('button', { name: '确认删除' }))
+    expect(screen.getByText('将图片 / DICOM / 3D 模型文件拖到此处')).toBeTruthy()
+    expect(screen.getByText('素材库（0）')).toBeTruthy()
+    const emptiedRight = screen.getByRole('complementary', { name: '信息面板' })
+    expect(within(emptiedRight).getByText(/在左栏选择素材/)).toBeTruthy()
+
+    // 级联清理无孤儿：资产/评审历史清空；标签注册表保留条目、计数归零
+    const stored = loadState().state
+    expect(Object.keys(stored.assets)).toHaveLength(0)
+    expect(Object.keys(stored.reviews)).toHaveLength(0)
+    expect(stored.tags['心脏']).toEqual({ name: '心脏', count: 0 })
+
+    // 删除后重导入同一文件：正常新增（不报重复、无幽灵残留）
+    dropFiles(container, [makeFile('heart.png', 64, 'image/png')])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
+    })
+    expect(screen.getByText('素材库（1）')).toBeTruthy()
+  })
+
+  it('deletes via the inline row button on the selected row', async () => {
+    const { container } = render(<App />)
+    dropFiles(container, [
+      makeFile('heart.png', 64, 'image/png'),
+      makeFile('lung.png', 32, 'image/png'),
+    ])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 2 个素材')).toBeTruthy()
+    })
+
+    // 未选中行不显示删除入口；点击行（选中行）后入口出现
+    expect(screen.queryByRole('button', { name: '删除素材 heart.png' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
+    fireEvent.click(screen.getByRole('button', { name: '删除素材 heart.png' }))
+    fireEvent.click(screen.getByRole('button', { name: '确认删除“heart.png”' }))
+
+    // 列表同步移除；其余行不受影响；持久化同步
+    expect(screen.getByText('素材库（1）')).toBeTruthy()
+    expect(screen.queryByText('heart.png', { selector: '.asset-row__name' })).toBeNull()
+    expect(screen.getByRole('button', { name: '选择“lung.png”加入比较' })).toBeTruthy()
+    expect(Object.keys(loadState().state.assets)).toHaveLength(1)
+  })
+
+  it('deleting the active DICOM asset closes the viewer and clears the expanded series group', async () => {
+    // 2 切片同 series：患者分组 → series → 切片层级由剩余素材即时重建
+    const buffers = buildDicomSeriesBuffers(2, {
+      patientName: '',
+      patientID: '',
+      patientIdentityRemoved: 'YES',
+      pixelData: gradientPixels8(8, 8, 30, 200),
+    })
+    let fetchCall = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        const bytes = new Uint8Array(buffers[Math.min(fetchCall, buffers.length - 1)])
+        fetchCall += 1
+        return {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => bytes.slice().buffer,
+        }
+      }),
+    )
+    // jsdom 无 2D Canvas：走查看器“环境不支持”降级分支（不崩溃）
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+
+    const { container } = render(<App />)
+    dropFiles(container, [
+      new File([new Uint8Array(buffers[0])], 's1.dcm', { type: 'application/dicom' }),
+      new File([new Uint8Array(buffers[1])], 's2.dcm', { type: 'application/dicom' }),
+    ])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 2 个素材')).toBeTruthy()
+    })
+
+    // 打开查看器（选中 → 患者分组自动展开）并等待 series 分组建成（2 切片）
+    fireEvent.click(screen.getByRole('button', { name: '查看“s1.dcm”的 DICOM 详情' }))
+    expect(screen.getByRole('dialog', { name: 'DICOM 详情' })).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /^查看切片/ })).toHaveLength(2)
+    })
+
+    // 行内删除当前 DICOM 素材：中央查看器关闭、展开的 series 分组被清空、列表同步
+    fireEvent.click(screen.getByRole('button', { name: '删除素材 s1.dcm' }))
+    fireEvent.click(screen.getByRole('button', { name: '确认删除“s1.dcm”' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByText('素材库（1）')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^查看切片/ })).toBeNull()
+    expect(Object.keys(loadState().state.assets)).toHaveLength(1)
+  })
+})

@@ -175,3 +175,33 @@ export function removeAssetTag(
       : { ...state.tags, [tagName]: { ...existing, count: countTagUsage(assets, tagName) } }
   return { assets, tags, reviews: state.reviews }
 }
+
+/**
+ * 删除素材（CR-006 T-001 / R-015）：级联清理——
+ * - 移除资产记录本体（DICOM 元数据挂在资产上，随资产一并消失）；
+ * - 移除其评审历史（reviews 无孤儿，不留幽灵记录）；
+ * - 其使用过的标签按实际使用情况重算计数（与 removeAssetTag 同一约定：
+ *   注册表保留条目、计数可为 0 便于复用）。
+ * blob 删除属 IndexedDB 层（T-003 / R-016），不在本函数职责内。
+ * 素材不存在时为 no-op（返回原状态引用）。
+ */
+export function removeAsset(state: AppState, assetId: string): AppState {
+  const asset: Asset | undefined = state.assets[assetId]
+  if (asset === undefined) return state
+  const assets: Record<string, Asset> = { ...state.assets }
+  delete assets[assetId]
+  const reviews: Record<string, ReviewHistory> = { ...state.reviews }
+  delete reviews[assetId]
+  let tags = state.tags
+  let tagsCopied = false
+  for (const tagName of asset.tags) {
+    const existing: Tag | undefined = tags[tagName]
+    if (existing === undefined) continue // 资产上的陈旧标签不在注册表：无条目可重算
+    if (!tagsCopied) {
+      tags = { ...tags }
+      tagsCopied = true
+    }
+    tags[tagName] = { ...existing, count: countTagUsage(assets, tagName) }
+  }
+  return { assets, tags, reviews }
+}

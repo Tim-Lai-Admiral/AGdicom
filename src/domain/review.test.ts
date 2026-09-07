@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Asset, AppState, ReviewHistory, ReviewRecord, Tag } from './types.ts'
-import { addAssetTag, applyReview, removeAssetTag, setAssetStatus, updateAssetName, updateAssetNote } from './review.ts'
+import { addAssetTag, applyReview, removeAsset, removeAssetTag, setAssetStatus, updateAssetName, updateAssetNote } from './review.ts'
 
 const NOW = '2026-09-03T08:00:00.000Z'
 
@@ -128,6 +128,46 @@ describe('removeAssetTag', () => {
   })
 })
 
+describe('removeAsset', () => {
+  it('deletes the asset, its review history and recounts shared tags (no orphans)', () => {
+    const state = makeState(
+      [
+        makeAsset({ id: 'a1', tags: ['共享', '独占'], dicomMeta: { sliceCount: 1, deidentified: true } }),
+        makeAsset({ id: 'a2', name: 'scan.dcm', kind: 'dicom', tags: ['共享'] }),
+      ],
+      { 共享: { name: '共享', count: 2 }, 独占: { name: '独占', count: 1 } },
+      {
+        a1: [{ status: 'passed', comment: '初审', createdAt: NOW }],
+        a2: [{ status: 'pending', comment: '', createdAt: NOW }],
+      },
+    )
+    const next = removeAsset(state, 'a1')
+    // 资产本体（含挂在资产上的 DICOM 元数据）消失
+    expect(next.assets['a1']).toBeUndefined()
+    // 评审历史无孤儿：a1 的历史被清除，a2 的历史保留
+    expect(next.reviews['a1']).toBeUndefined()
+    expect(next.reviews['a2']).toEqual(state.reviews['a2'])
+    // 标签计数按剩余素材重算：共享 → 1；独占 → 0（注册表保留条目便于复用）
+    expect(next.tags['共享']).toEqual({ name: '共享', count: 1 })
+    expect(next.tags['独占']).toEqual({ name: '独占', count: 0 })
+    // 其余素材不受影响
+    expect(next.assets['a2']).toEqual(state.assets['a2'])
+  })
+
+  it('leaves the registry untouched for tags the deleted asset no longer registers (stale tag)', () => {
+    const state = makeState([makeAsset({ tags: ['陈旧标签'] })])
+    const next = removeAsset(state, 'asset-1')
+    expect(next.assets).toEqual({})
+    expect(next.tags).toBe(state.tags) // 注册表本无该条目：不新增、不改动
+    expect(next.reviews).toEqual({})
+  })
+
+  it('is a no-op for a missing asset', () => {
+    const state = makeState([makeAsset()])
+    expect(removeAsset(state, 'missing')).toBe(state)
+  })
+})
+
 describe('updateAssetNote', () => {
   it('updates the note and updatedAt without appending a review record', () => {
     const state = makeState(
@@ -182,6 +222,7 @@ describe('purity', () => {
     removeAssetTag(state, 'a2', '已有', NOW)
     updateAssetNote(state, 'a2', '新备注', NOW)
     updateAssetName(state, 'a2', '新名称', NOW)
+    removeAsset(state, 'a2')
     expect(state).toEqual(snapshot)
   })
 })
