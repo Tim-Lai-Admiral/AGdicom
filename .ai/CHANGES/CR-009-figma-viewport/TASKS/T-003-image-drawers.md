@@ -77,7 +77,7 @@ branch: feature/CR-009-T-003-image-drawers
   重解释/滚轮缩放/Esc 复位/切素材复位/占位无控件）；CompareView 窗格独立变换 3 例（独立
   控件与读数/拖拽互不影响/各自重置）；App.workbench 抽屉开合断言更新为
   “保留挂载 + is-closed + aria-hidden/inert”（原“从 DOM 移除”断言随 R-026 契约更新）。
-- **commit**：见分支（feat: CR-009 T-003 ...）；PR：创建后回填链接。
+- **commit**：`c776705`（feat）/ `6d7669d`（docs）；PR：https://github.com/Tim-Lai-Admiral/AGdicom/pull/43（base master，合并顺序 #41→#42→#43）
 - **已知限制 / 需 Reviewer 关注**：
   - 抽屉收起改为“保留挂载”（R-026 动画要求），收起态内容仍在 DOM（aria-hidden + inert +
     overflow hidden 裁剪）；右栏评审表单草稿在收起再展开后保留（行为微变，属预期）。
