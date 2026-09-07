@@ -19,6 +19,10 @@
  *
  * 患者组间排序（R-012 组间码点升序）：面板渲染全部患者组头后可直接断言 UI 排序，
  * 并经持久化元数据 + groupDicomByPatient（产品同一实现）在真实导入数据上双重断言（④）。
+ *
+ * 面板交互与高亮联动（CR-008 T-003）：点击分组切片 → 面板不搬家（R-021：渲染位置 /
+ * 组头 / 系列 / 展开状态不变，仅中央与高亮切换）；滑动条切换 → 高亮跟随（R-022 同场景
+ * 断言；滑动条/点击/关闭完整三路径由 App.workbench.test.tsx 集成用例覆盖，不重复）。
  */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -531,5 +535,99 @@ describe('App: 场景矩阵——空批次与失败文件（CR-007 T-003 / R-020
     fireEvent.click(within(dialog).getByRole('button', { name: '关闭' }))
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.getByText('素材库（5）')).toBeTruthy()
+  })
+})
+
+describe('App: 场景矩阵——面板交互与高亮联动（CR-008 T-003 / R-021·R-022）', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    stubObjectUrlCreation()
+    generateMock.mockResolvedValue(null) // 默认降级：占位保持（高亮断言不依赖缩略图像素）
+    cacheMock.mockReturnValue(undefined)
+  })
+  afterEach(() => {
+    cleanup() // vitest 未启用 globals，RTL 自动清理不生效，需手动卸载
+    vi.restoreAllMocks()
+    vi.resetAllMocks()
+    vi.unstubAllGlobals()
+    if (originalCreateObjectURL === undefined) {
+      delete (URL as { createObjectURL?: unknown }).createObjectURL
+    } else {
+      Object.defineProperty(URL, 'createObjectURL', originalCreateObjectURL)
+    }
+    localStorage.clear()
+  })
+
+  it('点击分组切片 → 面板不搬家（R-021）；滑动条切换 → 高亮跟随（R-022）', async () => {
+    const buffers = buildDicomSeriesBuffers(4, {
+      patientName: 'CHEN^WEI',
+      patientID: 'P2',
+      pixelData: gradientPixels8(8, 8, 30, 200),
+    })
+    const bytesByName: Record<string, Uint8Array<ArrayBuffer>> = {}
+    const files = buffers.map((buffer, index) => {
+      const name = `m${String(index + 1).padStart(2, '0')}.dcm`
+      bytesByName[name] = new Uint8Array(buffer)
+      return dcmFile(name, bytesByName[name])
+    })
+    stubFetchFor(bytesByName)
+    stubCanvasUnavailable()
+
+    const { container } = render(<App />)
+    dropFiles(container, files)
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 4 个素材')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '查看“m01.dcm”的 DICOM 详情' }))
+    await waitForSliceThumbs(4)
+    expect(screen.getByRole('button', { name: '查看切片 #1' }).className).toContain('is-active')
+
+    // 面板渲染位置基准：.dicom-panel 在左栏直接子节点中的下标
+    const leftColumn = screen.getByRole('complementary', { name: '素材列表' })
+    const panelPosition = (): number =>
+      Array.from(leftColumn.children).indexOf(leftColumn.querySelector('.dicom-panel') as Element)
+    const positionBefore = panelPosition()
+
+    // 点击分组面板切片 #2：中央切换到该切片、高亮跟随，面板渲染位置/组头/系列/展开状态不变（R-021）
+    fireEvent.click(screen.getByRole('button', { name: '查看切片 #2' }))
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole('dialog', { name: 'DICOM 详情' })).getByText(
+          '切片 2 / 4（按 InstanceNumber 排序）',
+        ),
+      ).toBeTruthy()
+    })
+    expect(panelPosition()).toBe(positionBefore)
+    expect(groupHeadNames()).toEqual(['CHEN^WEI'])
+    expect(groupHeadByName('CHEN^WEI').getAttribute('aria-expanded')).toBe('true')
+    expect(seriesUidTexts()).toEqual([FIXTURE_SERIES_INSTANCE_UID])
+    expect(
+      document.querySelector('.dicom-panel__series-toggle')?.getAttribute('aria-expanded'),
+    ).toBe('true')
+    const thumbsAfterClick = await waitForSliceThumbs(4)
+    expect(thumbsAfterClick.map((thumb) => thumb.getAttribute('aria-label'))).toEqual([
+      '查看切片 #1', '查看切片 #2', '查看切片 #3', '查看切片 #4',
+    ])
+    expect(screen.getByRole('button', { name: '查看切片 #2' }).className).toContain('is-active')
+    expect(screen.getByRole('button', { name: '查看切片 #2' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    )
+    expect(screen.getByRole('button', { name: '查看切片 #1' }).className).not.toContain('is-active')
+
+    // 滑动条切到 #4：左栏高亮实时跟随（R-022，矩阵同场景断言）
+    fireEvent.change(
+      within(screen.getByRole('dialog', { name: 'DICOM 详情' })).getByLabelText('选择切片'),
+      { target: { value: '4' } },
+    )
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole('dialog', { name: 'DICOM 详情' })).getByText(
+          '切片 4 / 4（按 InstanceNumber 排序）',
+        ),
+      ).toBeTruthy()
+    })
+    expect(screen.getByRole('button', { name: '查看切片 #4' }).className).toContain('is-active')
+    expect(screen.getByRole('button', { name: '查看切片 #2' }).className).not.toContain('is-active')
   })
 })
