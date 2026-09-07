@@ -1,5 +1,5 @@
 /**
- * 左栏切片真实缩略图单测（CR-007 T-002 / R-017）。
+ * 左栏患者分组面板切片真实缩略图单测（CR-007 T-002 / R-017；CR-008 T-001 面板化移植）。
  *
  * 覆盖：series 展开后对已解析（dicomMeta + 会话 objectUrl）切片自动生成并切换为
  * 真实像素；会话缓存命中直接显示像素（不再生成）；生成失败/压缩降级保持占位
@@ -11,7 +11,7 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Asset, DicomMeta } from '../../domain/types.ts'
-import DicomSeriesExpansion from './DicomSeriesExpansion.tsx'
+import PatientGroupPanel from './PatientGroupPanel.tsx'
 import { generateSliceThumb, getCachedSliceThumb } from '../viewer/dicom/sliceThumb.ts'
 
 vi.mock('../viewer/dicom/sliceThumb.ts', () => ({
@@ -65,31 +65,34 @@ function parsedSeriesAssets(): Asset[] {
   )
 }
 
-function renderExpansion(assets: Asset[], activeSliceAssetId: string | null = null) {
+/** CHEN^WEI/P2 患者组键（R-012 键语义：`姓名\0ID`） */
+const CHEN_KEY = 'CHEN^WEI\u0000P2'
+
+function renderPanel(assets: Asset[], activeSliceAssetId: string | null = null) {
   return render(
-    <DicomSeriesExpansion
-      asset={assets[0] as Asset}
+    <PatientGroupPanel
       dicomAssets={assets}
-      open
       activeSliceAssetId={activeSliceAssetId}
-      onToggle={() => {}}
+      openGroupKeys={new Set([CHEN_KEY])}
+      onToggleGroup={() => {}}
+      onOpenGroup={() => {}}
       onOpenSlice={() => {}}
     />,
   )
 }
 
-describe('DicomSeriesExpansion 切片真实缩略图（R-017）', () => {
+describe('PatientGroupPanel 切片真实缩略图（R-017）', () => {
   it('series 展开后自动生成已解析切片的首帧并切换为真实像素', async () => {
     cacheMock.mockReturnValue(undefined)
     generateMock.mockImplementation(async ({ id }) => `data:image/png;base64,${id}`)
-    const { container } = renderExpansion(parsedSeriesAssets(), 'a-1')
+    const { container } = renderPanel(parsedSeriesAssets(), 'a-1')
 
     // 当前素材所在 series 自动展开：两张切片均触发生成（含会话 objectUrl）
     await waitFor(() => {
-      expect(container.querySelectorAll('.dicom-expand__thumb-img')).toHaveLength(2)
+      expect(container.querySelectorAll('.dicom-panel__thumb-img')).toHaveLength(2)
     })
     expect(screen.getByRole('button', { name: '查看切片 #1' }).querySelector('img')).not.toBeNull()
-    const img = container.querySelector('.dicom-expand__thumb-img') as HTMLImageElement
+    const img = container.querySelector('.dicom-panel__thumb-img') as HTMLImageElement
     expect(img.getAttribute('src')).toBe('data:image/png;base64,a-1')
     expect(generateMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'a-1', objectUrl: 'blob:a-1' }),
@@ -101,13 +104,13 @@ describe('DicomSeriesExpansion 切片真实缩略图（R-017）', () => {
 
   it('会话缓存已有时直接显示像素，不再触发生成', async () => {
     cacheMock.mockImplementation((id) => `data:image/png;base64,cache-${id}`)
-    const { container } = renderExpansion(parsedSeriesAssets(), 'a-1')
+    const { container } = renderPanel(parsedSeriesAssets(), 'a-1')
 
     await waitFor(() => {
-      expect(container.querySelectorAll('.dicom-expand__thumb-img')).toHaveLength(2)
+      expect(container.querySelectorAll('.dicom-panel__thumb-img')).toHaveLength(2)
     })
     expect(
-      (container.querySelector('.dicom-expand__thumb-img') as HTMLImageElement).getAttribute('src'),
+      (container.querySelector('.dicom-panel__thumb-img') as HTMLImageElement).getAttribute('src'),
     ).toBe('data:image/png;base64,cache-a-1')
     expect(generateMock).not.toHaveBeenCalled()
   })
@@ -117,22 +120,22 @@ describe('DicomSeriesExpansion 切片真实缩略图（R-017）', () => {
     generateMock.mockImplementation(
       () => new Promise<string | null>((resolve) => { resolvers.push(resolve) }),
     )
-    const { container } = renderExpansion(parsedSeriesAssets(), 'a-1')
+    const { container } = renderPanel(parsedSeriesAssets(), 'a-1')
 
     // 生成未完成：显示占位 SVG（非像素）
     await waitFor(() => {
-      expect(container.querySelector('.dicom-expand__thumb svg')).not.toBeNull()
+      expect(container.querySelector('.dicom-panel__thumb svg')).not.toBeNull()
     })
-    expect(container.querySelector('.dicom-expand__thumb-img')).toBeNull()
+    expect(container.querySelector('.dicom-panel__thumb-img')).toBeNull()
     expect(generateMock).toHaveBeenCalled()
 
     await act(async () => {
       for (const resolve of resolvers) resolve('data:image/png;base64,late')
     })
     await waitFor(() => {
-      expect(container.querySelector('.dicom-expand__thumb-img')).not.toBeNull()
+      expect(container.querySelector('.dicom-panel__thumb-img')).not.toBeNull()
     })
-    expect(container.querySelector('.dicom-expand__thumb svg')).toBeNull()
+    expect(container.querySelector('.dicom-panel__thumb svg')).toBeNull()
   })
 
   it('生成失败（压缩/解码失败 → null）保持占位 SVG，不崩溃', async () => {
@@ -140,16 +143,16 @@ describe('DicomSeriesExpansion 切片真实缩略图（R-017）', () => {
     generateMock.mockImplementation(
       () => new Promise<string | null>((resolve) => { resolvers.push(resolve) }),
     )
-    const { container } = renderExpansion(parsedSeriesAssets(), 'a-1')
+    const { container } = renderPanel(parsedSeriesAssets(), 'a-1')
     await waitFor(() => {
-      expect(container.querySelector('.dicom-expand__thumb svg')).not.toBeNull()
+      expect(container.querySelector('.dicom-panel__thumb svg')).not.toBeNull()
     })
     await act(async () => {
       for (const resolve of resolvers) resolve(null)
     })
     // 仍为占位，无像素 img，组件不崩溃
-    expect(container.querySelector('.dicom-expand__thumb-img')).toBeNull()
-    expect(container.querySelector('.dicom-expand__thumb svg')).not.toBeNull()
+    expect(container.querySelector('.dicom-panel__thumb-img')).toBeNull()
+    expect(container.querySelector('.dicom-panel__thumb svg')).not.toBeNull()
     expect(screen.getByRole('button', { name: '查看切片 #2' })).toBeTruthy()
   })
 
@@ -157,10 +160,10 @@ describe('DicomSeriesExpansion 切片真实缩略图（R-017）', () => {
     const assets = [
       // 已解析但刷新后无 objectUrl：不生成
       asset('a-nourl', { patientName: 'CHEN^WEI', patientID: 'P2', instanceNumber: 1 }),
-      // 未解析（无 dicomMeta）：不进入患者分组 → 整体占位提示
+      // 未解析（无 dicomMeta）：不进入患者分组 → 不影响分组展示
       asset('bare', { patientName: 'CHEN^WEI', patientID: 'P2' }, { objectUrl: 'blob:bare', dicomMeta: undefined }),
     ]
-    renderExpansion(assets, 'a-nourl')
+    renderPanel(assets, 'a-nourl')
     expect(generateMock).not.toHaveBeenCalled()
     // 无会话字节的切片不生成，保持占位 SVG；未解析素材不影响分组展示
     expect(screen.getByText('CHEN^WEI')).toBeTruthy()

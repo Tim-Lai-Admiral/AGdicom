@@ -39,8 +39,9 @@ export interface AssetGridProps {
   /** 点击 model 行主体：打开 3D 模型查看器（T-006）；未提供时 model 行不可交互 */
   onOpenModel?: (assetId: string) => void
   /**
-   * 行附加内容插槽（CR-003 T-002 工作台布局）：渲染在行主体之后
-   * （如左栏 DICOM series/切片展开区）；未提供时不渲染。
+   * 行附加内容插槽（CR-003 T-002 工作台布局）：渲染在行主体之后。
+   * CR-008 T-001 起患者分组移至左栏独立面板（R-021），App 不再传入；
+   * 可选 props 保留向后兼容，未提供时不渲染。
    */
   renderExtras?: (asset: Asset) => ReactNode
   /**
