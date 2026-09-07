@@ -70,6 +70,7 @@ Allowed changes:
 
 - [ ] Unit: <!-- command or scenario -->
 - [ ] Integration: <!-- command or scenario -->
+- [ ] Scenario matrix（场景矩阵，R-020）: <!-- 若涉及批量导入/多文件数据流（导入/分组/series/缩略图/批量解析）必填：导入组合矩阵（同系列多文件 / 跨系列 / 无 UID / 混合患者 / 空批次与失败文件）+ 左栏患者组/系列/切片层级断言 + 浏览器手动清单 -->
 - [ ] Manual/E2E: <!-- user-visible verification -->
 
 ## Definition of done
