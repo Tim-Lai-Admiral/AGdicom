@@ -1,6 +1,6 @@
 # AI_USAGE.md — AI 参与说明
 
-> 本文档说明"素材评审工作台"中 AI 参与的环节、当前 Mock 模式的实现方式，以及用户如何验证、修改或拒绝 AI 建议（对应 R-006）。
+> 本文档说明"素材评审工作台"中 AI 参与的环节、默认 Mock 模式与可选真实 API 模式的实现方式，以及用户如何验证、修改或拒绝 AI 建议（对应 R-006、R-027、R-028）。
 
 ## 1. AI 参与环节
 
@@ -16,9 +16,9 @@ AI 仅参与一个环节：**评审面板中的"AI 建议"区**（点击素材�
 
 AI **不参与**评审结论判定：通过/驳回始终由用户决定；AI 也绝不自动改名、不自动加标签，所有采纳都必须由用户点击按钮触发。
 
-## 2. Mock 模式说明（当前状态）
+## 2. Mock 模式说明（默认模式）
 
-**当前所有建议均为 Mock 生成**，界面"AI 建议"标题旁常驻"Mock 生成"标注：
+**未启用远程 API 时，所有建议均为 Mock 生成**，界面"AI 建议"标题旁常驻"Mock 生成"标注：
 
 - 建议由**本地确定性规则**计算产生（`src/features/ai/mockProvider.ts`），**无网络调用、无 API Key、无真实 AI 服务**；
 - **确定性**：同一素材（相同元数据）重复生成，结果完全一致；可点击"重新生成"自行验证；
@@ -34,15 +34,52 @@ AI **不参与**评审结论判定：通过/驳回始终由用户决定；AI 也
 - **修改**：采纳后可在评审面板继续手动调整——名称可通过"采纳命名"后再行修改，标签可随时移除，备注独立保存；建议本身不会被强制写入；
 - **拒绝**：点击"忽略建议"即不产生任何变更（无副作用），可稍后"重新查看建议"；不点击任何采纳按钮、直接关闭面板，同样不会产生任何变更。
 
-## 4. 未来接入真实 AI 的接口边界
+## 4. 真实 API 模式（CR-012 T-002 / R-028，可选）
 
-预留了 `AIProvider` 接口（`src/features/ai/types.ts`），当前仅有一个实现 `mockProvider`：
+### 4.1 接入方式
+
+打开顶栏「设置」弹窗，填写：
+
+| 字段 | 说明 |
+|---|---|
+| API Base URL | 服务地址，如 `https://api.example.com`（请求打到 `{baseURL}/suggest`） |
+| API Key | 鉴权密钥，仅存本机（见 4.4 安全提示） |
+| 启用 | 勾选后生效（默认关闭：关闭时一律使用本地 Mock） |
+| 失败回退 Mock | 远程调用失败时自动改用本地 Mock 规则（默认开启） |
+
+三个条件（启用 + Base URL + API Key）齐备才会发起远程调用；配置不完整时界面会提示仍使用 Mock。
+
+### 4.2 请求契约
+
+- 请求：`POST {baseURL}/suggest`，头 `Authorization: Bearer <API Key>`、`Content-Type: application/json`；
+- 请求体仅含素材描述信息：`{ name, kind, dicomMeta?, file: { fileName, fileSize, fileType } }`——**不含文件二进制内容与像素数据**；
+- 期望响应：`{ name?, tags?, summary? }`（字段均可选；`name` 为 null 或缺失表示无法给出命名建议，非法标签会被过滤、去重）；
+- 超时 10 秒（AbortController 中止）。
+
+服务端实现只需满足上述契约即可接入；实现位于 `src/features/ai/remoteProvider.ts`。
+
+### 4.3 失败回退与来源明示
+
+- **回退规则**：远程调用失败（非 2xx、网络错误、超时、响应解析失败）且"失败回退 Mock"开启时，本次建议自动改由本地 Mock 规则生成；
+- **来源明示**：徽标始终反映本次建议的真实来源——远程成功为「真实 API」，Mock（含回退）为「Mock 生成」；回退发生时另有提示文案说明"远程 AI 服务调用失败，已回退为本地 Mock 规则生成"；
+- **不悄悄换源**：关闭"失败回退 Mock"后，远程失败直接显示"暂无建议：生成失败"，不会静默改用 Mock；
+- **加载态**：等待远程响应期间显示"正在生成 AI 建议…"；可点击"重新生成"重试。
+
+### 4.4 密钥与隐私安全提示
+
+- API Key **仅保存在本机浏览器** localStorage（独立 key `ag-review-workbench:settings`），随"导出 JSON"备份素材时**绝不包含设置与密钥**；
+- 请勿将 API Key 提交到代码仓库、截图或与他人共享；泄露后请在服务方及时吊销；
+- 远程请求只发送素材名称、类型与元数据（如 DICOM 的 Modality/序列 UID/切片数），不含文件二进制；对敏感素材接入前请确认服务端的合规要求。
+
+## 5. 提供方接口边界
+
+预留了 `AIProvider` 接口（`src/features/ai/types.ts`），当前有两个实现：`mockProvider`（本地确定性规则）与 `createRemoteProvider`（远程服务，按设置创建）：
 
 ```ts
 interface AIProvider {
-  readonly id: string    // 提供方标识（如 'mock'）
+  readonly id: string    // 提供方标识（'mock' / 'remote'，界面按此明示来源）
   readonly label: string // 展示名（界面用于明示建议来源）
-  suggest(asset: Asset): AiSuggestion
+  suggest(asset: Asset): AiSuggestion | Promise<AiSuggestion> // 远程实现为异步
 }
 
 interface AiSuggestion {
@@ -52,8 +89,13 @@ interface AiSuggestion {
 }
 ```
 
-接入真实服务时的边界约定：
+接入新提供方时的边界约定：
 
-- 新实现（如 `remoteProvider`）实现同一接口，在面板注入点（`AiPanel` 的 `provider` prop，默认 `mockProvider`）替换即可，面板与上层逻辑无需改动；
-- `suggest` 应保持纯计算/可等待的确定性语义，输入为 `Asset`（含 DICOM 元数据），输出为 `AiSuggestion`；异常由面板统一降级为"暂无建议"（当前已具备）；
-- 无论接入何种提供方，**界面必须明示建议来源**（替换 `label` 与"Mock 生成"标注），且**采纳/拒绝交互不变**：不自动改名、不自动加标签，所有写入仍由用户点击触发。
+- 新实现（如 `remoteProvider`）实现同一接口，在面板注入点（`AiPanel` 的
+  `provider` / `fallbackProvider` prop；上层 `selectAiProvider` 按设置选择）替换即可，
+  面板与上层逻辑无需改动；远程实现为异步（返回 Promise），面板呈现加载态；
+- Mock 实现应保持纯计算/确定性的同步语义，输入为 `Asset`（含 DICOM 元数据），
+  输出为 `AiSuggestion`；远程实现的异常由面板按回退设置降级（未提供兜底时显示"暂无建议"）；
+- 无论接入何种提供方，**界面必须明示建议来源**（按 `id` 映射「Mock 生成」/「真实 API」，
+  未知实现展示 `label`），且**采纳/拒绝交互不变**：不自动改名、不自动加标签，
+  所有写入仍由用户点击触发。

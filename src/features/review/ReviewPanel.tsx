@@ -9,7 +9,9 @@
  * - 标签：当前标签可移除；输入框可新建自建标签（由领域层自动并入全局标签库）；
  *   全局标签库（注册表 ∪ 实际使用）一键复用；
  * - 备注：独立保存（不追加评审历史）；
- * - AI 建议：内嵌 AiPanel（CR-002 T-008 / R-006，Mock 生成，采纳命名/标签或忽略）；
+ * - AI 建议：内嵌 AiPanel（CR-002 T-008 / R-006，采纳命名/标签或忽略；
+ *   CR-012 T-002 / R-028：provider 由上层按设置注入——远程/本地 Mock、
+ *   失败回退与来源明示（真实 API / Mock 生成）由 AiPanel 呈现）；
  * - 评审历史：ReviewHistory 只读列表（最新在前）；
  * - 删除素材：面板末尾“危险区”入口 + 内联二次确认（CR-006 T-001 / R-015）；
  * - 合规脚注：面板末尾绿点 + 合规文案（DICOM 按 dicomMeta.deidentified 分级，CR-010 T-001）。
@@ -24,6 +26,7 @@
 import { useEffect, useState } from 'react'
 import type { Asset, AssetStatus, ReviewHistory as ReviewHistoryData } from '../../domain/types.ts'
 import { ASSET_KIND_LABELS, ASSET_STATUS_LABELS } from '../../domain/types.ts'
+import type { AIProvider } from '../ai/types.ts'
 import AiPanel from '../ai/AiPanel.tsx'
 import StatusDot from '../library/StatusDot.tsx'
 import ReviewHistory from './ReviewHistory.tsx'
@@ -51,6 +54,13 @@ export interface ReviewPanelProps {
   onSaveNote: (note: string) => void
   /** 采纳 AI 命名建议：重命名素材（持久化由上层完成；缺省时命名建议仅展示） */
   onAcceptAiName?: (name: string) => void
+  /**
+   * AI 建议提供方（CR-012 T-002 / R-028；缺省 = 本地 Mock provider）。
+   * 上层按设置注入：enabled && baseURL && apiKey → 远程 provider，否则 Mock。
+   */
+  aiProvider?: AIProvider
+  /** 远程建议失败时的兜底提供方（设置开启"失败回退 Mock"时为 mockProvider；回退在面板明示） */
+  aiFallbackProvider?: AIProvider
   /** 删除素材（CR-006 T-001 / R-015，二次确认由面板内联确认态完成，
    *  级联清理与持久化由上层负责）；缺省时不渲染删除入口（既有调用方不受影响） */
   onDeleteAsset?: () => void
@@ -65,6 +75,8 @@ export default function ReviewPanel({
   onSubmitReview,
   onSaveNote,
   onAcceptAiName,
+  aiProvider,
+  aiFallbackProvider,
   onDeleteAsset,
 }: ReviewPanelProps) {
   const [draftStatus, setDraftStatus] = useState<AssetStatus>(asset.status)
@@ -301,7 +313,13 @@ export default function ReviewPanel({
             ) : null}
           </section>
 
-          <AiPanel asset={asset} onAddTag={onAddTag} onAcceptName={onAcceptAiName} />
+          <AiPanel
+            asset={asset}
+            provider={aiProvider}
+            fallbackProvider={aiFallbackProvider}
+            onAddTag={onAddTag}
+            onAcceptName={onAcceptAiName}
+          />
 
           <section className="review-panel__note" aria-label="备注">
             <h3 className="review-panel__section-title">备注</h3>

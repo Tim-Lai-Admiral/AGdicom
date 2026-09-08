@@ -19,13 +19,15 @@ export interface AiSuggestion {
 
 /**
  * AI 建议提供方接口：输入素材（含元数据），输出一组建议。
- * 实现须为纯计算（无网络调用、无副作用），保证同输入同输出（R-006 确定性）。
+ * Mock 实现须为纯计算（无网络调用、无副作用），保证同输入同输出（R-006 确定性）；
+ * 远程实现（CR-012 T-002 / R-028）允许返回 Promise（fetch 本质异步），
+ * 面板对两种返回形态均兼容：同步结果即时呈现，Promise 呈现加载态。
  */
 export interface AIProvider {
   /** 提供方标识（如 'mock'；接入真实服务时用新 id 并在界面明示来源） */
   readonly id: string
   /** 提供方展示名（面板用于明示建议来源，如 "Mock（本地规则）"） */
   readonly label: string
-  /** 基于素材元数据生成建议；实现内部异常应自行兜底，面板同时对抛错降级 */
-  suggest(asset: Asset): AiSuggestion
+  /** 基于素材元数据生成建议；实现内部异常应自行兜底，面板同时对抛错/拒绝降级 */
+  suggest(asset: Asset): AiSuggestion | Promise<AiSuggestion>
 }

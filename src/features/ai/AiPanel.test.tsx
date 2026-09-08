@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Asset } from '../../domain/types.ts'
 import AiPanel from './AiPanel.tsx'
 import type { AiPanelProps } from './AiPanel.tsx'
+import { mockProvider } from './mockProvider.ts'
+import { createRemoteProvider } from './remoteProvider.ts'
 import type { AIProvider } from './types.ts'
 
 function makeAsset(overrides: Partial<Asset> = {}): Asset {
@@ -96,7 +98,68 @@ describe('AiPanel', () => {
   it('degrades to an empty suggestion without crashing when the provider throws', () => {
     setup({ provider: THROWING_PROVIDER })
     expect(screen.getByText('暂无建议：生成失败，素材数据不受影响。')).toBeTruthy()
-    expect(screen.queryByText('Mock 生成')).toBeTruthy() // Mock 标注仍在
+    // 来源明示（CR-012 T-002）：徽标跟随实际 provider（未知实现展示其 label）
+    expect(screen.queryByText('抛错提供方')).toBeTruthy()
     expect(screen.queryByRole('button', { name: '忽略建议' })).toBeNull()
+  })
+})
+
+describe('AiPanel：远程建议与回退明示（CR-012 T-002 / R-028）', () => {
+  afterEach(() => {
+    cleanup() // vitest 未启用 globals，RTL 自动清理不生效，需手动卸载
+    vi.unstubAllGlobals()
+  })
+
+  it('远程成功：徽标「真实 API」+ 远程提示，建议来自响应', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ name: '远程命名', tags: ['远程标签'], summary: '远程摘要。' }),
+        } as Response),
+      ),
+    )
+    const remote = createRemoteProvider({ baseURL: 'https://api.example.com', apiKey: 'sk-1' })
+    setup({ provider: remote, fallbackProvider: mockProvider })
+    expect(await screen.findByText('远程命名')).toBeTruthy()
+    expect(screen.getByText('真实 API')).toBeTruthy()
+    expect(screen.getByText(/远程 AI 服务（真实 API）生成/)).toBeTruthy()
+    expect(screen.queryByText(/回退/)).toBeNull()
+  })
+
+  it('远程失败且开启回退：回退 Mock 并明示（徽标「Mock 生成」+ 回退提示）', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new TypeError('network down'))),
+    )
+    const remote = createRemoteProvider({ baseURL: 'https://api.example.com', apiKey: 'sk-1' })
+    setup({ provider: remote, fallbackProvider: mockProvider })
+    expect(await screen.findByText('CT-序列1.2.840-12切片')).toBeTruthy() // Mock 规则结果
+    expect(screen.getByText('Mock 生成')).toBeTruthy()
+    expect(screen.getByText(/已回退为本地 Mock 规则生成/)).toBeTruthy()
+  })
+
+  it('远程失败且未提供兜底：降级为「暂无建议」，不崩溃', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new TypeError('network down'))),
+    )
+    const remote = createRemoteProvider({ baseURL: 'https://api.example.com', apiKey: 'sk-1' })
+    setup({ provider: remote })
+    expect(await screen.findByText('暂无建议：生成失败，素材数据不受影响。')).toBeTruthy()
+    expect(screen.getByText('真实 API')).toBeTruthy()
+  })
+
+  it('异步建议等待期间呈现加载态（Promise 未落定）', () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise(() => undefined)), // 永不落定
+    )
+    const remote = createRemoteProvider({ baseURL: 'https://api.example.com', apiKey: 'sk-1' })
+    setup({ provider: remote, fallbackProvider: mockProvider })
+    expect(screen.getByText('正在生成 AI 建议…')).toBeTruthy()
+    expect(screen.queryByText('暂无建议：生成失败，素材数据不受影响。')).toBeNull()
   })
 })
