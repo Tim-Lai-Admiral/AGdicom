@@ -41,6 +41,10 @@
 | R-024 | 顶栏工具组 pan/zoom/window/rotate/measure（测量迁移；图片子集） | active | CR-009 |
 | R-025 | 滚轮滚动切片与滑动条双向同步（Ctrl+滚轮缩放） | active | CR-009 |
 | R-026 | 左右侧栏抽屉滑动动画 | active | CR-009 |
+| R-027 | 设置弹窗与 API 配置（localStorage 独立 key；导出隔离） | active | CR-012 |
+| R-028 | AI 真实 API 接入（远程 provider，失败/未配置回退 Mock，来源明示，PHI 过滤） | active | CR-012 |
+| R-029 | DICOM 双系列比较（双窗切片/变换同步，W/L 独立） | active | CR-012 |
+| R-030 | STL 双模型比较（旋转/平移/缩放同步） | active | CR-012 |
 
 ## Requirements
 
