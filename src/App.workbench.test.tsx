@@ -113,6 +113,21 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
     expect(screen.queryByText('heart.png', { selector: '.image-stage__name' })).toBeNull()
   })
 
+  it('closes the image preview via Escape (CR-011 T-001 fix / review B1)', async () => {
+    const { container } = render(<App />)
+    dropFiles(container, [makeFile('lung.png', 64, 'image/png')])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('button', { name: '查看图片“lung.png”' }))
+    expect(screen.getByText('lung.png', { selector: '.image-stage__name' })).toBeTruthy()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await waitFor(() => {
+      expect(screen.getByText('将图片 / DICOM / 3D 模型文件拖到此处')).toBeTruthy()
+    })
+    expect(screen.queryByText('lung.png', { selector: '.image-stage__name' })).toBeNull()
+  })
+
   it('opens the DICOM viewer in the center with the grouped metadata panel, and expands slices in the left sidebar', async () => {
     // 3 切片同 series：fetch 按调用顺序返回第 1~3 个 fixture 字节（查看器按
     // dicomAssets 顺序逐个解析），覆盖“导入 → 打开查看器解析 → 右栏分组 → 左栏切片”链路

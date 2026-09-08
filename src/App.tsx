@@ -60,6 +60,19 @@ function App() {
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
   const [exportOpen, setExportOpen] = useState(false)
+  /** CR-011 T-001 修复（审查 B1）：图片预览的 Esc 关闭回归——评审面板移除 Esc 后，
+   *  App 层兜底：中央图片预览按 Esc 关闭回到导入视图（DICOM/3D/比较各自处理自身 Esc；
+   *  图片在 ImageStage 内按 Esc 仅复位视图，本监听负责关闭） */
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      const asset = activeAssetId !== null ? state.assets[activeAssetId] : undefined
+      if (asset !== undefined && asset.kind === 'image') closeActiveAsset()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAssetId, state.assets])
   /** 分组面板中处于展开态的患者组键（面板级状态；点击切片不改变，CR-008 T-001 / R-021） */
   const [openGroupKeys, setOpenGroupKeys] = useState<ReadonlySet<string>>(() => new Set())
   const [saveError, setSaveError] = useState<string | null>(null)
