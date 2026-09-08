@@ -87,7 +87,8 @@ branch: feature/CR-012-T-004-stl-compare
   chunk，three.js 仍在 `Model3DViewer-*.js`（553 kB）按需加载，主包不含 three（TD-002
   契约保持）。Manual（真机 WebGL 双 STL 目检 + 拖拽同步）留待 Reviewer 按任务卡执行。
 - **commit**：`8811163`（分支 `feature/CR-012-T-004-stl-compare`，基于 T-003 分支，含
-  T-001~T-003 提交链）；PR：见 PR 链接（body 注明按序合并 #52 → #53 → #54 → 本 PR）。
+  T-001~T-003 提交链）；PR：https://github.com/Tim-Lai-Admiral/AGdicom/pull/55
+  （body 注明按序合并 #52 → #53 → #54 → 本 PR）。
 - **已知限制/技术债**：① 初始 fit 各自独立：一侧加载完成前对侧的交互不会被补同步
   （各自 fit 是任务卡设计要点，两侧就绪后任一交互即对齐）；② 同步以 position+target
   为唯一状态、朝向由 lookAt 推导——双侧同时存在惯性阻尼残差时可能有一帧级微抖
