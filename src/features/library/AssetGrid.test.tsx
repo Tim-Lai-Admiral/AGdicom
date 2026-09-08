@@ -22,13 +22,18 @@ function makeAsset(overrides: Partial<Asset> = {}): Asset {
 function setup(
   assets: Asset[],
   selectedIds: readonly string[] = [],
-  extra: { activeAssetId?: string | null; onDeleteAsset?: (assetId: string) => void } = {},
+  extra: {
+    activeAssetId?: string | null
+    onDeleteAsset?: (assetId: string) => void
+    compareMode?: boolean
+  } = {},
 ) {
   const onToggleSelect = vi.fn()
   const utils = render(
     <AssetGrid
       assets={assets}
       selectedIds={selectedIds}
+      compareMode={extra.compareMode}
       onToggleSelect={onToggleSelect}
       activeAssetId={extra.activeAssetId}
       onDeleteAsset={extra.onDeleteAsset}
@@ -75,10 +80,11 @@ it('shows a placeholder on image load error without breaking other rows', () => 
     expect(container.querySelectorAll('.asset-row')).toHaveLength(2)
   })
 
-it('toggles compare selection on image row click and marks the selected row', () => {
+it('toggles compare selection on image row click and marks the selected row (compare mode)', () => {
     const { onToggleSelect } = setup(
       [makeAsset({ id: 'a1' }), makeAsset({ id: 'a2', name: 'lung.png' })],
       ['a1'],
+      { compareMode: true },
     )
     const selectedRow = screen.getByRole('button', { name: '取消选择“heart.png”' })
     expect(selectedRow.getAttribute('aria-pressed')).toBe('true')
@@ -92,6 +98,17 @@ it('toggles compare selection on image row click and marks the selected row', ()
     expect(otherRow.getAttribute('aria-pressed')).toBe('false')
     fireEvent.click(otherRow)
     expect(onToggleSelect).toHaveBeenCalledWith('a2')
+  })
+
+  it('uses view semantics for image rows in normal mode (CR-011 T-002)', () => {
+    const { onToggleSelect } = setup([makeAsset({ id: 'a1' }), makeAsset({ id: 'a2', name: 'lung.png' })])
+    // 普通模式：image 行可访问名为“查看图片 X”，无按压态（不再是选择加入比较）
+    const viewRow = screen.getByRole('button', { name: '查看图片“heart.png”' })
+    expect(viewRow.getAttribute('aria-pressed')).toBeNull()
+    fireEvent.click(viewRow)
+    expect(onToggleSelect).toHaveBeenCalledWith('a1')
+    expect(screen.queryByRole('button', { name: '选择“lung.png”加入比较' })).toBeNull()
+    expect(screen.getByRole('button', { name: '查看图片“lung.png”' })).toBeTruthy()
   })
 
   it('ignores clicks on non-image rows for compare selection', () => {
@@ -119,8 +136,8 @@ it('toggles compare selection on image row click and marks the selected row', ()
     fireEvent.click(screen.getByRole('button', { name: '查看“scan.dcm”的 DICOM 详情' }))
     expect(onOpenDicom).toHaveBeenCalledWith('a1')
 
-    // image 行点击仍走比较选中；model 行保持不可交互（T-006 前不变）
-    fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
+    // image 行点击走查看语义（普通模式 handler 由 App 传入）；model 行保持不可交互（T-006 前不变）
+    fireEvent.click(screen.getByRole('button', { name: '查看图片“heart.png”' }))
     expect(onOpenDicom).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('button', { name: /aorta\.stl/ })).toBeNull()
   })
@@ -150,7 +167,7 @@ it('renders status as display-only: no inline status button and no review button
     setup(
       [makeAsset({ id: 'a1' }), makeAsset({ id: 'a2', name: 'lung.png' })],
       ['a1'],
-      { onDeleteAsset },
+      { onDeleteAsset, compareMode: true },
     )
     expect(screen.getByRole('button', { name: '删除素材 heart.png' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '删除素材 lung.png' })).toBeNull()
@@ -190,7 +207,7 @@ it('renders status as display-only: no inline status button and no review button
     expect(onDeleteAsset).toHaveBeenCalledTimes(1)
     expect(onDeleteAsset).toHaveBeenCalledWith('a1')
     // 其他行不受影响
-    expect(screen.getByRole('button', { name: '选择“lung.png”加入比较' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '查看图片“lung.png”' })).toBeTruthy()
   })
 })
 

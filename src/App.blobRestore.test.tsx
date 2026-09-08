@@ -78,8 +78,8 @@ describe('App 启动二进制恢复（R-016）', () => {
     const thumb = container.querySelector('.asset-row__img') as HTMLImageElement
     expect(thumb).not.toBeNull()
     expect(thumb.src).toBe('blob:mock-1')
-    // 点开中央查看区：图片预览可见（不再是“预览不可用”占位）
-    fireEvent.click(screen.getByRole('button', { name: /选择“heart.png”加入比较/ }))
+    // 点开中央查看区（普通模式行点击=中央查看，CR-011 T-002）：图片预览可见（不再是“预览不可用”占位）
+    fireEvent.click(screen.getByRole('button', { name: /查看图片“heart.png”/ }))
     const stageImg = (await screen.findByRole('figure', { name: '图片预览' })).querySelector(
       '.image-stage__img',
     ) as HTMLImageElement
@@ -99,7 +99,7 @@ describe('App 启动二进制恢复（R-016）', () => {
     await screen.findByText('已从本地恢复 1 个素材的预览（无需重新导入）')
 
     // 选中行 → 行内删除 → 二次确认
-    fireEvent.click(screen.getByRole('button', { name: /选择“heart.png”加入比较/ }))
+    fireEvent.click(screen.getByRole('button', { name: /查看图片“heart.png”/ }))
     fireEvent.click(screen.getByRole('button', { name: '删除素材 heart.png' }))
     fireEvent.click(screen.getByRole('button', { name: '确认删除“heart.png”' }))
     await waitFor(() => {

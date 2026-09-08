@@ -8,6 +8,11 @@
  * 图标按钮以 aria-label 保持既有可访问名（存量测试语义不变），title 提供悬停提示；
  * 各按钮只负责回调，状态与持久化由 App 管理。
  *
+ * 汉字按钮（CR-011 T-002 / R-002）：导入与比较为汉字文本按钮（tool-btn--text），
+ * 功能不变。比较按钮进入显式比较模式：库中存在可比较素材（image）时可用；
+ * 进入比较模式后按钮呈「完成」态（aria-pressed），再次点击退出比较模式
+ * （清空选择、恢复列表由 App 完成）。
+ *
  * 视口工具组（R-024）：中央为 DICOM 或图片素材时显示（比较/导入/3D 隐藏）；
  * pan/zoom/window/rotate/measure 图标按钮（aria-pressed 切换态），激活工具由
  * App 持有并下发查看器；图片素材不支持 window/measure（禁用态），pan/zoom/rotate
@@ -23,18 +28,6 @@ const Icon = {
   Menu: () => (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
       <path d="M2 4h12M2 8h12M2 12h12" />
-    </svg>
-  ),
-  Upload: () => (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8 10.5V2.5M5 5.5l3-3 3 3" />
-      <path d="M2.5 11v2a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5v-2" />
-    </svg>
-  ),
-  Compare: () => (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <rect x="2" y="2.5" width="5" height="11" rx="0.5" />
-      <rect x="9" y="2.5" width="5" height="11" rx="0.5" />
     </svg>
   ),
   Download: () => (
@@ -120,9 +113,12 @@ export interface TopToolbarProps {
   /** 可选标签名列表（注册表 ∪ 素材在用标签，由 App 用 collectTagNames 计算） */
   tagNames: readonly string[]
   onFilterChange: (filter: AssetFilter) => void
-  /** 已选满两张图片（比较按钮可用） */
-  compareReady: boolean
-  onOpenCompare: () => void
+  /** 库中存在可比较素材（image）时比较按钮可用（比较模式内恒可用） */
+  compareAvailable: boolean
+  /** 是否处于比较模式（按钮呈「完成」态；进入/退出由 App 持有） */
+  compareMode: boolean
+  /** 点击比较/完成按钮：进入或退出比较模式 */
+  onToggleCompare: () => void
   /** 中央是否正处在导入视图（导入按钮高亮） */
   importActive: boolean
   onOpenImport: () => void
@@ -144,8 +140,9 @@ export default function TopToolbar({
   filter,
   tagNames,
   onFilterChange,
-  compareReady,
-  onOpenCompare,
+  compareAvailable,
+  compareMode,
+  onToggleCompare,
   importActive,
   onOpenImport,
   exportOpen,
@@ -200,23 +197,28 @@ export default function TopToolbar({
       ) : null}
       <button
         type="button"
-        className={importActive ? 'tool-btn active' : 'tool-btn'}
-        aria-label="导入"
+        className={importActive ? 'tool-btn tool-btn--text active' : 'tool-btn tool-btn--text'}
         aria-pressed={importActive}
         title="导入素材（选择文件 / 拖拽）"
         onClick={onOpenImport}
       >
-        <Icon.Upload />
+        导入
       </button>
       <button
         type="button"
-        className="tool-btn"
-        aria-label="比较"
-        title={compareReady ? '并排比较所选的两张图片' : '先选中两张图片'}
-        disabled={!compareReady}
-        onClick={onOpenCompare}
+        className={compareMode ? 'tool-btn tool-btn--text active' : 'tool-btn tool-btn--text'}
+        aria-pressed={compareMode}
+        title={
+          compareMode
+            ? '完成并退出比较模式（清空比较选择）'
+            : compareAvailable
+              ? '进入比较模式：选择两张图片并排对比'
+              : '无可比较的图片素材（先导入图片）'
+        }
+        disabled={!compareMode && !compareAvailable}
+        onClick={onToggleCompare}
       >
-        <Icon.Compare />
+        {compareMode ? '完成' : '比较'}
       </button>
       <span className="workbench__sep" aria-hidden="true" />
       <Filters filter={filter} tagNames={tagNames} onChange={onFilterChange} />
