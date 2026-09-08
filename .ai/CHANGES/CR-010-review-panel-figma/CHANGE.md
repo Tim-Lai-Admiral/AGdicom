@@ -4,9 +4,9 @@
 
 ```yaml
 id: CR-010
-title: "右栏评审面板 Figma 重样式：页签下划线、素材头、三态裁决按钮、标签库、AI 建议卡片化、备注、历史计数、危险区、合规脚注"
+title: "右栏评审面板图样重样式：页签下划线、素材头、三态裁决按钮、标签库、AI 建议卡片化、备注、历史计数、危险区、合规脚注"
 change_level: L2
-status: approved
+status: completed
 parent: null
 created_by: Planner
 created_at: 2026-09-07
@@ -43,7 +43,7 @@ Human 提供右栏评审面板图样（Review/Metadata 页签 + 素材头 + REVI
 
 ## Tasks
 
-- [ ] T-001: 右栏评审面板图样重样式（页面骨架 + VERDICT 三态 + TAGS + AI 卡片 + NOTES + HISTORY + DANGER + 脚注 + 页签联动）
+- [x] T-001: 右栏评审面板图样重样式（页面骨架 + VERDICT 三态 + TAGS + AI 卡片 + NOTES + HISTORY + DANGER + 脚注 + 页签联动）
 
 ## Dependencies
 
@@ -55,4 +55,7 @@ Human 提供右栏评审面板图样（Review/Metadata 页签 + 素材头 + REVI
 
 ## Result
 
-<!-- 合并后填写 -->
+- 2026-09-08 完成。T-001 合并至 master（PR #46，分支已删）。
+- 审查：代码与测试全 PASS；合并卫生阻塞（CR 规划文档 commit 73dc177 未推送 master）已由协调者推送解决，PR #46 基线收敛后合并。
+- 非阻塞：合规脚注"未检测到 PHI"依据 deidentified 标记而非真正扫描（按图样执行）；Series UID 截断阈值/显示长度微差（纯视觉）。
+- CURRENT 已更新（DESIGN 评审面板图样样式），Tag v0.5.1。
