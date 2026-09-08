@@ -60,6 +60,31 @@ describe('ReviewPanel', () => {
     expect(screen.getByText('待评审', { selector: '.review-panel__asset .status-dot' })).toBeTruthy()
     expect(screen.getByLabelText('移除标签“心脏”')).toBeTruthy()
     expect(screen.getByText('评审历史（2）')).toBeTruthy()
+    // 图样分区（CR-010 T-001）：评审结论（legend）与分区标题
+    expect(screen.getByText('评审结论')).toBeTruthy()
+    expect(screen.getByText('标签', { selector: 'h3' })).toBeTruthy()
+    expect(screen.getByText('备注', { selector: 'h3' })).toBeTruthy()
+  })
+
+  it('shows the compliance footer per asset kind (CR-010 T-001)', () => {
+    // 非 DICOM：工程素材提示
+    const { rerender, props } = setup()
+    expect(screen.getByText('工程素材 · 结论可追溯')).toBeTruthy()
+    // DICOM 按去标识化标记分级：已去标识化 / 存在待核验标识信息
+    rerender(
+      <ReviewPanel
+        {...props}
+        asset={makeAsset({ kind: 'dicom', dicomMeta: { sliceCount: 1, deidentified: true } })}
+      />,
+    )
+    expect(screen.getByText('已去标识化 · 未检测到 PHI')).toBeTruthy()
+    rerender(
+      <ReviewPanel
+        {...props}
+        asset={makeAsset({ kind: 'dicom', dicomMeta: { sliceCount: 1, deidentified: false } })}
+      />,
+    )
+    expect(screen.getByText('存在待核验标识信息')).toBeTruthy()
   })
 
   it('adds a self-created tag via the input (trimmed) with feedback', () => {
@@ -161,6 +186,8 @@ describe('ReviewPanel', () => {
   it('deletes only after the inline confirm; cancel keeps the asset (CR-006 T-001 / R-015)', () => {
     const onDeleteAsset = vi.fn()
     setup({ onDeleteAsset })
+    // 图样分区（CR-010 T-001）：危险区标题（DANGER ZONE → 中文）
+    expect(screen.getByText('危险区', { selector: 'h3' })).toBeTruthy()
     // 入口存在且默认非确认态
     fireEvent.click(screen.getByRole('button', { name: '删除素材' }))
     expect(onDeleteAsset).not.toHaveBeenCalled()

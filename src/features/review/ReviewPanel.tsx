@@ -11,7 +11,11 @@
  * - 备注：独立保存（不追加评审历史）；
  * - AI 建议：内嵌 AiPanel（CR-002 T-008 / R-006，Mock 生成，采纳命名/标签或忽略）；
  * - 评审历史：ReviewHistory 只读列表（最新在前）；
- * - 删除素材：面板末尾入口 + 内联二次确认（CR-006 T-001 / R-015）。
+ * - 删除素材：面板末尾“危险区”入口 + 内联二次确认（CR-006 T-001 / R-015）；
+ * - 合规脚注：面板末尾绿点 + 合规文案（DICOM 按 dicomMeta.deidentified 分级，CR-010 T-001）。
+ *
+ * 图样重样式（CR-010 T-001）：区块化 + 分区标题大写字距 + 三态瓦片 + 危险区/脚注，
+ * 仅视觉与结构分区，功能契约不变；页签（评审/元数据）由 App 渲染，样式联动 styles.css。
  *
  * 交互与可访问性：Esc 关闭；可折叠为仅标题栏（aria-expanded）；
  * 保存成功以 role="status" 文案反馈并数秒后自动消失。
@@ -149,6 +153,21 @@ export default function ReviewPanel({
   // 全局标签库中尚未加到该素材的标签（已加过的不再提供复用按钮）
   const reusableTags = tagNames.filter((name) => !asset.tags.includes(name))
 
+  // 合规脚注（CR-010 T-001 图样）：DICOM 依据去标识化标记分级提示；其余素材为工程提示
+  const complianceNote =
+    asset.kind === 'dicom'
+      ? asset.dicomMeta?.deidentified === true
+        ? '已去标识化 · 未检测到 PHI'
+        : '存在待核验标识信息'
+      : '工程素材 · 结论可追溯'
+
+  // 素材头 Series/切片信息（CR-010 T-001 图样）：DICOM 解析出元数据后展示
+  // （UID 过长时截断显示，title 保留全文；元数据未解析或非 DICOM 不展示）
+  const dicomMeta = asset.kind === 'dicom' ? asset.dicomMeta : undefined
+  const seriesUid = dicomMeta?.seriesInstanceUID
+  const seriesLabel =
+    seriesUid !== undefined && seriesUid.length > 16 ? `${seriesUid.slice(0, 13)}…` : (seriesUid ?? '—')
+
   return (
     <aside
       className={collapsed ? 'review-panel is-collapsed' : 'review-panel'}
@@ -187,6 +206,14 @@ export default function ReviewPanel({
             <p className="review-panel__asset-source">
               文件：{asset.file.fileName}　来源：{asset.source === '' ? '未提供' : asset.source}
             </p>
+            {dicomMeta !== undefined ? (
+              <p className="review-panel__asset-source">
+                <span title={seriesUid} className="review-panel__asset-series">
+                  Series：{seriesLabel}
+                </span>
+                　切片：{dicomMeta.sliceCount}
+              </p>
+            ) : null}
           </section>
 
           {feedback !== null ? (
@@ -204,17 +231,31 @@ export default function ReviewPanel({
           >
             <fieldset className="review-panel__fieldset">
               <legend>评审结论</legend>
+              {/* 图样（CR-010 T-001）：三态平铺瓦片；radio 视觉隐藏（仍可聚焦/键盘操作），
+                  圆点 + 文字双通道；选中瓦片按状态着色（pending 琥珀/passed 绿/rejected 红） */}
               <div className="review-panel__status-options">
                 {STATUS_OPTIONS.map((status) => (
-                  <label key={status} className="review-panel__status-option">
+                  <label
+                    key={status}
+                    className={
+                      draftStatus === status
+                        ? 'review-panel__status-option is-checked'
+                        : 'review-panel__status-option'
+                    }
+                    data-status={status}
+                  >
                     <input
                       type="radio"
                       name="review-status"
+                      className="review-panel__status-radio"
                       value={status}
                       checked={draftStatus === status}
                       onChange={() => setDraftStatus(status)}
                     />
-                    {ASSET_STATUS_LABELS[status]}
+                    <span className="review-panel__status-dot" aria-hidden="true" />
+                    <span className="review-panel__status-text">
+                      {ASSET_STATUS_LABELS[status]}
+                    </span>
                   </label>
                 ))}
               </div>
@@ -323,11 +364,11 @@ export default function ReviewPanel({
 
           <ReviewHistory history={history} />
 
-          {/* 删除素材入口（CR-006 T-001 / R-015）：置于面板末尾避免误触；
+          {/* 危险区（CR-006 T-001 / R-015，图样 DANGER ZONE）：置于面板末尾避免误触；
               内联二次确认（确认/取消），确认后由上层级联清理并持久化 */}
           {onDeleteAsset !== undefined ? (
-            <section className="review-panel__danger" aria-label="删除素材">
-              <h3 className="review-panel__section-title">删除素材</h3>
+            <section className="review-panel__danger" aria-label="危险区">
+              <h3 className="review-panel__section-title">危险区</h3>
               {confirmingDelete ? (
                 <>
                   <p className="review-panel__danger-hint">
@@ -361,6 +402,12 @@ export default function ReviewPanel({
               )}
             </section>
           ) : null}
+
+          {/* 合规脚注（图样 footer）：绿点 + 合规文案（DICOM 按去标识化标记分级） */}
+          <footer className="review-panel__footer" aria-label="合规提示">
+            <span className="review-panel__footer-dot" aria-hidden="true" />
+            <span className="review-panel__footer-text">{complianceNote}</span>
+          </footer>
         </div>
       ) : null}
     </aside>
