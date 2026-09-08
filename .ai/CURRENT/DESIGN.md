@@ -22,6 +22,7 @@
 - 中文界面；**Tailwind v4**（`@tailwindcss/vite`）+ 深色设计令牌（`--bg #060810 / --panel / --surface / --accent #00c4d8 / --text-*`，源自 Figma Make 原型 rec/）；手写 CSS 变量层（index.css）。
 - 字体本地化：Inter + JetBrains Mono woff2（public/fonts/，@font-face），零外部 CDN（离线可用）；CJK 回退系统字体。
 - 布局：顶部工具栏 + 左侧素材/序列栏（可折叠）+ 中央查看区 + 右侧面板（可折叠）；窄屏 64rem 收窄，顶栏开关折叠。
+- **右栏评审面板（CR-010 图样）**：顶部页签（评审/元数据，下划线高亮）；素材头卡片（文件名 + 类型 chip + 状态点 + 来源行，DICOM 附 Series/切片行）；评审结论三态瓦片（待评审=琥珀/通过=绿/驳回=红，圆点+文字，radio 键盘焦点保留）；保存评审（accent 青色）；标签 chips× + 输入/添加 + 全局标签库（虚线 +chips）；AI 建议 [Mock] 卡片化（建议命名/标签/摘要 + 采纳/忽略/重新生成）；备注独立保存；评审历史（N）+ 空态斜体；危险区（红框 + 删除素材，二次确认）；页脚合规（绿点：DICOM 按 deidentified 分级 / 其余"工程素材 · 结论可追溯"）；收起/关闭/Esc 可访问入口保留。
 - **视觉对齐 rec/（CR-004）**：左栏为紧凑行式列表（38px 方形缩略图 + 名称行 + `类型 · 状态点` mono 元信息行，选中 accent 左边框+底色）；**无卡片容器、无卡片评审按钮、无徽标式状态按钮**；顶栏 44px + tool-btn 16px 线性图标 + 分隔线 + mono 读数；状态经"选中 → 右栏评审面板"修改（StatusDot 仅展示）。
 - 组件类：.tool-btn / .range-input / .preset-btn / .sidebar-thumb / .meta-row / .viewport-overlay 等；4px 细滚动条。
 - 可访问性：状态徽标颜色+文字双通道；反馈 role="status"、错误/降级 role="alert"；DICOM 面板焦点圈定；Esc 关闭查看/比较；查看器为内嵌视图（非模态，已去除 aria-modal）。
