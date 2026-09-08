@@ -6,7 +6,7 @@
 id: CR-011
 title: "评审面板去收起/关闭；右栏页签各占 50%；顶栏 比较/导入 汉字按钮；比较改为显式模式（先筛选可比较素材再选择）"
 change_level: L2
-status: approved
+status: completed
 parent: null
 created_by: Planner
 created_at: 2026-09-08
@@ -49,9 +49,9 @@ Human 反馈（2026-09-08）：
 
 ## Tasks
 
-- [ ] T-001: 评审面板精简 + 页签均分（去收起/关闭；tabs 50/50）
-- [ ] T-002: 顶栏汉字按钮 + 比较显式模式（compareMode 状态、筛选、普通/比较模式行点击语义）
-- [ ] T-003: 测试适配 + 场景矩阵更新 + 文档
+- [x] T-001: 评审面板精简 + 页签均分（去收起/关闭；tabs 50/50）
+- [x] T-002: 顶栏汉字按钮 + 比较显式模式（compareMode 状态、筛选、普通/比较模式行点击语义）
+- [x] T-003: 测试适配 + 场景矩阵更新 + 文档
 
 ## Dependencies
 
@@ -63,4 +63,6 @@ Human 反馈（2026-09-08）：
 
 ## Result
 
-<!-- 合并后填写 -->
+- 2026-09-08 完成。T-001~T-003 合并至 master（PR #48~#50 按序，分支已删）。
+- 审查：初评 REQUEST CHANGES（B1：评审面板移除 Esc 后图片预览 Esc 关闭回归）→ 协调者修复（App 层 Esc 关闭图片预览 + 用例），复评通过；非阻塞 M1~M5（T-001 卡回填、tsconfig node types 建议独立测试 tsconfig、页签断言为 CSS 源码、E2E §10 计数过时、T-002 Scope 笔误）。
+- CURRENT 已更新（REQUIREMENTS R-002 细化、DESIGN 比较显式模式/页签均分/面板常驻），Tag v0.6.0。
