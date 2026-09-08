@@ -1,5 +1,5 @@
 import './styles.css'
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Asset, AssetStatus, AppState, DicomMeta } from './domain/types.ts'
 import { collectTagNames, DEFAULT_ASSET_FILTER, filterAssets } from './domain/filter.ts'
@@ -7,6 +7,9 @@ import type { AssetFilter } from './domain/filter.ts'
 import { addAssetTag, applyReview, removeAsset, removeAssetTag, updateAssetName, updateAssetNote } from './domain/review.ts'
 import { loadState, saveState } from './store/repository.ts'
 import type { LoadIssue } from './store/repository.ts'
+import { loadSettings, saveSettings } from './features/settings/settingsStore.ts'
+import type { ApiSettings } from './features/settings/settingsStore.ts'
+import { selectAiProvider } from './features/ai/remoteProvider.ts'
 import { deleteAssetBlob, restoreAssetBlobs } from './features/library/blobPersistence.ts'
 import ImportZone from './features/library/ImportZone.tsx'
 import { useImport } from './features/library/useImport.ts'
@@ -61,8 +64,11 @@ function App() {
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
   const [exportOpen, setExportOpen] = useState(false)
-  /** 设置弹窗开合（CR-012 T-001 / R-027 骨架）：条件挂载 SettingsDialog；配置持久化由 T-002 接入 */
+  /** 设置弹窗开合（CR-012 T-001 / R-027）：条件挂载 SettingsDialog */
   const [settingsOpen, setSettingsOpen] = useState(false)
+  /** AI API 设置（CR-012 T-002 / R-027）：启动时从本机 localStorage 读取（损坏回退默认值）；
+   *  保存（弹窗「保存」）经 saveSettings 持久化后更新会话状态 */
+  const [apiSettings, setApiSettings] = useState<ApiSettings>(() => loadSettings())
   /** CR-011 T-001 修复（审查 B1）：图片预览的 Esc 关闭回归——评审面板移除 Esc 后，
    *  App 层兜底：中央图片预览按 Esc 关闭回到导入视图（DICOM/3D/比较各自处理自身 Esc；
    *  图片在 ImageStage 内按 Esc 仅复位视图，本监听负责关闭）。
@@ -91,6 +97,24 @@ function App() {
     state,
     onStateChange: setState,
   })
+
+  /** AI provider 选择（CR-012 T-002 / R-028）：设置启用且 baseURL/apiKey 齐备 →
+   *  远程 provider（fallbackToMock 决定是否附带 Mock 兜底），否则全本地 Mock。
+   *  设置对象仅在保存时替换，useMemo 保证 provider 实例稳定（不触发无谓重生成） */
+  const aiSelection = useMemo(() => selectAiProvider(apiSettings), [apiSettings])
+
+  /** 设置弹窗「保存」：持久化到本机 localStorage（独立 key，不随素材导出），
+   *  成功后更新会话状态即时生效；失败时本会话仍生效并提示（与评审保存同模式） */
+  const handleSaveSettings = (next: ApiSettings): void => {
+    setApiSettings(next)
+    try {
+      saveSettings(next)
+      setSaveError(null)
+    } catch (error) {
+      const reason = error instanceof Error && error.message !== '' ? error.message : String(error)
+      setSaveError(`设置已在本会话生效，但保存失败（${reason}）。`)
+    }
+  }
 
   // 进入/切换素材时 W/L 复位为自动 min-max（R-003：默认进入时自动 min-max），
   // 视口工具复位为平移（R-024 默认；视口变换随查看器重挂载自然归零）
@@ -421,7 +445,13 @@ function App() {
           <ExportImport state={state} onImport={handleImportState} />
         </div>
       ) : null}
-      {settingsOpen ? <SettingsDialog onClose={() => setSettingsOpen(false)} /> : null}
+      {settingsOpen ? (
+        <SettingsDialog
+          settings={apiSettings}
+          onSave={handleSaveSettings}
+          onClose={() => setSettingsOpen(false)}
+        />
+      ) : null}
 
       {initialLoad.issue !== null || saveError !== null || restoreNotice !== null ? (
         <div className="workbench__warnings">
@@ -549,6 +579,8 @@ function App() {
               }
               onSaveNote={(note) => handleSaveNote(activeAsset.id, note)}
               onAcceptAiName={(name) => handleRenameAsset(activeAsset.id, name)}
+              aiProvider={aiSelection.provider}
+              aiFallbackProvider={aiSelection.fallbackProvider}
               onDeleteAsset={() => handleDeleteAsset(activeAsset.id)}
             />
           ) : null}
