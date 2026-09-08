@@ -13,6 +13,9 @@
  * 进入比较模式后按钮呈「完成」态（aria-pressed），再次点击退出比较模式
  * （清空选择、恢复列表由 App 完成）。
  *
+ * 设置按钮（CR-012 T-001 / R-027）：齿轮图标按钮（aria-label=设置），打开设置
+ * 弹窗骨架（SettingsDialog）；按钮只回调，开合状态与弹窗挂载由 App 持有。
+ *
  * 视口工具组（R-024）：中央为 DICOM 或图片素材时显示（比较/导入/3D 隐藏）；
  * pan/zoom/window/rotate/measure 图标按钮（aria-pressed 切换态），激活工具由
  * App 持有并下发查看器；图片素材不支持 window/measure（禁用态），pan/zoom/rotate
@@ -40,6 +43,12 @@ const Icon = {
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
       <circle cx="8" cy="8" r="6" />
       <path d="M8 7v5M8 5.5v.5" />
+    </svg>
+  ),
+  Settings: () => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="8" r="2.2" />
+      <circle cx="8" cy="8" r="5.2" strokeDasharray="2.04 1.36" />
     </svg>
   ),
 }
@@ -124,6 +133,9 @@ export interface TopToolbarProps {
   onOpenImport: () => void
   exportOpen: boolean
   onToggleExport: () => void
+  /** 设置弹窗开合（CR-012 T-001 / R-027）：按钮呈 active/aria-expanded 态，挂载由 App 完成 */
+  settingsOpen: boolean
+  onToggleSettings: () => void
   leftOpen: boolean
   rightOpen: boolean
   onToggleLeft: () => void
@@ -147,6 +159,8 @@ export default function TopToolbar({
   onOpenImport,
   exportOpen,
   onToggleExport,
+  settingsOpen,
+  onToggleSettings,
   leftOpen,
   rightOpen,
   onToggleLeft,
@@ -232,6 +246,16 @@ export default function TopToolbar({
         onClick={onToggleExport}
       >
         <Icon.Download />
+      </button>
+      <button
+        type="button"
+        className={settingsOpen ? 'tool-btn active' : 'tool-btn'}
+        aria-label="设置"
+        aria-expanded={settingsOpen}
+        title="打开设置（API 配置）"
+        onClick={onToggleSettings}
+      >
+        <Icon.Settings />
       </button>
       <span className="workbench__sep" aria-hidden="true" />
       <button

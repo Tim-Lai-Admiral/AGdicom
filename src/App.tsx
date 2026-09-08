@@ -21,6 +21,7 @@ import type { ViewerTool } from './features/viewer/viewerTools.ts'
 const Model3DViewer = lazy(() => import('./features/viewer/model3d/Model3DViewer.tsx'))
 import ReviewPanel from './features/review/ReviewPanel.tsx'
 import ExportImport from './features/review/ExportImport.tsx'
+import SettingsDialog from './features/settings/SettingsDialog.tsx'
 import TopToolbar from './features/workbench/TopToolbar.tsx'
 import MetadataPanel from './features/workbench/MetadataPanel.tsx'
 import WindowLevelPanel from './features/workbench/WindowLevelPanel.tsx'
@@ -60,19 +61,23 @@ function App() {
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
   const [exportOpen, setExportOpen] = useState(false)
+  /** 设置弹窗开合（CR-012 T-001 / R-027 骨架）：条件挂载 SettingsDialog；配置持久化由 T-002 接入 */
+  const [settingsOpen, setSettingsOpen] = useState(false)
   /** CR-011 T-001 修复（审查 B1）：图片预览的 Esc 关闭回归——评审面板移除 Esc 后，
    *  App 层兜底：中央图片预览按 Esc 关闭回到导入视图（DICOM/3D/比较各自处理自身 Esc；
-   *  图片在 ImageStage 内按 Esc 仅复位视图，本监听负责关闭） */
+   *  图片在 ImageStage 内按 Esc 仅复位视图，本监听负责关闭）。
+   *  CR-012 T-001：设置弹窗打开期间跳过（弹窗自身处理 Esc），避免一键关闭两层 */
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return
+      if (settingsOpen) return
       const asset = activeAssetId !== null ? state.assets[activeAssetId] : undefined
       if (asset !== undefined && asset.kind === 'image') closeActiveAsset()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAssetId, state.assets])
+  }, [activeAssetId, state.assets, settingsOpen])
   /** 分组面板中处于展开态的患者组键（面板级状态；点击切片不改变，CR-008 T-001 / R-021） */
   const [openGroupKeys, setOpenGroupKeys] = useState<ReadonlySet<string>>(() => new Set())
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -401,6 +406,8 @@ function App() {
         onOpenImport={closeActiveAsset}
         exportOpen={exportOpen}
         onToggleExport={() => setExportOpen(!exportOpen)}
+        settingsOpen={settingsOpen}
+        onToggleSettings={() => setSettingsOpen(!settingsOpen)}
         leftOpen={leftOpen}
         rightOpen={rightOpen}
         onToggleLeft={() => setLeftOpen(!leftOpen)}
@@ -414,6 +421,7 @@ function App() {
           <ExportImport state={state} onImport={handleImportState} />
         </div>
       ) : null}
+      {settingsOpen ? <SettingsDialog onClose={() => setSettingsOpen(false)} /> : null}
 
       {initialLoad.issue !== null || saveError !== null || restoreNotice !== null ? (
         <div className="workbench__warnings">
