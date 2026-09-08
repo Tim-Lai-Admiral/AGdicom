@@ -1119,7 +1119,8 @@ button.asset-row__main:hover {
   }
 }
 
-/* --- 评审面板（CR-001 T-007 / R-005）：CR-003 T-002 起嵌入右栏信息面板 --- */
+/* --- 评审面板（CR-001 T-007 / R-005）：CR-003 T-002 起嵌入右栏信息面板；
+       CR-011 T-001 起常驻右栏，无内部标题头/收起/关闭（右栏收起由顶栏开关负责） --- */
 .review-panel {
   position: relative;
   flex: 1 1 auto;
@@ -1128,45 +1129,6 @@ button.asset-row__main:hover {
   display: flex;
   flex-direction: column;
   background: var(--panel, var(--color-surface));
-}
-
-.review-panel__header {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.review-panel__title {
-  margin: 0;
-  font-size: 1.0625rem;
-}
-
-.review-panel__collapse,
-.review-panel__close {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  color: var(--color-text);
-  padding: 0.3rem 0.8rem;
-  font-size: 0.8125rem;
-  font-family: inherit;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.review-panel__collapse:hover,
-.review-panel__close:hover {
-  background: var(--color-bg);
-}
-
-.review-panel__close {
-  margin-left: auto;
 }
 
 .review-panel__body {
@@ -2162,7 +2124,8 @@ button.asset-row__main:hover {
 }
 
 /* 页签（CR-010 T-001 图样）：文本 + 下划线高亮（active 底边压在容器分隔线上，
-   与 meta-panel/wl-panel 的 mono 小字语言一致） */
+   与 meta-panel/wl-panel 的 mono 小字语言一致）；
+   CR-011 T-001：两页签等宽各占一半（flex: 1 1 0 均分剩余空间），下划线高亮保留 */
 .workbench__right-tabs {
   flex: 0 0 auto;
   display: flex;
@@ -2172,6 +2135,8 @@ button.asset-row__main:hover {
 }
 
 .workbench__tab {
+  flex: 1 1 0;
+  text-align: center;
   border: none;
   border-bottom: 2px solid transparent;
   border-radius: 0;

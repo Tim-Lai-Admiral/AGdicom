@@ -14,6 +14,10 @@
  * - T-004：右栏评审全链路（状态/标签/备注/历史/AI 建议）与顶栏导出/导入入口回环。
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+// 本用例需读取样式源码断言布局规则：jsdom 不应用样式表，且 ?raw 导入经 vitest
+// 禁用 CSS 的管线会得到空串，故用 node:fs（tsconfig.app 的 types 已含 node）
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
 import { loadState } from './store/repository.ts'
@@ -76,6 +80,18 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
     expect(rightAside.getAttribute('aria-hidden')).toBe('false')
   })
 
+  it('styles the right-column meta/review tabs as equal-width halves with underline highlight (CR-011 T-001)', () => {
+    // jsdom 不应用样式表（无法计算真实布局），断言样式源码规则（去空白后比对，
+    // 兼容压缩形态）；页签结构（两个 workbench__tab 按钮与切换行为）由 DICOM
+    // 页签集成用例覆盖。npm test/verify 均在项目根运行，用根相对路径读取
+    const css = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8')
+    const tabRule = (/[.]workbench__tab\s*\{([^}]*)\}/.exec(css)?.[1] ?? '').replace(/\s+/g, ' ')
+    // 两页签等宽各占一半（flex: 1 1 0 均分剩余空间；压缩形态仍保留数字间单空格）
+    expect(tabRule).toContain('flex: 1 1 0')
+    // 下划线高亮保留（CR-010 T-001 图样）
+    expect(tabRule).toContain('border-bottom: 2px solid')
+  })
+
   it('shows the image preview in the center and the review panel on the right, and returns to the import view', async () => {
     const { container } = render(<App />)
     dropFiles(container, [makeFile('heart.png', 64, 'image/png')])
@@ -87,7 +103,8 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
     fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
     expect(screen.getByText('heart.png', { selector: '.image-stage__name' })).toBeTruthy()
     const right = screen.getByRole('complementary', { name: '信息面板' })
-    expect(within(right).getByRole('heading', { name: '评审面板' })).toBeTruthy()
+    // CR-011 T-001：面板常驻右栏，无标题头（以面板 landmark 断言，而非 heading）
+    expect(within(right).getByRole('complementary', { name: '评审面板' })).toBeTruthy()
 
     // 顶栏“导入”：从查看状态返回中央导入视图
     fireEvent.click(screen.getByRole('button', { name: '导入' }))
@@ -151,7 +168,7 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
 
     // DICOM 页签：右栏可切到评审面板（评审入口对 DICOM 素材仍可达）
     fireEvent.click(within(right).getByRole('button', { name: '评审' }))
-    expect(within(right).getByRole('heading', { name: '评审面板' })).toBeTruthy()
+    expect(within(right).getByRole('complementary', { name: '评审面板' })).toBeTruthy()
     fireEvent.click(within(right).getByRole('button', { name: '元数据' }))
     expect(within(right).getByText('DICOM 元数据')).toBeTruthy()
 
@@ -337,7 +354,7 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
     // 选中图片：右栏评审面板打开，AI 建议（Mock）区可达
     fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
     const right = screen.getByRole('complementary', { name: '信息面板' })
-    expect(within(right).getByRole('heading', { name: '评审面板' })).toBeTruthy()
+    expect(within(right).getByRole('complementary', { name: '评审面板' })).toBeTruthy()
     const aiSection = within(right).getByLabelText('AI 建议')
     expect(within(aiSection).getByText('Mock 生成')).toBeTruthy()
     expect(within(aiSection).getByText('命名建议')).toBeTruthy()

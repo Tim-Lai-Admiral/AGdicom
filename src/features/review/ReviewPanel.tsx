@@ -17,11 +17,11 @@
  * 图样重样式（CR-010 T-001）：区块化 + 分区标题大写字距 + 三态瓦片 + 危险区/脚注，
  * 仅视觉与结构分区，功能契约不变；页签（评审/元数据）由 App 渲染，样式联动 styles.css。
  *
- * 交互与可访问性：Esc 关闭；可折叠为仅标题栏（aria-expanded）；
- * 保存成功以 role="status" 文案反馈并数秒后自动消失。
+ * 常驻面板（CR-011 T-001）：无内部标题头/收起/关闭（右栏自身收起由 App 顶栏开关负责，
+ * 页签切换 rightTab 亦由 App 渲染）；保存成功以 role="status" 文案反馈并数秒后自动消失。
  * 领域计算与持久化（saveState）由上层（App）完成；保存失败提示由 App 呈现。
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Asset, AssetStatus, ReviewHistory as ReviewHistoryData } from '../../domain/types.ts'
 import { ASSET_KIND_LABELS, ASSET_STATUS_LABELS } from '../../domain/types.ts'
 import AiPanel from '../ai/AiPanel.tsx'
@@ -54,8 +54,6 @@ export interface ReviewPanelProps {
   /** 删除素材（CR-006 T-001 / R-015，二次确认由面板内联确认态完成，
    *  级联清理与持久化由上层负责）；缺省时不渲染删除入口（既有调用方不受影响） */
   onDeleteAsset?: () => void
-  /** 关闭面板（“关闭”按钮与 Esc 键均触发） */
-  onClose: () => void
 }
 
 export default function ReviewPanel({
@@ -68,16 +66,13 @@ export default function ReviewPanel({
   onSaveNote,
   onAcceptAiName,
   onDeleteAsset,
-  onClose,
 }: ReviewPanelProps) {
-  const [collapsed, setCollapsed] = useState(false)
   const [draftStatus, setDraftStatus] = useState<AssetStatus>(asset.status)
   const [draftComment, setDraftComment] = useState('')
   const [draftNote, setDraftNote] = useState(asset.note)
   const [newTag, setNewTag] = useState('')
   const [feedback, setFeedback] = useState<string | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const closeButtonRef = useRef<HTMLButtonElement>(null)
 
   // 切换素材时重置草稿（素材 ID 变化才重置，草稿字段本身不是依赖）
   useEffect(() => {
@@ -104,18 +99,6 @@ export default function ReviewPanel({
       window.clearTimeout(timer)
     }
   }, [feedback])
-
-  // 打开时聚焦“关闭”按钮（键盘用户可直达）；Esc 关闭（与查看器弹层一致）
-  useEffect(() => {
-    closeButtonRef.current?.focus()
-    const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [onClose])
 
   const handleAddNewTag = (): void => {
     const tagName = newTag.trim()
@@ -169,32 +152,8 @@ export default function ReviewPanel({
     seriesUid !== undefined && seriesUid.length > 16 ? `${seriesUid.slice(0, 13)}…` : (seriesUid ?? '—')
 
   return (
-    <aside
-      className={collapsed ? 'review-panel is-collapsed' : 'review-panel'}
-      aria-label="评审面板"
-    >
-      <header className="review-panel__header">
-        <h2 className="review-panel__title">评审面板</h2>
-        <button
-          type="button"
-          className="review-panel__collapse"
-          aria-expanded={!collapsed}
-          onClick={() => setCollapsed((value) => !value)}
-        >
-          {collapsed ? '展开' : '收起'}
-        </button>
-        <button
-          type="button"
-          ref={closeButtonRef}
-          className="review-panel__close"
-          onClick={onClose}
-        >
-          关闭
-        </button>
-      </header>
-
-      {!collapsed ? (
-        <div className="review-panel__body">
+    <aside className="review-panel" aria-label="评审面板">
+      <div className="review-panel__body">
           <section className="review-panel__asset" aria-label="素材信息">
             <p className="review-panel__asset-name" title={asset.name}>
               {asset.name}
@@ -409,7 +368,6 @@ export default function ReviewPanel({
             <span className="review-panel__footer-text">{complianceNote}</span>
           </footer>
         </div>
-      ) : null}
     </aside>
   )
 }

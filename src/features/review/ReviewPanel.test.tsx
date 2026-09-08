@@ -30,7 +30,6 @@ function setup(overrides: Partial<ReviewPanelProps> = {}) {
   const onRemoveTag = vi.fn()
   const onSubmitReview = vi.fn()
   const onSaveNote = vi.fn()
-  const onClose = vi.fn()
   const props: ReviewPanelProps = {
     asset: makeAsset(),
     history: HISTORY,
@@ -39,11 +38,10 @@ function setup(overrides: Partial<ReviewPanelProps> = {}) {
     onRemoveTag,
     onSubmitReview,
     onSaveNote,
-    onClose,
     ...overrides,
   }
   const utils = render(<ReviewPanel {...props} />)
-  return { ...utils, onAddTag, onRemoveTag, onSubmitReview, onSaveNote, onClose, props }
+  return { ...utils, onAddTag, onRemoveTag, onSubmitReview, onSaveNote, props }
 }
 
 describe('ReviewPanel', () => {
@@ -51,9 +49,22 @@ describe('ReviewPanel', () => {
     cleanup() // vitest 未启用 globals，RTL 自动清理不生效，需手动卸载
   })
 
+  it('renders as a resident panel without header title/collapse/close (CR-011 T-001)', () => {
+    setup()
+    // 常驻右栏（CR-011 T-001）：无标题头、无收起/关闭按钮、无 Esc 关闭职责
+    expect(screen.getByRole('complementary', { name: '评审面板' })).toBeTruthy()
+    expect(screen.queryByText('评审面板', { selector: '.review-panel__title' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '收起' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '展开' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '关闭' })).toBeNull()
+    // Esc 不再触发任何面板级行为（window keydown 监听已移除）
+    const before = document.body.innerHTML
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(document.body.innerHTML).toBe(before)
+  })
+
   it('renders asset info, current status, tags and the review history', () => {
     setup()
-    expect(screen.getByText('评审面板')).toBeTruthy()
     expect(screen.getByText('heart.png')).toBeTruthy()
     expect(screen.getByText('图片', { selector: '.review-panel__asset-kind' })).toBeTruthy()
     // 当前状态指示（限定素材信息区，历史记录里也会有同文案）

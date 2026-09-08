@@ -162,8 +162,9 @@ function App() {
     setOpenGroupKeys((prev) => (prev.has(groupKey) ? prev : new Set([...prev, groupKey])))
   }
 
-  /** 关闭中央查看区：回到导入视图（查看器“关闭”/Esc 与评审面板“关闭”/Esc 共用）；
-   *  左栏分组面板高亮同步清理（CR-008 T-002 / R-022 验收：关闭查看器 → 高亮清理） */
+  /** 关闭中央查看区：回到导入视图（查看器“关闭”/Esc 触发；CR-011 T-001 起评审面板
+   *  常驻右栏，不再经此关闭）；左栏分组面板高亮同步清理
+   *  （CR-008 T-002 / R-022 验收：关闭查看器 → 高亮清理） */
   const closeActiveAsset = (): void => {
     setActiveAssetId(null)
     setActiveSliceAssetId(null)
@@ -497,7 +498,6 @@ function App() {
               onSaveNote={(note) => handleSaveNote(activeAsset.id, note)}
               onAcceptAiName={(name) => handleRenameAsset(activeAsset.id, name)}
               onDeleteAsset={() => handleDeleteAsset(activeAsset.id)}
-              onClose={closeActiveAsset}
             />
           ) : null}
         </aside>
