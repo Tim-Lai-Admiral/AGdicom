@@ -6,7 +6,7 @@
 id: CR-012
 title: "右栏页签字号放大；设置弹窗（API 配置，真实 API 替代 Mock AI）；比较支持 DICOM/STL 双系列并行（滑动/旋转/平移同步）"
 change_level: L3
-status: approved
+status: completed
 parent: null
 created_by: Planner
 created_at: 2026-09-08
@@ -50,10 +50,10 @@ Human 指示（2026-09-08）：
 
 ## Tasks
 
-- [ ] T-001: 右栏页签字号放大 + 设置按钮与弹窗骨架
-- [ ] T-002: API 配置存储 + 真实 AI provider（回退 Mock）+ AI_USAGE 更新
-- [ ] T-003: DICOM 双系列比较（并行显示 + 切片/滑条同步）
-- [ ] T-004: STL 双模型比较（旋转/平移/缩放同步）+ 比较模式素材选择扩展（dicom/model）+ 矩阵/文档
+- [x] T-001: 右栏页签字号放大 + 设置按钮与弹窗骨架
+- [x] T-002: API 配置存储 + 真实 AI provider（回退 Mock）+ AI_USAGE 更新
+- [x] T-003: DICOM 双系列比较（并行显示 + 切片/滑条同步）
+- [x] T-004: STL 双模型比较（旋转/平移/缩放同步）+ 比较模式素材选择扩展（dicom/model）+ 矩阵/文档
 
 ## Dependencies
 
@@ -65,4 +65,8 @@ Human 指示（2026-09-08）：
 
 ## Result
 
-<!-- 合并后填写 -->
+- 2026-09-08 完成。T-001~T-004 合并至 master（PR #52~#55 按序，分支已删）。
+- 审查：初评 REQUEST CHANGES（M1 隐私边界：远程请求含 PHI）→ 修复（toRemoteDicomMeta 白名单过滤 + 单测 + AI_USAGE 补强）→ PASS（REVIEW-CR012.md，442 测试复跑全绿）。
+- 非阻塞：m1 图片比较 Esc 双重退出（与 TD-003 同族，待统一处理）；m2 设置弹窗无焦点圈定；m3 geometry dispose；m4 用例计数口径。
+- 遗留人工：真机验收（设置弹窗假 API 回退、DICOM 双系列目检、STL 双模型拖拽同步）。
+- CURRENT 已更新（REQUIREMENTS R-027~R-030、DESIGN/ARCHITECTURE 设置与比较扩展），Tag v0.7.0。
