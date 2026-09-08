@@ -10,14 +10,18 @@ function renderToolbar(overrides: {
   toolGroupKind?: 'dicom' | 'image' | null
   viewerTool?: ViewerTool
   onViewerToolChange?: (tool: ViewerTool) => void
+  compareMode?: boolean
+  compareAvailable?: boolean
+  importActive?: boolean
 } = {}) {
   const filter: AssetFilter = DEFAULT_ASSET_FILTER
   const props = {
     filter,
     tagNames: [],
     onFilterChange: vi.fn(),
-    compareReady: false,
-    onOpenCompare: vi.fn(),
+    compareAvailable: true,
+    compareMode: false,
+    onToggleCompare: vi.fn(),
     importActive: false,
     onOpenImport: vi.fn(),
     exportOpen: false,
@@ -87,5 +91,54 @@ describe('TopToolbar: 视口工具组（CR-009 T-002 / R-024）', () => {
     renderToolbar({ toolGroupKind: null })
     expect(screen.queryByRole('group', { name: '视口工具' })).toBeNull()
     expect(screen.queryByRole('button', { name: '平移' })).toBeNull()
+  })
+})
+
+describe('TopToolbar: 汉字按钮与比较模式入口（CR-011 T-002 / R-002）', () => {
+  it('renders 导入/比较 as Chinese text buttons without legacy icon-only variants', () => {
+    renderToolbar()
+    const importBtn = screen.getByRole('button', { name: '导入' })
+    const compareBtn = screen.getByRole('button', { name: '比较' })
+    expect(importBtn.textContent).toBe('导入')
+    expect(compareBtn.textContent).toBe('比较')
+    expect(importBtn.className).toContain('tool-btn--text')
+    expect(compareBtn.className).toContain('tool-btn--text')
+    // 无旧图标按钮残留（同一名下不应再有 svg 图标按钮）
+    expect(importBtn.querySelector('svg')).toBeNull()
+    expect(compareBtn.querySelector('svg')).toBeNull()
+  })
+
+  it('reports the compare toggle and is disabled without comparable image assets', () => {
+    const { onToggleCompare } = renderToolbar({ compareAvailable: false })
+    const compareBtn = screen.getByRole('button', { name: '比较' }) as HTMLButtonElement
+    expect(compareBtn.disabled).toBe(true)
+    fireEvent.click(compareBtn)
+    expect(onToggleCompare).not.toHaveBeenCalled()
+
+    cleanup()
+    const { onToggleCompare: onToggleAvailable } = renderToolbar({ compareAvailable: true })
+    const enabledBtn = screen.getByRole('button', { name: '比较' }) as HTMLButtonElement
+    expect(enabledBtn.disabled).toBe(false)
+    expect(enabledBtn.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(enabledBtn)
+    expect(onToggleAvailable).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the 完成 state inside compare mode and exits via the same button', () => {
+    const { onToggleCompare } = renderToolbar({ compareMode: true, compareAvailable: true })
+    const doneBtn = screen.getByRole('button', { name: '完成' })
+    expect(screen.queryByRole('button', { name: '比较' })).toBeNull()
+    expect(doneBtn.getAttribute('aria-pressed')).toBe('true')
+    expect((doneBtn as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(doneBtn)
+    expect(onToggleCompare).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the 导入 button clickable with its toggle state (功能不变)', () => {
+    const { onOpenImport } = renderToolbar({ importActive: true })
+    const importBtn = screen.getByRole('button', { name: '导入' })
+    expect(importBtn.getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(importBtn)
+    expect(onOpenImport).toHaveBeenCalledTimes(1)
   })
 })

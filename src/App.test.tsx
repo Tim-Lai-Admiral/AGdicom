@@ -119,8 +119,8 @@ describe('App', () => {
     expect(screen.getByText('待评审', { selector: '.status-dot' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /当前状态：待评审/ })).toBeNull()
 
-    // 状态修改入口：选中素材 → 右栏评审面板（CR-004 T-001）
-    fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
+    // 状态修改入口：选中素材 → 右栏评审面板（CR-004 T-001；普通模式行点击=中央查看）
+    fireEvent.click(screen.getByRole('button', { name: '查看图片“heart.png”' }))
     const right = screen.getByRole('complementary', { name: '信息面板' })
     fireEvent.click(within(right).getByRole('radio', { name: '通过' }))
     fireEvent.click(within(right).getByRole('button', { name: '保存评审' }))
@@ -205,7 +205,42 @@ describe('App', () => {
     expect(screen.getByText('素材库（1）')).toBeTruthy()
   })
 
-  it('compares two selected images side by side and exits via button and Esc', async () => {
+  it('views an image centrally on image row click in normal mode without compare selection (CR-011 T-002)', async () => {
+    const { container } = render(<App />)
+    dropFiles(container, [
+      makeFile('heart.png', 64, 'image/png'),
+      makeFile('lung.png', 64, 'image/png'),
+    ])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 2 个素材')).toBeTruthy()
+    })
+
+    // 普通模式：无比较提示条；图片行点击=中央查看该图片（不再进入比较选择）
+    expect(screen.queryByText(/已选/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '查看图片“heart.png”' }))
+    expect(screen.getByText('heart.png', { selector: '.image-stage__name' })).toBeTruthy()
+
+    // 再点另一张：中央切换查看对象，不出现比较视图，无“选择加入比较”残留语义
+    fireEvent.click(screen.getByRole('button', { name: '查看图片“lung.png”' }))
+    expect(screen.getByText('lung.png', { selector: '.image-stage__name' })).toBeTruthy()
+    expect(screen.queryByRole('dialog', { name: '图片比较' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /加入比较/ })).toBeNull()
+  })
+
+  it('keeps the compare entry disabled when no comparable image assets exist', async () => {
+    const { container } = render(<App />)
+    dropFiles(container, [
+      makeFile('scan.dcm', 128),
+      makeFile('aorta.stl', 256),
+    ])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 2 个素材')).toBeTruthy()
+    })
+    // 无 image 素材：比较模式入口不可用
+    expect(compareButton().disabled).toBe(true)
+  })
+
+  it('enters compare mode via the toolbar, selects two images explicitly and exits clearing the selection', async () => {
     const { container } = render(<App />)
     dropFiles(container, [
       makeFile('heart.png', 64, 'image/png'),
@@ -217,18 +252,17 @@ describe('App', () => {
       expect(screen.getByText('成功导入 4 个素材')).toBeTruthy()
     })
 
-    // 未选中两张前“比较”不可用；dicom 卡片点击打开 DICOM 查看器（不参与比较选择）
-    expect(compareButton().disabled).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: '查看“scan.dcm”的 DICOM 详情' }))
-    expect(screen.getByRole('dialog', { name: 'DICOM 详情' })).toBeTruthy()
-    expect(compareButton().disabled).toBe(true)
-    fireEvent.keyDown(window, { key: 'Escape' }) // 关闭查看器，继续比较流程
-    expect(screen.queryByRole('dialog')).toBeNull()
+    // 顶栏「比较」进入显式比较模式：提示条出现，列表仅剩 image（非 image 行隐藏）
+    fireEvent.click(compareButton())
+    expect(screen.getByText('选择两张图片进行比较（已选 0/2）')).toBeTruthy()
+    expect(screen.queryByText('scan.dcm', { selector: '.asset-row__name' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '查看“scan.dcm”的 DICOM 详情' })).toBeNull()
 
-    // 选中第一张：提示已选 1/2，比较仍不可用
+    // 选中第一张：仅显式选择（提示 1/2；不进入比较视图）
     fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
-    expect(screen.getByText(/已选 1\/2/)).toBeTruthy()
-    expect(compareButton().disabled).toBe(true)
+    expect(screen.getByText('选择两张图片进行比较（已选 1/2）')).toBeTruthy()
+    expect(screen.queryByRole('dialog', { name: '图片比较' })).toBeNull()
+    expect(screen.getByRole('button', { name: '取消选择“heart.png”' })).toBeTruthy()
 
     // 选中第二张：自动进入比较，双图并排可见
     fireEvent.click(screen.getByRole('button', { name: '选择“lung.png”加入比较' }))
@@ -238,23 +272,48 @@ describe('App', () => {
     expect(within(dialog).getByText('heart.png')).toBeTruthy()
     expect(within(dialog).getByText('lung.png')).toBeTruthy()
 
-    // 退出按钮关闭比较，保留选中以便再次进入
+    // 退出比较视图（退出按钮）= 退出比较模式：清空选择并恢复列表（非 image 行回来）
     fireEvent.click(within(dialog).getByRole('button', { name: '退出比较' }))
     expect(screen.queryByRole('dialog')).toBeNull()
-    expect(compareButton().disabled).toBe(false)
+    expect(screen.queryByText(/选择两张图片进行比较/)).toBeNull()
+    expect(screen.getByRole('button', { name: '查看“scan.dcm”的 DICOM 详情' })).toBeTruthy()
 
-    // 已选满两张：点击第三张图片卡片被忽略
-    fireEvent.click(screen.getByRole('button', { name: '选择“brain.png”加入比较' }))
-    expect(compareButton().disabled).toBe(false)
-
-    // 通过“比较”按钮再次进入，Esc 关闭
+    // 再次进入：选择从 0/2 重新开始；Esc 退出比较视图同样退出比较模式
     fireEvent.click(compareButton())
+    expect(screen.getByText('选择两张图片进行比较（已选 0/2）')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
+    fireEvent.click(screen.getByRole('button', { name: '选择“lung.png”加入比较' }))
     expect(screen.getByRole('dialog', { name: '图片比较' })).toBeTruthy()
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByRole('dialog')).toBeNull()
-    // 取消选择一张后：比较按钮回到不可用
+    expect(screen.queryByText(/选择两张图片进行比较/)).toBeNull()
+    expect(screen.getByRole('button', { name: '查看图片“brain.png”' })).toBeTruthy()
+  })
+
+  it('supports cancel within compare mode and exits via the 完成 button', async () => {
+    const { container } = render(<App />)
+    dropFiles(container, [
+      makeFile('heart.png', 64, 'image/png'),
+      makeFile('lung.png', 64, 'image/png'),
+    ])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 2 个素材')).toBeTruthy()
+    })
+
+    fireEvent.click(compareButton())
+    fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
+    expect(screen.getByText(/已选 1\/2/)).toBeTruthy()
+    // 比较模式内可取消选择（显式选择可回退）
     fireEvent.click(screen.getByRole('button', { name: '取消选择“heart.png”' }))
-    expect(compareButton().disabled).toBe(true)
+    expect(screen.getByText(/已选 0\/2/)).toBeTruthy()
+    expect(screen.queryByRole('dialog', { name: '图片比较' })).toBeNull()
+
+    // 顶栏「完成」：退出比较模式——提示条消失、按钮回到「比较」、普通模式行语义恢复
+    fireEvent.click(screen.getByRole('button', { name: '完成' }))
+    expect(screen.queryByText(/选择两张图片进行比较/)).toBeNull()
+    expect(compareButton()).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '完成' })).toBeNull()
+    expect(screen.getByRole('button', { name: '查看图片“heart.png”' })).toBeTruthy()
   })
 
   it('imports a STL file directly via file selection and opens the 3D viewer from a model card', async () => {

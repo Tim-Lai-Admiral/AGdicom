@@ -1890,6 +1890,16 @@ button.asset-row__main:hover {
   flex: 0 0 auto;
 }
 
+/* 汉字文本按钮（CR-011 T-002 / R-002）：导入/比较，宽度随文字（非固定 32px 图标位） */
+.workbench__toolbar .tool-btn--text {
+  width: auto;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
 /* 视口工具组（CR-009 T-002 / R-024）：tool-btn 图标按钮横排（激活态见 .tool-btn.active） */
 .workbench__toolgroup {
   display: flex;

@@ -6,8 +6,11 @@
  * 无独立卡片容器、无行内“评审”按钮、无状态徽标按钮——状态与评审统一经
  * “选中素材 → 右栏评审面板”完成（数据持久化契约不变）。
  *
- * 交互：image 行主体可点击切换“比较选中”（最多两张，选中集合与上限由上层
- * 管理，同时作为“在中央查看该图片”）；dicom 行主体可点击打开 DICOM 查看器
+ * 交互（CR-011 T-002 / R-002 显式比较模式）：image 行主体可点击，handler 由上层
+ * 按模式传入同一 onToggleSelect prop——普通模式传入“中央查看该图片”（onOpenImage
+ * 语义），比较模式传入“切换比较选中”（最多两张，选中集合与上限由上层管理）；
+ * compareMode 决定行可访问名与 aria-pressed：普通“查看图片 X”（无按压态），
+ * 比较“选择 X 加入比较”/“取消选择 X”。dicom 行主体可点击打开 DICOM 查看器
  * （onOpenDicom，T-005 接入；未提供时保持不可交互）；model 行主体可点击打开
  * 3D 模型查看器（onOpenModel，T-006 接入；未提供时保持不可交互）。
  * 行内删除（CR-006 T-001 / R-015）：仅选中行（比较选中或工作台当前素材）显示
@@ -32,8 +35,12 @@ export interface AssetGridProps {
   assets: readonly Asset[]
   /** 当前选中的素材 ID（用于图片比较，最多两张） */
   selectedIds: readonly string[]
-  /** 点击 image 行主体：切换比较选中 */
+  /** 点击 image 行主体：语义随 compareMode——普通模式为中央查看（App 传入查看
+   *  handler），比较模式为切换比较选中（props 语义保持，handler 由 App 按模式传入） */
   onToggleSelect: (assetId: string) => void
+  /** 是否处于比较模式（CR-011 T-002）：决定 image 行可访问名与 aria-pressed
+   *  （普通“查看图片 X”；比较“选择 X 加入比较”/“取消选择 X”）；缺省普通模式 */
+  compareMode?: boolean
   /** 点击 dicom 行主体：打开 DICOM 查看器（T-005）；未提供时 dicom 行不可交互 */
   onOpenDicom?: (assetId: string) => void
   /** 点击 model 行主体：打开 3D 模型查看器（T-006）；未提供时 model 行不可交互 */
@@ -184,6 +191,7 @@ function AssetRow({
   asset,
   selected,
   active,
+  compareMode,
   onToggleSelect,
   onOpenDicom,
   onOpenModel,
@@ -194,6 +202,8 @@ function AssetRow({
   selected: boolean
   /** 工作台当前素材（与 selected 共同决定删除按钮显隐） */
   active: boolean
+  /** 是否处于比较模式（image 行可访问名与 aria-pressed 按模式切换） */
+  compareMode: boolean
   onToggleSelect: (assetId: string) => void
   onOpenDicom?: (assetId: string) => void
   onOpenModel?: (assetId: string) => void
@@ -252,9 +262,13 @@ function AssetRow({
         <button
           type="button"
           className="asset-row__main"
-          aria-pressed={selected}
+          aria-pressed={compareMode ? selected : undefined}
           aria-label={
-            selected ? `取消选择“${asset.name}”` : `选择“${asset.name}”加入比较`
+            compareMode
+              ? selected
+                ? `取消选择“${asset.name}”`
+                : `选择“${asset.name}”加入比较`
+              : `查看图片“${asset.name}”`
           }
           onClick={() => onToggleSelect(asset.id)}
         >
@@ -324,6 +338,7 @@ function AssetRow({
 export default function AssetGrid({
   assets,
   selectedIds,
+  compareMode = false,
   onToggleSelect,
   onOpenDicom,
   onOpenModel,
@@ -339,6 +354,7 @@ export default function AssetGrid({
           asset={asset}
           selected={selectedIds.includes(asset.id)}
           active={activeAssetId === asset.id}
+          compareMode={compareMode}
           onToggleSelect={onToggleSelect}
           onOpenDicom={onOpenDicom}
           onOpenModel={onOpenModel}

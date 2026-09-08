@@ -99,8 +99,9 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
       expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
     })
 
-    // 点击图片卡片：中央显示图片预览，右栏显示评审面板（非 DICOM 素材 → 评审）
-    fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
+    // 点击图片卡片：中央显示图片预览，右栏显示评审面板（非 DICOM 素材 → 评审）；
+    // 普通模式行点击=中央查看（CR-011 T-002）
+    fireEvent.click(screen.getByRole('button', { name: '查看图片“heart.png”' }))
     expect(screen.getByText('heart.png', { selector: '.image-stage__name' })).toBeTruthy()
     const right = screen.getByRole('complementary', { name: '信息面板' })
     // CR-011 T-001：面板常驻右栏，无标题头（以面板 landmark 断言，而非 heading）
@@ -351,8 +352,8 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
       expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
     })
 
-    // 选中图片：右栏评审面板打开，AI 建议（Mock）区可达
-    fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
+    // 选中图片：右栏评审面板打开，AI 建议（Mock）区可达（普通模式行点击=中央查看）
+    fireEvent.click(screen.getByRole('button', { name: '查看图片“heart.png”' }))
     const right = screen.getByRole('complementary', { name: '信息面板' })
     expect(within(right).getByRole('complementary', { name: '评审面板' })).toBeTruthy()
     const aiSection = within(right).getByLabelText('AI 建议')
@@ -490,7 +491,7 @@ describe('App: 素材删除（CR-006 T-001 / R-015）', () => {
     })
 
     // 选中图片：中央预览 + 右栏评审面板；先留评审历史与标签，验证级联清理
-    fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
+    fireEvent.click(screen.getByRole('button', { name: '查看图片“heart.png”' }))
     expect(screen.getByText('heart.png', { selector: '.image-stage__name' })).toBeTruthy()
     const right = screen.getByRole('complementary', { name: '信息面板' })
     fireEvent.click(within(right).getByRole('radio', { name: '通过' }))
@@ -539,16 +540,16 @@ describe('App: 素材删除（CR-006 T-001 / R-015）', () => {
       expect(screen.getByText('成功导入 2 个素材')).toBeTruthy()
     })
 
-    // 未选中行不显示删除入口；点击行（选中行）后入口出现
+    // 未选中行不显示删除入口；点击行（查看该图片，行成为工作台当前素材）后入口出现
     expect(screen.queryByRole('button', { name: '删除素材 heart.png' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
+    fireEvent.click(screen.getByRole('button', { name: '查看图片“heart.png”' }))
     fireEvent.click(screen.getByRole('button', { name: '删除素材 heart.png' }))
     fireEvent.click(screen.getByRole('button', { name: '确认删除“heart.png”' }))
 
     // 列表同步移除；其余行不受影响；持久化同步
     expect(screen.getByText('素材库（1）')).toBeTruthy()
     expect(screen.queryByText('heart.png', { selector: '.asset-row__name' })).toBeNull()
-    expect(screen.getByRole('button', { name: '选择“lung.png”加入比较' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '查看图片“lung.png”' })).toBeTruthy()
     expect(Object.keys(loadState().state.assets)).toHaveLength(1)
   })
 
