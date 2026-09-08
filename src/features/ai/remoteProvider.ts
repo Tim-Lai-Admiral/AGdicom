@@ -72,6 +72,33 @@ function normalizeSuggestion(payload: unknown): AiSuggestion {
   return { name, tags, summary }
 }
 
+/** 远程请求的 DICOM 元数据（R-028 隐私边界，M1 修复）：过滤 patientName/patientID 等
+ *  直接标识符（PHI），仅发送非 PHI 的工程元数据（Modality/序列 UID/切片数/尺寸/像素间距/去标识化标记）。 */
+function toRemoteDicomMeta(meta: Asset['dicomMeta']): {
+  modality?: string
+  sopClass?: string
+  transferSyntax?: string
+  rows?: number
+  columns?: number
+  pixelSpacing?: number[]
+  seriesInstanceUID?: string
+  sliceCount: number
+  deidentified: boolean
+} | null {
+  if (meta === undefined) return null
+  return {
+    modality: meta.modality,
+    sopClass: meta.sopClass,
+    transferSyntax: meta.transferSyntax,
+    rows: meta.rows,
+    columns: meta.columns,
+    pixelSpacing: meta.pixelSpacing,
+    seriesInstanceUID: meta.seriesInstanceUID,
+    sliceCount: meta.sliceCount,
+    deidentified: meta.deidentified,
+  }
+}
+
 /** 创建远程 provider（每次设置变更创建新实例，捕获当时的 baseURL/apiKey） */
 export function createRemoteProvider(config: RemoteProviderConfig): AIProvider {
   const url = suggestUrl(config.baseURL)
@@ -93,8 +120,8 @@ export function createRemoteProvider(config: RemoteProviderConfig): AIProvider {
           body: JSON.stringify({
             name: asset.name,
             kind: asset.kind,
-            ...(asset.kind === 'dicom' && asset.dicomMeta !== undefined
-              ? { dicomMeta: asset.dicomMeta }
+            ...(asset.kind === 'dicom'
+              ? { dicomMeta: toRemoteDicomMeta(asset.dicomMeta) }
               : {}),
             file: {
               fileName: asset.file.fileName,
