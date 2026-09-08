@@ -1,6 +1,6 @@
 /**
  * 素材并排比较视图（CR-001 T-004 / R-002；CR-009 T-003 / R-024 窗格独立变换；
- * CR-012 T-003 / R-029 DICOM 双系列比较）。
+ * CR-012 T-003 / R-029 DICOM 双系列比较；CR-012 T-004 / R-030 STL 双模型比较）。
  *
  * 应用内视图状态（非路由）：由上层在选中两张同类型素材时渲染于工作台中央查看区
  * （CR-003 T-002 布局壳 / T-004 归位）；按素材 kind 分派：
@@ -8,11 +8,13 @@
  *   （共享 imageViewport 模块，R-024 契约：比较视图隐藏顶栏工具组）；
  * - dicom：双系列双窗（R-029），每窗复用 DicomViewport（四角/工具/切片滑动条），
  *   切片索引共享（各系列按 InstanceNumber 排序后按 index 对齐，切片数不同按本系列
- *   长度钳制显示；滚轮/滑条任一侧驱动两侧）、pan/zoom/rotate 共享、W/L 每窗独立。
+ *   长度钳制显示；滚轮/滑条任一侧驱动两侧）、pan/zoom/rotate 共享、W/L 每窗独立；
+ * - model：双 three.js 渲染实例并排（R-030），相机旋转/平移/缩放两窗同步
+ *   （共享 OrbitControls 目标 + 复制相机变换，见 modelViewSync）；组件按需加载
+ *   （React.lazy，TD-002：three.js 不进首屏主包），加载/错误/降级每窗独立。
  * “退出比较”按钮与 Esc 键均可退出；降级（压缩/损坏/会话失效）单窗降级不互相影响。
- * 3D 模型比较由 T-004 承接（App 现不允许选入 model）。
  */
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import type { Asset, DicomMeta } from '../../domain/types.ts'
 import {
   ImageViewportControls,
@@ -24,6 +26,9 @@ import type { ViewportTransform } from '../viewer/dicom/DicomViewport.tsx'
 import { AUTO_WINDOW_LEVEL } from '../viewer/dicom/windowLevel.ts'
 import type { WindowLevelState } from '../viewer/dicom/windowLevel.ts'
 import type { ViewerTool } from '../viewer/viewerTools.ts'
+
+// TD-002：three.js 随模型比较拆为独立 chunk（React.lazy 按需加载，不进首屏主包）
+const ModelComparePanes = lazy(() => import('../viewer/model3d/ModelComparePanes.tsx'))
 
 // 幽灵占位提示统一措辞（CR-006 T-004，与 AssetGrid/ImageStage 一致）
 const PREVIEW_UNAVAILABLE = '图片预览不可用：会话失效，可重新导入或删除该素材'
@@ -173,12 +178,15 @@ export default function CompareView({
   activeTool = 'pan',
 }: CompareViewProps) {
   const exitButtonRef = useRef<HTMLButtonElement>(null)
-  // 按选中素材类型分派（App 保证两张同类型；model 由 T-004 承接，现不可选入）
+  // 按选中素材类型分派（App 保证两张同类型）
   const dicomCompare = left.kind === 'dicom' && right.kind === 'dicom'
-  const title = dicomCompare ? 'DICOM 比较' : '图片比较'
+  const modelCompare = left.kind === 'model' && right.kind === 'model'
+  const title = dicomCompare ? 'DICOM 比较' : modelCompare ? '模型比较' : '图片比较'
   const hint = dicomCompare
     ? '双系列并排显示：切片与视图变换两窗同步（W/L 每窗独立），按 Esc 也可退出'
-    : '两张图片等尺寸并排显示，按 Esc 也可退出'
+    : modelCompare
+      ? '双模型并排显示：旋转/平移/缩放两窗同步，按 Esc 也可退出'
+      : '两张图片等尺寸并排显示，按 Esc 也可退出'
 
   useEffect(() => {
     // 弹层打开后聚焦退出按钮（键盘用户可直达），并监听 Esc 关闭
@@ -210,6 +218,16 @@ export default function CompareView({
             activeTool={activeTool}
             onMetasParsed={onMetasParsed}
           />
+        ) : modelCompare ? (
+          <Suspense
+            fallback={
+              <div className="compare__panes" role="status">
+                <p className="compare-pane__placeholder">正在加载模型比较…</p>
+              </div>
+            }
+          >
+            <ModelComparePanes left={left} right={right} />
+          </Suspense>
         ) : (
           <div className="compare__panes">
             <ComparePane asset={left} />

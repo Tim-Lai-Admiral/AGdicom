@@ -29,12 +29,13 @@
  * 反向连续性同测）；顶栏工具组切换冒烟（R-024，aria-pressed ↔ 查看器 data-tool 跟随，
  * 测量小控件随工具显隐；工具行为细节由 DicomViewer/TopToolbar 组件测试覆盖，不重复）。
  *
- * 比较显式模式场景（CR-011 T-003 / R-002；CR-012 T-003 / R-029 扩展 dicom）：混合素材下
- * 的 App 级集成断言——顶栏「比较」进入比较模式后列表筛选出可比较素材（image+dicom 行可选、
- * model 行与 DICOM 患者分组面板隐藏、提示条出现）、显式选择满两张自动并排比较（先选在左）、
- * 退出恢复完整列表与普通模式行点击查看语义（模式状态机细节由 App.test.tsx /
- * TopToolbar.test.tsx 覆盖，不重复）；另含 DICOM 双系列比较场景（R-029：双窗渲染、
- * 切片滚轮/滑条双向同步、退出恢复）。
+ * 比较显式模式场景（CR-011 T-003 / R-002；CR-012 T-003 / R-029 扩展 dicom、T-004 / R-030
+ * 扩展 model）：混合素材下的 App 级集成断言——顶栏「比较」进入比较模式后列表筛选出可比较
+ * 素材（image+dicom+model 行可选、DICOM 患者分组面板隐藏、提示条出现）、显式选择满两张
+ * 自动并排比较（先选在左）、退出恢复完整列表与普通模式行点击查看语义（模式状态机细节由
+ * App.test.tsx / TopToolbar.test.tsx 覆盖，不重复）；另含 DICOM 双系列比较场景（R-029：
+ * 双窗渲染、切片滚轮/滑条双向同步、退出恢复）与 STL 双模型比较场景（R-030：双窗渲染、
+ * 退出恢复）。
  */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -48,6 +49,7 @@ import {
   buildDicomSeriesBuffers,
   gradientPixels8,
 } from './features/viewer/dicom/__fixtures__/buildDicomFile.ts'
+import { buildStlFile } from './features/viewer/model3d/__fixtures__/buildStlFile.ts'
 import { generateSliceThumb, getCachedSliceThumb } from './features/viewer/dicom/sliceThumb.ts'
 
 // sliceThumb 模块 mock（T-002 组件测试同款隔离）：
@@ -833,8 +835,8 @@ describe('App: 场景矩阵——比较显式模式（CR-011 T-003 / R-002）', 
     localStorage.clear()
   })
 
-  it('进入比较模式筛选出可比较素材（image+dicom 可选、model 行与 DICOM 分组面板隐藏）；显式选择满两张自动比较；退出恢复', async () => {
-    // 混合素材：2 张图片（可比较）+ 1 个 DICOM（可比较，CR-012 T-003 / R-029）+ 1 个 STL（T-004 前不可比较）
+  it('进入比较模式筛选出可比较素材（image+dicom+model 可选、DICOM 分组面板隐藏）；显式选择满两张自动比较；退出恢复', async () => {
+    // 混合素材：2 张图片（可比较）+ 1 个 DICOM（可比较，CR-012 T-003 / R-029）+ 1 个 STL（可比较，T-004 / R-030）
     const { container } = render(<App />)
     dropFiles(container, [
       plainFile('heart.png', 64, 'image/png'),
@@ -856,14 +858,14 @@ describe('App: 场景矩阵——比较显式模式（CR-011 T-003 / R-002）', 
     expect(screen.getByText('aorta.stl')).toBeTruthy()
     expect(document.querySelectorAll('.dicom-panel')).toHaveLength(1)
 
-    // 顶栏「比较」进入显式比较模式：提示条出现；列表剩可比较素材——image+dicom 行
-    // 呈「加入比较」语义（R-029），STL 行与 DICOM 患者分组面板隐藏（进入模式筛选断言）
+    // 顶栏「比较」进入显式比较模式：提示条出现；列表剩可比较素材——image+dicom+model
+    // 行呈「加入比较」语义（R-029/R-030），DICOM 患者分组面板隐藏（进入模式筛选断言）
     fireEvent.click(screen.getByRole('button', { name: '比较' }))
     expect(screen.getByText('选择两个同类型素材进行比较（已选 0/2）')).toBeTruthy()
     expect(screen.getByRole('button', { name: '选择“heart.png”加入比较' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '选择“lung.png”加入比较' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '选择“p01.dcm”加入比较' })).toBeTruthy()
-    expect(screen.queryByText('aorta.stl')).toBeNull()
+    expect(screen.getByRole('button', { name: '选择“aorta.stl”加入比较' })).toBeTruthy()
     expect(document.querySelectorAll('.dicom-panel')).toHaveLength(0)
 
     // 显式选择第一张：仅计数（1/2），不进入比较视图
@@ -987,5 +989,97 @@ describe('App: 场景矩阵——DICOM 双系列比较（CR-012 T-003 / R-029）
     fireEvent.click(within(dialog).getByRole('button', { name: '退出比较' }))
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.getByRole('button', { name: '查看“a1.dcm”的 DICOM 详情' })).toBeTruthy()
+  })
+})
+
+describe('App: 场景矩阵——STL 双模型比较（CR-012 T-004 / R-030）', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    stubObjectUrlCreation()
+    generateMock.mockResolvedValue(null)
+    cacheMock.mockReturnValue(undefined)
+  })
+  afterEach(() => {
+    cleanup() // vitest 未启用 globals，RTL 自动清理不生效，需手动卸载
+    vi.restoreAllMocks()
+    vi.resetAllMocks()
+    vi.unstubAllGlobals()
+    if (originalCreateObjectURL === undefined) {
+      delete (URL as { createObjectURL?: unknown }).createObjectURL
+    } else {
+      Object.defineProperty(URL, 'createObjectURL', originalCreateObjectURL)
+    }
+    localStorage.clear()
+  })
+
+  it('选择两个 model 素材进入双模型比较：双窗渲染（先选在左）、退出恢复', async () => {
+    // 查看器加载桩：objectUrl → 最小二进制 STL（经 nameByUrl 映射按名供给字节）。
+    // 模型加载器（loadModelBytes）读取 headers.get('Content-Length') 与 body 分块，
+    // 需要带 headers/body 的完整 response 形状（DICOM 场景的 stubFetchFor 不提供）。
+    const bytesByName: Record<string, Uint8Array<ArrayBuffer>> = {
+      'aorta.stl': new Uint8Array(buildStlFile()),
+      'heart.stl': new Uint8Array(buildStlFile()),
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const name = nameByUrl.get(url)
+        const bytes = name !== undefined ? bytesByName[name] : undefined
+        if (bytes === undefined) {
+          return {
+            ok: false,
+            status: 404,
+            headers: { get: () => null },
+            body: null,
+            arrayBuffer: async () => new ArrayBuffer(0),
+          }
+        }
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => String(bytes.byteLength) },
+          body: null,
+          arrayBuffer: async () => bytes.slice().buffer,
+        }
+      }),
+    )
+    stubCanvasUnavailable() // jsdom 无 WebGL：窗格到达降级分支（不崩溃；同步/dispose 细节由组件测试覆盖）
+    const { container } = render(<App />)
+    dropFiles(container, [
+      plainFile('aorta.stl', 284, 'model/stl'),
+      plainFile('heart.stl', 284, 'model/stl'),
+    ])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 2 个素材')).toBeTruthy()
+    })
+
+    // 比较模式 → 先选 aorta.stl（提示明示 3D 模型配对）再选 heart.stl：自动进入双模型比较
+    fireEvent.click(screen.getByRole('button', { name: '比较' }))
+    fireEvent.click(screen.getByRole('button', { name: '选择“aorta.stl”加入比较' }))
+    expect(
+      screen.getByText('选择两个同类型素材进行比较（已选 1/2）：请再选择一个3D 模型'),
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '选择“heart.stl”加入比较' }))
+    const dialog = screen.getByRole('dialog', { name: '模型比较' })
+
+    // 双窗渲染（ModelComparePanes 经 React.lazy 按需加载，需等待挂载）：两窗各一窗格
+    const panes = await waitFor(() => {
+      const elements = Array.from(dialog.querySelectorAll('.compare-pane--model')) as HTMLElement[]
+      expect(elements).toHaveLength(2)
+      return elements
+    })
+    await within(panes[0] as HTMLElement).findByText(/当前浏览器不支持 WebGL/)
+    await within(panes[1] as HTMLElement).findByText(/当前浏览器不支持 WebGL/)
+    // 窗名先选在左（R-002 顺序契约）
+    const paneNames = Array.from(
+      dialog.querySelectorAll('.compare-pane__name'),
+      (el) => el.textContent,
+    )
+    expect(paneNames).toEqual(['aorta.stl', 'heart.stl'])
+
+    // 退出比较：弹层关闭、普通模式行语义恢复（卸载清理随组件卸载发生，无异常即通过）
+    fireEvent.click(within(dialog).getByRole('button', { name: '退出比较' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: '查看“aorta.stl”的 3D 模型' })).toBeTruthy()
   })
 })

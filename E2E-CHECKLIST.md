@@ -25,10 +25,10 @@
 - [x] 卡片网格展示名称 / 类型 / 大小 / 状态徽标 —— App.test.tsx、AssetGrid.test.tsx、StatusBadge.test.tsx
 - [x] 类型筛选 + 搜索组合（大小写不敏感）+ 清空筛选 —— App.test.tsx「filters the grid by kind and search…」
 - [x] 空素材库与「无符合条件」空态提示 —— 同上
-- [x] 比较显式模式（CR-011 / R-002）：顶栏「比较」汉字按钮进入比较模式 → 素材库筛选出可比较图片（非 image 行与 DICOM 患者分组面板隐藏）+「选择两张图片进行比较（已选 X/2）」提示条 —— App.scenarioMatrix.test.tsx 比较显式模式场景 + App.test.tsx「enters compare mode via the toolbar…」（CR-011 T-003）
+- [x] 比较显式模式（CR-011 / R-002；CR-012 T-003/T-004 扩展 dicom/model）：顶栏「比较」汉字按钮进入比较模式 → 素材库筛选出可比较素材（image+dicom+model 行可选，DICOM 患者分组面板隐藏）+「选择两个同类型素材进行比较（已选 X/2）」提示条 —— App.scenarioMatrix.test.tsx 比较显式模式场景 + App.test.tsx「enters compare mode via the toolbar…」
 - [x] 显式选择满两张自动并排比较（先选在左）；比较内可取消重选 —— 同上 + App.test.tsx「supports cancel within compare mode…」
 - [x] 退出比较（「退出比较」按钮 / Esc / 顶栏「完成」）：清空选择、恢复完整列表与普通模式行点击查看语义 —— 同上 + App.test.tsx
-- [x] 无可比较图片素材时「比较」入口禁用 —— App.test.tsx「keeps the compare entry disabled…」
+- [x] model 纳入可比较类型（CR-012 T-004 / R-030）：model-only 素材库启用「比较」入口；混合类型选择被同类配对约束拒绝 —— App.test.tsx「enables the compare entry for model-only assets…」+「rejects mixed-kind compare selection…」
 
 ## 3. DICOM 查看
 
@@ -53,7 +53,11 @@
 - [x] 损坏 / 空 STL：错误提示 + 重试按钮；重试成功恢复 —— useModelLoader.test.ts + Model3DViewer.test.tsx
 - [x] 刷新后无会话内容：提示「需重新导入」不崩溃 —— Model3DViewer.test.tsx
 - [x] WebGL 不可用环境：降级提示（非白屏），Esc / 关闭可用 —— App.test.tsx + Model3DViewer.test.tsx
-- [ ] **（人工）** 真机 WebGL：左键拖拽旋转 / 滚轮缩放 / 右键平移、相机自动 fit、多次开关不泄漏 —— jsdom 无 WebGL，自动化不可覆盖
+- [x] **STL 双模型比较（CR-012 T-004 / R-030）**：比较模式选择两个 STL →「模型比较」双窗并排（先选在左，React.lazy 按需加载）—— App.scenarioMatrix.test.tsx STL 双模型比较场景 + CompareView.test.tsx
+- [x] 任一侧旋转/平移/缩放 → 另一侧相机变换同步（方案 A：共享 OrbitControls 目标 + 复制相机变换，回环防护收敛）—— modelViewSync.test.ts + ModelComparePanes.test.tsx
+- [x] 单侧加载失败（错误 + 重试）/ 会话失效 / WebGL 降级互不影响，不崩溃 —— ModelComparePanes.test.tsx + CompareView.test.tsx
+- [x] 退出比较 dispose 清理：两实例 controls / 材质 / renderer 释放（含 forceContextLoss）—— ModelComparePanes.test.tsx
+- [ ] **（人工）** 真机 WebGL 双模型比较：双 STL 并排各自 fit、任一侧拖拽旋转 / 滚轮缩放 / 右键平移 → 另一侧实时同步；退出后多次开关无泄漏 —— jsdom 无 WebGL，自动化不可覆盖
 
 ## 5. 标注（标签）
 
@@ -114,15 +118,18 @@
 - [ ] （人工）滚轮切片 ↔ 滑条（R-025）：DICOM 视口滚轮上下切切片（首末片钳制不溢出），底部滑条与四角 Inst 同步；滑条拖动 → 视口与 Inst 跟随；Ctrl+滚轮 = 缩放、不切切片
 - [ ] （人工）左右抽屉（R-026）：顶栏开关切换左/右栏 → 0.2s 宽度过渡滑动、内容不溢出；窄窗口下侧栏折叠不遮挡中央视口
 
-## 12. 图片比较走查 · 人工清单（CR-011 / R-002）
+## 12. 比较模式走查 · 人工清单（CR-011 / R-002；CR-012 T-003/T-004 扩展 dicom/model）
 
 > 比较显式模式的状态机（进入筛选 / 显式选择 / 退出恢复）已由自动化覆盖（App.test.tsx +
-> `src/App.scenarioMatrix.test.tsx` 比较显式模式场景，CR-011 T-003）；按钮文字态、提示条
-> 与双图并排的视觉观感 jsdom 无法覆盖，留待浏览器人工复核（`npm run dev` / `npm run preview`）。
+> `src/App.scenarioMatrix.test.tsx` 比较显式模式场景、DICOM 双系列与 STL 双模型比较场景）；
+> 按钮文字态、提示条与并排窗格的视觉观感 jsdom 无法覆盖，留待浏览器人工复核
+> （`npm run dev` / `npm run preview`）。
 
-- [ ] （人工）顶栏「导入」「比较」汉字按钮：文字态清晰；进入比较模式后「比较」呈「完成」态（aria-pressed）；无可比较图片素材时「比较」禁用且悬停有「无可比较的图片素材（先导入图片）」说明
-- [ ] （人工）比较模式：提示条「选择两张图片进行比较（已选 X/2）」计数实时；选中行有明显选中标记；非图片素材不可见、不干扰选择；选择第一张后可取消重选
+- [ ] （人工）顶栏「导入」「比较」汉字按钮：文字态清晰；进入比较模式后「比较」呈「完成」态（aria-pressed）；无可比较素材时「比较」禁用
+- [ ] （人工）比较模式：提示条「选择两个同类型素材进行比较（已选 X/2）」计数实时（选中其一后明示配对类型：图片 / DICOM / 3D 模型）；选中行有明显选中标记；选择第一张后可取消重选
 - [ ] （人工）双图并排（R-002）：等尺寸窗格、先选在左；窗格独立放大 / 缩小 / 旋转 90° / 重置互不影响；图片加载失败时该侧占位提示、另一侧不受影响
+- [ ] （人工）DICOM 双窗（R-029）：双系列切片与视图变换同步、W/L 每窗独立；压缩 / 损坏单侧降级不互相影响
+- [ ] （人工）STL 双窗（R-030）：双模型并排各自 fit；任一侧左键旋转 / 滚轮缩放 / 右键平移 → 另一侧同步；加载进度单侧独立；加载失败单侧错误 + 重试
 - [ ] （人工）退出恢复：「退出比较」按钮 / Esc / 顶栏「完成」三路径均清空选择、恢复完整素材列表与普通模式行点击查看语义，无残留选中态
 
 ---

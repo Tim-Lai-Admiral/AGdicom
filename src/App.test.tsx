@@ -227,7 +227,7 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: /加入比较/ })).toBeNull()
   })
 
-  it('keeps the compare entry disabled when no comparable assets exist (model only)', async () => {
+  it('enables the compare entry for model-only assets (CR-012 T-004 / R-030)', async () => {
     const { container } = render(<App />)
     dropFiles(container, [
       makeFile('aorta.stl', 256),
@@ -235,8 +235,8 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
     })
-    // 仅 model 素材（CR-012 T-004 前不可比较）：比较模式入口不可用
-    expect(compareButton().disabled).toBe(true)
+    // CR-012 T-004：model 纳入可比较类型——仅 STL 素材也启用比较模式入口
+    expect(compareButton().disabled).toBe(false)
   })
 
   it('enters compare mode via the toolbar, selects two images explicitly and exits clearing the selection', async () => {
@@ -252,7 +252,7 @@ describe('App', () => {
     })
 
     // 顶栏「比较」进入显式比较模式：提示条出现，列表剩可比较素材（CR-012 T-003 /
-    // R-029 扩展：image+dicom 可选，STL/model 仍隐藏）
+    // T-004 扩展：image+dicom+model 可选）
     fireEvent.click(compareButton())
     expect(screen.getByText('选择两个同类型素材进行比较（已选 0/2）')).toBeTruthy()
     expect(screen.getByRole('button', { name: '选择“scan.dcm”加入比较' })).toBeTruthy()
@@ -291,7 +291,7 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: '查看图片“brain.png”' })).toBeTruthy()
   })
 
-  it('rejects mixed-kind compare selection and pairs only same-kind assets (CR-012 T-003 / R-029)', async () => {
+  it('rejects mixed-kind compare selection and pairs only same-kind assets (CR-012 T-003 / R-029 + T-004 / R-030)', async () => {
     const { container } = render(<App />)
     dropFiles(container, [
       makeFile('heart.png', 64, 'image/png'),
@@ -303,10 +303,10 @@ describe('App', () => {
     })
 
     fireEvent.click(compareButton())
-    // 比较模式列表：image + dicom 可选，model 不可见（T-004 前不可比较）
+    // 比较模式列表：image + dicom + model 均可选（CR-012 T-004 / R-030 扩展 model）
     expect(screen.getByRole('button', { name: '选择“heart.png”加入比较' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '选择“scan.dcm”加入比较' })).toBeTruthy()
-    expect(screen.queryByText('aorta.stl')).toBeNull()
+    expect(screen.getByRole('button', { name: '选择“aorta.stl”加入比较' })).toBeTruthy()
 
     // 先选图片：再点 DICOM 行被同类约束拒绝（选择不生效、不进入比较视图）
     fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
@@ -324,6 +324,16 @@ describe('App', () => {
       screen.getByText('选择两个同类型素材进行比较（已选 1/2）：请再选择一个DICOM'),
     ).toBeTruthy()
     expect(screen.queryByRole('dialog', { name: 'DICOM 比较' })).toBeNull()
+
+    // CR-012 T-004 / R-030：先选 model——配对类型锁定为 3D 模型，DICOM 行同样被同类约束拒绝
+    fireEvent.click(screen.getByRole('button', { name: '取消选择“scan.dcm”' }))
+    fireEvent.click(screen.getByRole('button', { name: '选择“aorta.stl”加入比较' }))
+    expect(
+      screen.getByText('选择两个同类型素材进行比较（已选 1/2）：请再选择一个3D 模型'),
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '选择“scan.dcm”加入比较' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: '选择“scan.dcm”加入比较' })).toBeTruthy()
   })
 
   it('supports cancel within compare mode and exits via the 完成 button', async () => {

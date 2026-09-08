@@ -7,6 +7,7 @@ import {
   JPEG_BASELINE_TRANSFER_SYNTAX_UID,
   gradientPixels8,
 } from '../viewer/dicom/__fixtures__/buildDicomFile.ts'
+import { buildStlFile } from '../viewer/model3d/__fixtures__/buildStlFile.ts'
 
 function makeImageAsset(overrides: Partial<Asset> = {}): Asset {
   return {
@@ -504,5 +505,76 @@ describe('CompareView: DICOM 双系列比较（CR-012 T-003 / R-029）', () => {
     // 右窗不损坏：滑条与 Inst 读数正常
     await within(panes[1]).findByText('Inst #1 / 1')
     expect(within(panes[1]).getByLabelText('选择切片（右侧）')).toBeTruthy()
+  })
+})
+
+describe('CompareView: STL 双模型比较（CR-012 T-004 / R-030）', () => {
+  function makeModelAsset(id: string, name: string): Asset {
+    return {
+      id,
+      name,
+      kind: 'model',
+      status: 'pending',
+      tags: [],
+      note: '',
+      source: '样本 STL',
+      file: { fileName: name, fileSize: 284, fileType: 'model/stl' },
+      createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-01T00:00:00.000Z',
+      objectUrl: `blob:${id}`,
+    }
+  }
+
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('dispatches a model pair to the 模型比较 dialog with two model panes (real three, no WebGL)', async () => {
+    // jsdom 无 WebGL：加载桩走真实 STLLoader 解析 → 双窗到达 WebGL 降级分支
+    // （同步接线 / dispose 清理由 ModelComparePanes.test.tsx 以 three.js 桩覆盖）
+    const stlBytes = new Uint8Array(buildStlFile())
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        headers: { get: () => String(stlBytes.byteLength) },
+        body: null,
+        arrayBuffer: async () => stlBytes.slice().buffer,
+      })),
+    )
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    const onExit = vi.fn()
+    render(
+      <CompareView
+        left={makeModelAsset('m1', 'aorta.stl')}
+        right={makeModelAsset('m2', 'heart.stl')}
+        onExit={onExit}
+      />,
+    )
+    const dialog = screen.getByRole('dialog', { name: '模型比较' })
+    expect(within(dialog).getByText(/双模型并排显示/)).toBeTruthy()
+    // 双窗渲染（ModelComparePanes 经 React.lazy 按需加载，需等待挂载）：
+    // 窗名按窗格顺序呈现（先选在左）
+    const paneNames = await waitFor(() => {
+      const names = Array.from(
+        dialog.querySelectorAll('.compare-pane__name'),
+        (el) => el.textContent,
+      )
+      expect(names).toEqual(['aorta.stl', 'heart.stl'])
+      return names
+    })
+    expect(paneNames).toEqual(['aorta.stl', 'heart.stl'])
+    // 两窗各自降级（WebGL 不可用），互不影响且不崩溃
+    await waitFor(() => {
+      expect(within(dialog).getAllByText(/当前浏览器不支持 WebGL/)).toHaveLength(2)
+    })
+    // 退出比较：按钮 + Esc 双路径
+    fireEvent.click(within(dialog).getByRole('button', { name: '退出比较' }))
+    expect(onExit).toHaveBeenCalledTimes(1)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onExit).toHaveBeenCalledTimes(2)
   })
 })
