@@ -111,6 +111,46 @@ describe('remoteProvider（CR-012 T-002 / R-028）', () => {
     })
   })
 
+  it('R-028 隐私边界（M1）：请求体过滤 patientName/patientID 等 PHI 字段', async () => {
+    const { requests } = stubFetch(() =>
+      jsonResponse({ name: 'CT 胸部序列', tags: ['CT'], summary: 'S' }),
+    )
+    await provider.suggest(
+      makeAsset({
+        dicomMeta: {
+          modality: 'CT',
+          seriesInstanceUID: '1.2.840.10008',
+          sliceCount: 12,
+          deidentified: false,
+          patientName: 'DOE^JOHN',
+          patientID: 'PID-001',
+          deidentificationMethod: 'AGDICOM-SYNTHETIC-PHANTOM',
+          rows: 128,
+          columns: 128,
+          pixelSpacing: [0.5, 0.5],
+          transferSyntax: '1.2.840.10008.1.2.1',
+        },
+      }),
+    )
+    const body = JSON.parse(requests[0]?.body as string) as Record<string, unknown>
+    const meta = body.dicomMeta as Record<string, unknown>
+    expect(meta.patientName).toBeUndefined()
+    expect(meta.patientID).toBeUndefined()
+    expect(meta.deidentificationMethod).toBeUndefined()
+    // 非 PHI 工程元数据保留（R-028 请求契约）
+    expect(meta).toEqual({
+      modality: 'CT',
+      sopClass: undefined,
+      transferSyntax: '1.2.840.10008.1.2.1',
+      rows: 128,
+      columns: 128,
+      pixelSpacing: [0.5, 0.5],
+      seriesInstanceUID: '1.2.840.10008',
+      sliceCount: 12,
+      deidentified: false,
+    })
+  })
+
   it('非 DICOM 素材不带 dicomMeta 字段；部分响应逐项降级并清洗标签', async () => {
     const { requests } = stubFetch(() =>
       jsonResponse({ name: '  ', tags: ['PNG', 'PNG', 42, '  胸片 '], extra: 'ignored' }),

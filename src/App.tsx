@@ -42,11 +42,10 @@ const LOAD_ISSUE_MESSAGES: Readonly<Record<LoadIssue, string>> = {
 const COMPARE_SELECTION_LIMIT = 2
 
 /**
- * 比较模式可选素材类型（CR-012 T-003 / R-029）：image + dicom（STL 由 T-004 加入）。
- * 比较仍限“两个同类型素材”（R-029：选择两个 DICOM 素材/两张图片），混合类型由
- * handleToggleCompareSelect 的同类约束拒绝。
+ * 比较模式可选素材类型（CR-012 T-003 / R-029 + T-004 / R-030）：image + dicom + model。
+ * 比较仍限“两个同类型素材”，混合类型由 handleToggleCompareSelect 的同类约束拒绝。
  */
-const COMPARE_SELECTABLE_KINDS: readonly AssetKind[] = ['image', 'dicom']
+const COMPARE_SELECTABLE_KINDS: readonly AssetKind[] = ['image', 'dicom', 'model']
 
 /** 右栏信息面板页签：DICOM 默认元数据分组，其余素材评审（R：右栏自动切换） */
 type RightTab = 'meta' | 'review'
@@ -57,8 +56,9 @@ function App() {
   const [filter, setFilter] = useState<AssetFilter>(DEFAULT_ASSET_FILTER)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [compareOpen, setCompareOpen] = useState(false)
-  /** 显式比较模式（CR-011 T-002 / R-002）：进入后列表过滤为可比较素材（image）、
-   *  行点击切换比较选中（满 2 自动比较）；退出清空选择并恢复列表 */
+  /** 显式比较模式（CR-011 T-002 / R-002）：进入后列表过滤为可比较素材
+   *  （image/dicom/model，CR-012 T-003/T-004）、行点击切换比较选中（满 2 自动比较）；
+   *  退出清空选择并恢复列表 */
   const [compareMode, setCompareMode] = useState(false)
   /** 工作台当前素材（中央查看区 + 右栏联动）；null = 导入视图（T-002 布局壳） */
   const [activeAssetId, setActiveAssetId] = useState<string | null>(null)
@@ -165,13 +165,13 @@ function App() {
 
   const assets = Object.values(state.assets)
   const filteredAssets = filterAssets(assets, filter)
-  // 比较模式列表过滤（CR-011 T-002 / R-002；CR-012 T-003 / R-029 扩展）：叠加可比较
-  // 类型（image+dicom），其余行隐藏；退出比较模式即恢复完整列表（筛选条件不变）
+  // 比较模式列表过滤（CR-011 T-002 / R-002；CR-012 T-003/T-004 扩展）：叠加可比较
+  // 类型（image+dicom+model），其余行隐藏；退出比较模式即恢复完整列表（筛选条件不变）
   const gridAssets = compareMode
     ? filteredAssets.filter((asset) => COMPARE_SELECTABLE_KINDS.includes(asset.kind))
     : filteredAssets
   const tagNames = collectTagNames(state)
-  // 库中存在可比较素材（image/dicom）时比较入口可用（CR-012 T-003 / R-029 扩展）
+  // 库中存在可比较素材（image/dicom/model）时比较入口可用（CR-012 T-003/T-004 扩展）
   const hasComparable = assets.some((asset) => COMPARE_SELECTABLE_KINDS.includes(asset.kind))
   const dicomAssets = assets.filter((asset) => asset.kind === 'dicom')
   const activeAsset = activeAssetId !== null ? state.assets[activeAssetId] : undefined
@@ -324,9 +324,9 @@ function App() {
   }
 
   /**
-   * 比较模式：切换比较选中（CR-011 T-002 / R-002；CR-012 T-003 / R-029 扩展 dicom）。
-   * 仅可比较类型（image/dicom）且两个同类型（先选素材的 kind 锁定配对类型，混合
-   * 选择拒绝）；最多两张；选中第二张时自动进入比较视图。行点击只做显式选择/取消，
+   * 比较模式：切换比较选中（CR-011 T-002 / R-002；CR-012 T-003/T-004 扩展 dicom/model）。
+   * 仅可比较类型（image/dicom/model）且两个同类型（先选素材的 kind 锁定配对类型，
+   * 混合选择拒绝）；最多两张；选中第二张时自动进入比较视图。行点击只做显式选择/取消，
    * 不再联动中央查看区（普通模式的查看语义由 selectAsset 承担）。
    */
   const handleToggleCompareSelect = (assetId: string): void => {
@@ -345,7 +345,7 @@ function App() {
     if (next.length === COMPARE_SELECTION_LIMIT) setCompareOpen(true)
   }
 
-  /** 进入比较模式：清空既有选择，列表过滤为可比较素材（image）+ 提示条 */
+  /** 进入比较模式：清空既有选择，列表过滤为可比较素材（image/dicom/model）+ 提示条 */
   const enterCompareMode = (): void => {
     setSelectedIds([])
     setCompareOpen(false)
@@ -377,7 +377,7 @@ function App() {
 
   /** 顶栏工具组目标（CR-009 T-002 / R-024；CR-012 T-003 / R-029 扩展）：DICOM/图片
    *  显示，比较模式内仅 DICOM 双窗比较显示（R-029：四角/工具/W-L 沿用现有查看器，
-   *  window 工具拖拽在所在窗独立调 W/L）；图片比较沿用 R-024 契约隐藏工具组 */
+   *  window 工具拖拽在所在窗独立调 W/L）；图片/模型比较沿用 R-024 契约隐藏工具组 */
   const toolGroupKind = showCompare
     ? compareAssets[0]?.kind === 'dicom'
       ? 'dicom'

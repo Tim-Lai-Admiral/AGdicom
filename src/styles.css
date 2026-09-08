@@ -623,6 +623,24 @@ button.asset-row__main:hover {
   font-size: 0.75rem;
 }
 
+/* --- STL 双模型比较窗格（CR-012 T-004 / R-030）：画布充满视口；深色底与 3D
+   查看器一致（场景背景同色，加载/降级覆盖层复用 .model3d-viewer__overlay 系） --- */
+.compare-pane__viewport--model {
+  background: #10141a;
+  cursor: default; /* OrbitControls 自管指针语义（拖拽/缩放），不叠加 grab 光标 */
+}
+
+.model-compare-pane__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none; /* OrbitControls 触屏操作需要 */
+}
+
+.model-compare-pane__canvas.is-hidden {
+  display: none;
+}
+
 /* --- 图片视口变换（CR-009 T-003 / R-024 图片子集）：ImageStage 与 CompareView
    窗格共用：变换舞台（CSS transform，与 DICOM 变换舞台同口径）+ 视口右上
    小控件（放大/缩小/旋转 90°/重置 + mono 缩放读数，与 DICOM 测量小控件同语言） --- */
