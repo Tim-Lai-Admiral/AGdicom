@@ -227,16 +227,15 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: /加入比较/ })).toBeNull()
   })
 
-  it('keeps the compare entry disabled when no comparable image assets exist', async () => {
+  it('keeps the compare entry disabled when no comparable assets exist (model only)', async () => {
     const { container } = render(<App />)
     dropFiles(container, [
-      makeFile('scan.dcm', 128),
       makeFile('aorta.stl', 256),
     ])
     await waitFor(() => {
-      expect(screen.getByText('成功导入 2 个素材')).toBeTruthy()
+      expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
     })
-    // 无 image 素材：比较模式入口不可用
+    // 仅 model 素材（CR-012 T-004 前不可比较）：比较模式入口不可用
     expect(compareButton().disabled).toBe(true)
   })
 
@@ -252,15 +251,17 @@ describe('App', () => {
       expect(screen.getByText('成功导入 4 个素材')).toBeTruthy()
     })
 
-    // 顶栏「比较」进入显式比较模式：提示条出现，列表仅剩 image（非 image 行隐藏）
+    // 顶栏「比较」进入显式比较模式：提示条出现，列表剩可比较素材（CR-012 T-003 /
+    // R-029 扩展：image+dicom 可选，STL/model 仍隐藏）
     fireEvent.click(compareButton())
-    expect(screen.getByText('选择两张图片进行比较（已选 0/2）')).toBeTruthy()
-    expect(screen.queryByText('scan.dcm', { selector: '.asset-row__name' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '查看“scan.dcm”的 DICOM 详情' })).toBeNull()
+    expect(screen.getByText('选择两个同类型素材进行比较（已选 0/2）')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '选择“scan.dcm”加入比较' })).toBeTruthy()
 
-    // 选中第一张：仅显式选择（提示 1/2；不进入比较视图）
+    // 选中第一张：仅显式选择（提示 1/2 并明示配对类型；不进入比较视图）
     fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
-    expect(screen.getByText('选择两张图片进行比较（已选 1/2）')).toBeTruthy()
+    expect(
+      screen.getByText('选择两个同类型素材进行比较（已选 1/2）：请再选择一个图片'),
+    ).toBeTruthy()
     expect(screen.queryByRole('dialog', { name: '图片比较' })).toBeNull()
     expect(screen.getByRole('button', { name: '取消选择“heart.png”' })).toBeTruthy()
 
@@ -272,22 +273,57 @@ describe('App', () => {
     expect(within(dialog).getByText('heart.png')).toBeTruthy()
     expect(within(dialog).getByText('lung.png')).toBeTruthy()
 
-    // 退出比较视图（退出按钮）= 退出比较模式：清空选择并恢复列表（非 image 行回来）
+    // 退出比较视图（退出按钮）= 退出比较模式：清空选择并恢复列表（全部行回来）
     fireEvent.click(within(dialog).getByRole('button', { name: '退出比较' }))
     expect(screen.queryByRole('dialog')).toBeNull()
-    expect(screen.queryByText(/选择两张图片进行比较/)).toBeNull()
+    expect(screen.queryByText(/选择两个同类型素材进行比较/)).toBeNull()
     expect(screen.getByRole('button', { name: '查看“scan.dcm”的 DICOM 详情' })).toBeTruthy()
 
     // 再次进入：选择从 0/2 重新开始；Esc 退出比较视图同样退出比较模式
     fireEvent.click(compareButton())
-    expect(screen.getByText('选择两张图片进行比较（已选 0/2）')).toBeTruthy()
+    expect(screen.getByText('选择两个同类型素材进行比较（已选 0/2）')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
     fireEvent.click(screen.getByRole('button', { name: '选择“lung.png”加入比较' }))
     expect(screen.getByRole('dialog', { name: '图片比较' })).toBeTruthy()
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByRole('dialog')).toBeNull()
-    expect(screen.queryByText(/选择两张图片进行比较/)).toBeNull()
+    expect(screen.queryByText(/选择两个同类型素材进行比较/)).toBeNull()
     expect(screen.getByRole('button', { name: '查看图片“brain.png”' })).toBeTruthy()
+  })
+
+  it('rejects mixed-kind compare selection and pairs only same-kind assets (CR-012 T-003 / R-029)', async () => {
+    const { container } = render(<App />)
+    dropFiles(container, [
+      makeFile('heart.png', 64, 'image/png'),
+      makeFile('scan.dcm', 128),
+      makeFile('aorta.stl', 256),
+    ])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 3 个素材')).toBeTruthy()
+    })
+
+    fireEvent.click(compareButton())
+    // 比较模式列表：image + dicom 可选，model 不可见（T-004 前不可比较）
+    expect(screen.getByRole('button', { name: '选择“heart.png”加入比较' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '选择“scan.dcm”加入比较' })).toBeTruthy()
+    expect(screen.queryByText('aorta.stl')).toBeNull()
+
+    // 先选图片：再点 DICOM 行被同类约束拒绝（选择不生效、不进入比较视图）
+    fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
+    expect(
+      screen.getByText('选择两个同类型素材进行比较（已选 1/2）：请再选择一个图片'),
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '选择“scan.dcm”加入比较' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: '选择“scan.dcm”加入比较' })).toBeTruthy()
+
+    // 取消图片选择后先选 DICOM：提示切换为 DICOM 配对，可再选第二个 DICOM 进入双窗比较
+    fireEvent.click(screen.getByRole('button', { name: '取消选择“heart.png”' }))
+    fireEvent.click(screen.getByRole('button', { name: '选择“scan.dcm”加入比较' }))
+    expect(
+      screen.getByText('选择两个同类型素材进行比较（已选 1/2）：请再选择一个DICOM'),
+    ).toBeTruthy()
+    expect(screen.queryByRole('dialog', { name: 'DICOM 比较' })).toBeNull()
   })
 
   it('supports cancel within compare mode and exits via the 完成 button', async () => {
@@ -310,7 +346,7 @@ describe('App', () => {
 
     // 顶栏「完成」：退出比较模式——提示条消失、按钮回到「比较」、普通模式行语义恢复
     fireEvent.click(screen.getByRole('button', { name: '完成' }))
-    expect(screen.queryByText(/选择两张图片进行比较/)).toBeNull()
+    expect(screen.queryByText(/选择两个同类型素材进行比较/)).toBeNull()
     expect(compareButton()).toBeTruthy()
     expect(screen.queryByRole('button', { name: '完成' })).toBeNull()
     expect(screen.getByRole('button', { name: '查看图片“heart.png”' })).toBeTruthy()

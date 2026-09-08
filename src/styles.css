@@ -609,6 +609,18 @@ button.asset-row__main:hover {
   .compare-pane__viewport {
     height: 40vh;
   }
+
+  /* DICOM 双窗（CR-012 T-003 / R-029）复用查看器视口：窄屏同步压低画布高度 */
+  .compare-pane--dicom .dicom-viewer__canvas-wrap {
+    height: 40vh;
+  }
+}
+
+/* --- DICOM 双窗比较（CR-012 T-003 / R-029）：窗格复用查看器视口样式
+   （.dicom-viewer__canvas-wrap / 四角覆盖层 / 切片滑动条），等分栅格与图片
+   窗格一致；仅补双窗并排下的间距细节 --- */
+.compare-pane--dicom .dicom-viewer__slice-nav {
+  font-size: 0.75rem;
 }
 
 /* --- 图片视口变换（CR-009 T-003 / R-024 图片子集）：ImageStage 与 CompareView

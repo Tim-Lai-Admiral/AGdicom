@@ -29,10 +29,12 @@
  * 反向连续性同测）；顶栏工具组切换冒烟（R-024，aria-pressed ↔ 查看器 data-tool 跟随，
  * 测量小控件随工具显隐；工具行为细节由 DicomViewer/TopToolbar 组件测试覆盖，不重复）。
  *
- * 比较显式模式场景（CR-011 T-003 / R-002）：混合素材下的 App 级集成断言——顶栏「比较」
- * 进入比较模式后列表筛选出可比较图片（非 image 行与 DICOM 患者分组面板隐藏、提示条出现）、
- * 显式选择满两张自动并排比较（先选在左）、退出恢复完整列表与普通模式行点击查看语义
- * （模式状态机细节由 App.test.tsx / TopToolbar.test.tsx 覆盖，不重复）。
+ * 比较显式模式场景（CR-011 T-003 / R-002；CR-012 T-003 / R-029 扩展 dicom）：混合素材下
+ * 的 App 级集成断言——顶栏「比较」进入比较模式后列表筛选出可比较素材（image+dicom 行可选、
+ * model 行与 DICOM 患者分组面板隐藏、提示条出现）、显式选择满两张自动并排比较（先选在左）、
+ * 退出恢复完整列表与普通模式行点击查看语义（模式状态机细节由 App.test.tsx /
+ * TopToolbar.test.tsx 覆盖，不重复）；另含 DICOM 双系列比较场景（R-029：双窗渲染、
+ * 切片滚轮/滑条双向同步、退出恢复）。
  */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -831,8 +833,8 @@ describe('App: 场景矩阵——比较显式模式（CR-011 T-003 / R-002）', 
     localStorage.clear()
   })
 
-  it('进入比较模式筛选出可比较图片（非 image 行与 DICOM 分组面板隐藏）；显式选择满两张自动比较；退出恢复', async () => {
-    // 混合素材：2 张图片（可比较）+ 1 个 DICOM + 1 个 STL（不可比较）
+  it('进入比较模式筛选出可比较素材（image+dicom 可选、model 行与 DICOM 分组面板隐藏）；显式选择满两张自动比较；退出恢复', async () => {
+    // 混合素材：2 张图片（可比较）+ 1 个 DICOM（可比较，CR-012 T-003 / R-029）+ 1 个 STL（T-004 前不可比较）
     const { container } = render(<App />)
     dropFiles(container, [
       plainFile('heart.png', 64, 'image/png'),
@@ -854,19 +856,21 @@ describe('App: 场景矩阵——比较显式模式（CR-011 T-003 / R-002）', 
     expect(screen.getByText('aorta.stl')).toBeTruthy()
     expect(document.querySelectorAll('.dicom-panel')).toHaveLength(1)
 
-    // 顶栏「比较」进入显式比较模式：提示条出现；列表筛选仅剩 image——DICOM 行、
-    // STL 行隐藏，DICOM 患者分组面板一并隐藏（进入模式筛选 image 断言，R-002）
+    // 顶栏「比较」进入显式比较模式：提示条出现；列表剩可比较素材——image+dicom 行
+    // 呈「加入比较」语义（R-029），STL 行与 DICOM 患者分组面板隐藏（进入模式筛选断言）
     fireEvent.click(screen.getByRole('button', { name: '比较' }))
-    expect(screen.getByText('选择两张图片进行比较（已选 0/2）')).toBeTruthy()
+    expect(screen.getByText('选择两个同类型素材进行比较（已选 0/2）')).toBeTruthy()
     expect(screen.getByRole('button', { name: '选择“heart.png”加入比较' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '选择“lung.png”加入比较' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '查看“p01.dcm”的 DICOM 详情' })).toBeNull()
+    expect(screen.getByRole('button', { name: '选择“p01.dcm”加入比较' })).toBeTruthy()
     expect(screen.queryByText('aorta.stl')).toBeNull()
     expect(document.querySelectorAll('.dicom-panel')).toHaveLength(0)
 
     // 显式选择第一张：仅计数（1/2），不进入比较视图
     fireEvent.click(screen.getByRole('button', { name: '选择“heart.png”加入比较' }))
-    expect(screen.getByText('选择两张图片进行比较（已选 1/2）')).toBeTruthy()
+    expect(
+      screen.getByText('选择两个同类型素材进行比较（已选 1/2）：请再选择一个图片'),
+    ).toBeTruthy()
     expect(screen.queryByRole('dialog', { name: '图片比较' })).toBeNull()
 
     // 选择第二张：满 2 自动进入比较视图；双图并排且先选在左（R-002）
@@ -875,10 +879,10 @@ describe('App: 场景矩阵——比较显式模式（CR-011 T-003 / R-002）', 
     const paneNames = Array.from(dialog.querySelectorAll('.compare-pane__name'), (el) => el.textContent)
     expect(paneNames).toEqual(['heart.png', 'lung.png'])
 
-    // 退出比较视图 = 退出比较模式：清空选择并恢复完整列表（非 image 行与分组面板回来）
+    // 退出比较视图 = 退出比较模式：清空选择并恢复完整列表（全部行与分组面板回来）
     fireEvent.click(within(dialog).getByRole('button', { name: '退出比较' }))
     expect(screen.queryByRole('dialog')).toBeNull()
-    expect(screen.queryByText(/选择两张图片进行比较/)).toBeNull()
+    expect(screen.queryByText(/选择两个同类型素材进行比较/)).toBeNull()
     expect(screen.getByRole('button', { name: '查看“p01.dcm”的 DICOM 详情' })).toBeTruthy()
     expect(screen.getByText('aorta.stl')).toBeTruthy()
     expect(document.querySelectorAll('.dicom-panel')).toHaveLength(1)
@@ -889,5 +893,99 @@ describe('App: 场景矩阵——比较显式模式（CR-011 T-003 / R-002）', 
     expect(screen.getByRole('button', { name: '比较' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '查看图片“heart.png”' }))
     expect(screen.getByText('heart.png', { selector: '.image-stage__name' })).toBeTruthy()
+  })
+})
+
+describe('App: 场景矩阵——DICOM 双系列比较（CR-012 T-003 / R-029）', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    stubObjectUrlCreation()
+    generateMock.mockResolvedValue(null)
+    cacheMock.mockReturnValue(undefined)
+  })
+  afterEach(() => {
+    cleanup() // vitest 未启用 globals，RTL 自动清理不生效，需手动卸载
+    vi.restoreAllMocks()
+    vi.resetAllMocks()
+    vi.unstubAllGlobals()
+    if (originalCreateObjectURL === undefined) {
+      delete (URL as { createObjectURL?: unknown }).createObjectURL
+    } else {
+      Object.defineProperty(URL, 'createObjectURL', originalCreateObjectURL)
+    }
+    localStorage.clear()
+  })
+
+  /** 同患者（CHEN^WEI / P2）两个系列 × 各 3 切片的导入文件与字节表 */
+  function buildTwoSeriesFiles(): {
+    files: File[]
+    bytesByName: Record<string, Uint8Array<ArrayBuffer>>
+  } {
+    const files: File[] = []
+    const bytesByName: Record<string, Uint8Array<ArrayBuffer>> = {}
+    for (const uid of ['uid-A', 'uid-B'] as const) {
+      const buffers = buildDicomSeriesBuffers(3, {
+        seriesInstanceUID: uid,
+        patientName: 'CHEN^WEI',
+        patientID: 'P2',
+      })
+      for (let i = 1; i <= 3; i += 1) {
+        const name = `${uid === 'uid-A' ? 'a' : 'b'}${i}.dcm`
+        const bytes = new Uint8Array(buffers[i - 1]) as Uint8Array<ArrayBuffer>
+        bytesByName[name] = bytes
+        files.push(dcmFile(name, bytes))
+      }
+    }
+    return { files, bytesByName }
+  }
+
+  it('选择两个 dicom 素材进入双窗比较：切片滚轮/滑条双向同步（各系列按 InstanceNumber 序位对齐）；退出恢复', async () => {
+    const { files, bytesByName } = buildTwoSeriesFiles()
+    stubFetchFor(bytesByName)
+    stubCanvasUnavailable() // jsdom 无 2D Canvas：预览降级文案，不影响切片同步断言
+    const { container } = render(<App />)
+    dropFiles(container, files)
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 6 个素材')).toBeTruthy()
+    })
+
+    // 比较模式 → 先选 a1.dcm（uid-A 系列）再选 b1.dcm（uid-B 系列）：自动进入双窗比较
+    fireEvent.click(screen.getByRole('button', { name: '比较' }))
+    fireEvent.click(screen.getByRole('button', { name: '选择“a1.dcm”加入比较' }))
+    fireEvent.click(screen.getByRole('button', { name: '选择“b1.dcm”加入比较' }))
+    const dialog = screen.getByRole('dialog', { name: 'DICOM 比较' })
+
+    // 双窗渲染：两窗各按所属 series 分组展示（解析完成后 Inst #1 / 3；先选在左）
+    const panes = await waitFor(() => {
+      const elements = Array.from(dialog.querySelectorAll('.compare-pane--dicom')) as HTMLElement[]
+      expect(elements).toHaveLength(2)
+      return elements
+    })
+    await within(panes[0] as HTMLElement).findByText('Inst #1 / 3')
+    await within(panes[1] as HTMLElement).findByText('Inst #1 / 3')
+
+    // 左窗滚轮向下：共享切片索引 +1 → 右窗同步到序位 #2（InstanceNumber 对齐）
+    const wraps = Array.from(
+      dialog.querySelectorAll('.dicom-viewer__canvas-wrap'),
+    ) as HTMLElement[]
+    expect(wraps).toHaveLength(2)
+    fireEvent.wheel(wraps[0] as HTMLElement, { deltaY: 100 })
+    await within(panes[0] as HTMLElement).findByText('Inst #2 / 3')
+    expect(within(panes[1] as HTMLElement).getByText('Inst #2 / 3')).toBeTruthy()
+
+    // 右窗滑条拖到 #3：左窗同步（滑条 → 滚轮通路反向同步）
+    fireEvent.change(within(panes[1] as HTMLElement).getByLabelText('选择切片（右侧）'), {
+      target: { value: '3' },
+    })
+    await within(panes[1] as HTMLElement).findByText('Inst #3 / 3')
+    expect(within(panes[0] as HTMLElement).getByText('Inst #3 / 3')).toBeTruthy()
+    expect(
+      (within(panes[0] as HTMLElement).getByLabelText('选择切片（左侧）') as HTMLInputElement).value,
+    ).toBe('3')
+
+    // 退出比较：弹层关闭、普通模式行语义恢复（退出清理，R-029）
+    fireEvent.click(within(dialog).getByRole('button', { name: '退出比较' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: '查看“a1.dcm”的 DICOM 详情' })).toBeTruthy()
   })
 })

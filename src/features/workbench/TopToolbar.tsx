@@ -122,7 +122,7 @@ export interface TopToolbarProps {
   /** 可选标签名列表（注册表 ∪ 素材在用标签，由 App 用 collectTagNames 计算） */
   tagNames: readonly string[]
   onFilterChange: (filter: AssetFilter) => void
-  /** 库中存在可比较素材（image）时比较按钮可用（比较模式内恒可用） */
+  /** 库中存在可比较素材（image/dicom，CR-012 T-003 / R-029）时比较按钮可用（比较模式内恒可用） */
   compareAvailable: boolean
   /** 是否处于比较模式（按钮呈「完成」态；进入/退出由 App 持有） */
   compareMode: boolean
@@ -226,8 +226,8 @@ export default function TopToolbar({
           compareMode
             ? '完成并退出比较模式（清空比较选择）'
             : compareAvailable
-              ? '进入比较模式：选择两张图片并排对比'
-              : '无可比较的图片素材（先导入图片）'
+              ? '进入比较模式：选择两个同类型素材并排对比'
+              : '无可比较的素材（先导入图片或 DICOM）'
         }
         disabled={!compareMode && !compareAvailable}
         onClick={onToggleCompare}

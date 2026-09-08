@@ -1,7 +1,8 @@
 import './styles.css'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Asset, AssetStatus, AppState, DicomMeta } from './domain/types.ts'
+import type { Asset, AssetKind, AssetStatus, AppState, DicomMeta } from './domain/types.ts'
+import { ASSET_KIND_LABELS } from './domain/types.ts'
 import { collectTagNames, DEFAULT_ASSET_FILTER, filterAssets } from './domain/filter.ts'
 import type { AssetFilter } from './domain/filter.ts'
 import { addAssetTag, applyReview, removeAsset, removeAssetTag, updateAssetName, updateAssetNote } from './domain/review.ts'
@@ -37,8 +38,15 @@ const LOAD_ISSUE_MESSAGES: Readonly<Record<LoadIssue, string>> = {
   'storage-unavailable': '浏览器本地存储不可用：素材仍可导入，但刷新后无法保留。',
 }
 
-/** 比较视图最多可选图片数（R-002：两张并排比较） */
+/** 比较视图最多可选素材数（R-002：两张并排比较） */
 const COMPARE_SELECTION_LIMIT = 2
+
+/**
+ * 比较模式可选素材类型（CR-012 T-003 / R-029）：image + dicom（STL 由 T-004 加入）。
+ * 比较仍限“两个同类型素材”（R-029：选择两个 DICOM 素材/两张图片），混合类型由
+ * handleToggleCompareSelect 的同类约束拒绝。
+ */
+const COMPARE_SELECTABLE_KINDS: readonly AssetKind[] = ['image', 'dicom']
 
 /** 右栏信息面板页签：DICOM 默认元数据分组，其余素材评审（R：右栏自动切换） */
 type RightTab = 'meta' | 'review'
@@ -157,13 +165,14 @@ function App() {
 
   const assets = Object.values(state.assets)
   const filteredAssets = filterAssets(assets, filter)
-  // 比较模式列表过滤（CR-011 T-002 / R-002）：叠加 kind=image，非 image 行隐藏；
-  // 退出比较模式即恢复完整列表（筛选条件不变）
+  // 比较模式列表过滤（CR-011 T-002 / R-002；CR-012 T-003 / R-029 扩展）：叠加可比较
+  // 类型（image+dicom），其余行隐藏；退出比较模式即恢复完整列表（筛选条件不变）
   const gridAssets = compareMode
-    ? filteredAssets.filter((asset) => asset.kind === 'image')
+    ? filteredAssets.filter((asset) => COMPARE_SELECTABLE_KINDS.includes(asset.kind))
     : filteredAssets
   const tagNames = collectTagNames(state)
-  const hasImages = assets.some((asset) => asset.kind === 'image')
+  // 库中存在可比较素材（image/dicom）时比较入口可用（CR-012 T-003 / R-029 扩展）
+  const hasComparable = assets.some((asset) => COMPARE_SELECTABLE_KINDS.includes(asset.kind))
   const dicomAssets = assets.filter((asset) => asset.kind === 'dicom')
   const activeAsset = activeAssetId !== null ? state.assets[activeAssetId] : undefined
   // 比较素材：按选中先后顺序（先选的在左）
@@ -315,13 +324,17 @@ function App() {
   }
 
   /**
-   * 比较模式：切换比较选中（CR-011 T-002 / R-002）。仅 image；最多两张；选中
-   * 第二张时自动进入比较视图。行点击只做显式选择/取消，不再联动中央查看区
-   * （普通模式的查看语义由 selectAsset 承担）。
+   * 比较模式：切换比较选中（CR-011 T-002 / R-002；CR-012 T-003 / R-029 扩展 dicom）。
+   * 仅可比较类型（image/dicom）且两个同类型（先选素材的 kind 锁定配对类型，混合
+   * 选择拒绝）；最多两张；选中第二张时自动进入比较视图。行点击只做显式选择/取消，
+   * 不再联动中央查看区（普通模式的查看语义由 selectAsset 承担）。
    */
   const handleToggleCompareSelect = (assetId: string): void => {
     const asset = state.assets[assetId]
-    if (asset === undefined || asset.kind !== 'image') return
+    if (asset === undefined || !COMPARE_SELECTABLE_KINDS.includes(asset.kind)) return
+    const firstSelected =
+      selectedIds.length > 0 ? state.assets[selectedIds[0] as string] : undefined
+    if (firstSelected !== undefined && firstSelected.kind !== asset.kind) return // 同类型约束
     if (selectedIds.includes(assetId)) {
       setSelectedIds(selectedIds.filter((id) => id !== assetId))
       return
@@ -355,10 +368,21 @@ function App() {
   // 比较视图仅在比较模式内可达（选中满两张自动进入）
   const showCompare = compareMode && compareOpen && compareAssets.length === COMPARE_SELECTION_LIMIT
 
-  /** 顶栏工具组目标（CR-009 T-002 / R-024）：DICOM/图片显示（比较/导入/3D 隐藏）；
-   *  图片素材下 window/measure 按钮呈禁用态（由 TopToolbar 依据 kind 处理） */
-  const toolGroupKind =
-    showCompare || activeAsset === undefined
+  /** 比较模式提示条（CR-012 T-003 / R-029 文案扩展）：限两个同类型素材；
+   *  已选其一时明示配对类型（先选素材的 kind 锁定配对） */
+  const compareHint =
+    compareMode && compareAssets.length > 0
+      ? `选择两个同类型素材进行比较（已选 ${selectedIds.length}/${COMPARE_SELECTION_LIMIT}）：请再选择一个${ASSET_KIND_LABELS[compareAssets[0].kind]}`
+      : `选择两个同类型素材进行比较（已选 ${selectedIds.length}/${COMPARE_SELECTION_LIMIT}）`
+
+  /** 顶栏工具组目标（CR-009 T-002 / R-024；CR-012 T-003 / R-029 扩展）：DICOM/图片
+   *  显示，比较模式内仅 DICOM 双窗比较显示（R-029：四角/工具/W-L 沿用现有查看器，
+   *  window 工具拖拽在所在窗独立调 W/L）；图片比较沿用 R-024 契约隐藏工具组 */
+  const toolGroupKind = showCompare
+    ? compareAssets[0]?.kind === 'dicom'
+      ? 'dicom'
+      : null
+    : activeAsset === undefined
       ? null
       : activeAsset.kind === 'dicom' || activeAsset.kind === 'image'
         ? activeAsset.kind
@@ -367,7 +391,16 @@ function App() {
   /** 中央查看区（统一容器）：比较 > 查看器（DICOM/3D）> 图片预览 > 导入视图 */
   let centerView: ReactNode
   if (showCompare) {
-    centerView = <CompareView left={compareAssets[0]} right={compareAssets[1]} onExit={exitCompareMode} />
+    centerView = (
+      <CompareView
+        left={compareAssets[0]}
+        right={compareAssets[1]}
+        onExit={exitCompareMode}
+        dicomAssets={dicomAssets}
+        onMetasParsed={handleDicomMetasParsed}
+        activeTool={viewerTool}
+      />
+    )
   } else if (activeAsset !== undefined && activeAsset.kind === 'dicom') {
     centerView = (
       <DicomViewer
@@ -424,7 +457,7 @@ function App() {
         tagNames={tagNames}
         onFilterChange={setFilter}
         compareMode={compareMode}
-        compareAvailable={hasImages}
+        compareAvailable={hasComparable}
         onToggleCompare={toggleCompareMode}
         importActive={activeAssetId === null}
         onOpenImport={closeActiveAsset}
@@ -494,7 +527,7 @@ function App() {
             <div className="workbench__left-body">
               {compareMode ? (
                 <p className="library__select-hint" role="status">
-                  {`选择两张图片进行比较（已选 ${selectedIds.length}/${COMPARE_SELECTION_LIMIT}）`}
+                  {compareHint}
                 </p>
               ) : null}
               {gridAssets.length > 0 ? (
