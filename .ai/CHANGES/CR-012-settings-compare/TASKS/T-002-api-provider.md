@@ -81,8 +81,8 @@ branch: feature/CR-012-T-002-api-provider
   覆盖：settings 往返/默认值/损坏容错/保存失败/导出不含设置与 Key；remote 成功/部分响应/
   非 2xx/超时/网络/解析失败（mock fetch）；selectAiProvider 三态；AiPanel 远程成功/回退明示/
   无兜底降级/加载态。Manual（配置假 API 观察回退）留待 Reviewer 按任务卡执行。
-- **commit**：分支 `feature/CR-012-T-002-api-provider`（含 T-001 提交链）；PR：见 Git 记录
-  （PR body 注明按序合并 #52 → 本 PR）。
+- **commit**：`d05f9d5`（分支 `feature/CR-012-T-002-api-provider`，含 T-001 提交链）；
+  PR：https://github.com/Tim-Lai-Admiral/AGdicom/pull/53（body 注明按序合并 #52 → 本 PR）。
 - **已知限制/技术债**：远程契约为本仓库自定义简化契约（非 OpenAI chat completions 兼容），
   如需兼容 OpenAI 协议需后续 Task；并发/重试策略按任务卡 Out of scope 未实现；
   `settingsSaveError` 复用 App 既有 saveError 提示区（与评审保存同模式）。
