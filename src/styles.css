@@ -2135,7 +2135,9 @@ button.asset-row__main:hover {
 
 /* 页签（CR-010 T-001 图样）：文本 + 下划线高亮（active 底边压在容器分隔线上，
    与 meta-panel/wl-panel 的 mono 小字语言一致）；
-   CR-011 T-001：两页签等宽各占一半（flex: 1 1 0 均分剩余空间），下划线高亮保留 */
+   CR-011 T-001：两页签等宽各占一半（flex: 1 1 0 均分剩余空间），下划线高亮保留；
+   CR-012 T-001：字号 10.5px → 13px（可读性：与右栏 0.8125rem=13px 的次要文本
+   刻度一致，右栏其余字号不动；mono 语言与 0.08em 字距保留） */
 .workbench__right-tabs {
   flex: 0 0 auto;
   display: flex;
@@ -2154,7 +2156,7 @@ button.asset-row__main:hover {
   color: var(--text-secondary, #8a94a8);
   padding: 7px 2px 8px;
   margin-bottom: -1px;
-  font-size: 10.5px;
+  font-size: 13px;
   font-family: var(--font-mono-data, ui-monospace, monospace);
   letter-spacing: 0.08em;
   cursor: pointer;
@@ -2602,4 +2604,145 @@ button.asset-row__main:hover {
 
 .workbench .review-history__item {
   background: rgba(255, 255, 255, 0.04);
+}
+
+/* --- 设置弹窗（CR-012 T-001 / R-027 骨架） ---
+   居中模态：遮罩 fixed 全屏 + 面板深色（与导出弹层同一深色令牌语言）；
+   字段为占位控件（T-002 接入持久化），样式与 .workbench__export-pop 对齐 */
+.settings-dialog__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.settings-dialog {
+  width: min(26rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 1rem 1.25rem 1.25rem;
+  background: var(--panel, #0b0e16);
+  border: 1px solid var(--border-strong, rgba(255, 255, 255, 0.13));
+  border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+.settings-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-dialog__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary, #e2e6f0);
+}
+
+.settings-dialog__close {
+  padding: 0.25rem 0.625rem;
+  font-size: 0.8125rem;
+  font-family: inherit;
+  color: var(--text-secondary, #8a94a8);
+  background: transparent;
+  border: 1px solid var(--border-strong, rgba(255, 255, 255, 0.13));
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    color 0.12s,
+    border-color 0.12s;
+}
+
+.settings-dialog__close:hover {
+  color: var(--text-primary, #e2e6f0);
+  border-color: var(--text-secondary, #8a94a8);
+}
+
+.settings-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.settings-dialog__label {
+  font-size: 0.8125rem;
+  color: var(--text-secondary, #8a94a8);
+}
+
+.settings-dialog__input {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.875rem;
+  font-family: var(--font-mono-data, ui-monospace, monospace);
+  color: var(--text-primary, #e2e6f0);
+  background: var(--surface, #10141e);
+  border: 1px solid var(--border-strong, rgba(255, 255, 255, 0.13));
+  border-radius: var(--radius-sm);
+}
+
+.settings-dialog__input:focus {
+  outline: none;
+  border-color: var(--accent, #00c4d8);
+}
+
+.settings-dialog__switch {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-primary, #e2e6f0);
+}
+
+.settings-dialog__switch input {
+  accent-color: var(--accent, #00c4d8);
+}
+
+.settings-dialog__hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-style: italic;
+  color: var(--text-secondary, #8a94a8);
+}
+
+.settings-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.625rem;
+}
+
+.settings-dialog__save {
+  padding: 0.35rem 1rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+  color: #06242a;
+  font-weight: 600;
+  background: var(--color-primary, var(--accent, #00c4d8));
+  border: 1px solid var(--color-primary, var(--accent, #00c4d8));
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.settings-dialog__save:hover {
+  background: var(--color-primary-strong, #3bd7e8);
+}
+
+.settings-dialog__cancel {
+  padding: 0.35rem 1rem;
+  font-size: 0.875rem;
+  font-family: inherit;
+  color: var(--text-secondary, #8a94a8);
+  background: transparent;
+  border: 1px solid var(--border-strong, rgba(255, 255, 255, 0.13));
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.settings-dialog__cancel:hover {
+  color: var(--text-primary, #e2e6f0);
 }

@@ -13,6 +13,7 @@ function renderToolbar(overrides: {
   compareMode?: boolean
   compareAvailable?: boolean
   importActive?: boolean
+  settingsOpen?: boolean
 } = {}) {
   const filter: AssetFilter = DEFAULT_ASSET_FILTER
   const props = {
@@ -26,6 +27,8 @@ function renderToolbar(overrides: {
     onOpenImport: vi.fn(),
     exportOpen: false,
     onToggleExport: vi.fn(),
+    settingsOpen: false,
+    onToggleSettings: vi.fn(),
     leftOpen: true,
     rightOpen: true,
     onToggleLeft: vi.fn(),
@@ -140,5 +143,23 @@ describe('TopToolbar: 汉字按钮与比较模式入口（CR-011 T-002 / R-002�
     expect(importBtn.getAttribute('aria-pressed')).toBe('true')
     fireEvent.click(importBtn)
     expect(onOpenImport).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('TopToolbar: 设置按钮（CR-012 T-001 / R-027）', () => {
+  it('renders the settings entry with aria-expanded state and reports toggles', () => {
+    const { onToggleSettings } = renderToolbar()
+    const settingsBtn = screen.getByRole('button', { name: '设置' })
+    expect(settingsBtn.getAttribute('aria-expanded')).toBe('false')
+    expect(settingsBtn.className).not.toContain('active')
+    fireEvent.click(settingsBtn)
+    expect(onToggleSettings).toHaveBeenCalledTimes(1)
+
+    // 打开态（由 App 持有）：aria-expanded=true + active 样式
+    cleanup()
+    renderToolbar({ settingsOpen: true })
+    const openBtn = screen.getByRole('button', { name: '设置' })
+    expect(openBtn.getAttribute('aria-expanded')).toBe('true')
+    expect(openBtn.className).toContain('active')
   })
 })

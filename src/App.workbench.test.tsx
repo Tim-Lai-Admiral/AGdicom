@@ -11,7 +11,9 @@
  * - 切片高亮同步（CR-008 T-002 / R-022）：查看器内滑动条切换切片 → 左栏分组面板
  *   对应缩略图高亮实时跟随（onSelectedSliceChange 通路）；关闭查看器 → 高亮清理；
  * - 折叠交互：右栏信息面板与顶栏开关联动；
- * - T-004：右栏评审全链路（状态/标签/备注/历史/AI 建议）与顶栏导出/导入入口回环。
+ * - T-004：右栏评审全链路（状态/标签/备注/历史/AI 建议）与顶栏导出/导入入口回环；
+ * - CR-012 T-001：右栏页签字号放大（样式断言）与设置弹窗骨架（顶栏设置按钮开合、
+ *   Esc/关闭按钮关闭、占位字段展示；持久化由 T-002 接入）。
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 // 本用例需读取样式源码断言布局规则：jsdom 不应用样式表，且 ?raw 导入经 vitest
@@ -90,6 +92,13 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
     expect(tabRule).toContain('flex: 1 1 0')
     // 下划线高亮保留（CR-010 T-001 图样）
     expect(tabRule).toContain('border-bottom: 2px solid')
+  })
+
+  it('enlarges the right-column tab font size to 13px (CR-012 T-001)', () => {
+    // 同上：jsdom 不应用样式表，断言样式源码规则（CR-012 T-001：10.5px → 13px）
+    const css = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8')
+    const tabRule = (/[.]workbench__tab\s*\{([^}]*)\}/.exec(css)?.[1] ?? '').replace(/\s+/g, ' ')
+    expect(tabRule).toContain('font-size: 13px')
   })
 
   it('shows the image preview in the center and the review panel on the right, and returns to the import view', async () => {
@@ -484,6 +493,53 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
         Object.defineProperty(URL, 'revokeObjectURL', originalRevoke)
       }
     }
+  })
+})
+
+describe('App: 设置弹窗（CR-012 T-001 / R-027 骨架）', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+  afterEach(() => {
+    cleanup() // vitest 未启用 globals，RTL 自动清理不生效，需手动卸载
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+    localStorage.clear()
+  })
+
+  it('opens the settings dialog from the toolbar and closes it via Escape and the close button', () => {
+    render(<App />)
+
+    // 顶栏设置按钮（齿轮，aria-label=设置）：开合状态经 aria-expanded 呈现
+    expect(screen.queryByRole('dialog', { name: '设置' })).toBeNull()
+    const settingsButton = screen.getByRole('button', { name: '设置' })
+    expect(settingsButton.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(settingsButton)
+
+    // 弹窗骨架：标题 + 占位字段（文本/密码框/两个开关）+ 保存/取消
+    const dialog = screen.getByRole('dialog', { name: '设置' })
+    expect(settingsButton.getAttribute('aria-expanded')).toBe('true')
+    expect(within(dialog).getByRole('heading', { name: '设置' })).toBeTruthy()
+    expect(within(dialog).getByLabelText('API Base URL')).toBeTruthy()
+    expect(within(dialog).getByLabelText('API Key')).toBeTruthy()
+    expect(within(dialog).getByRole('checkbox', { name: '启用' })).toBeTruthy()
+    expect(within(dialog).getByRole('checkbox', { name: '失败回退 Mock' })).toBeTruthy()
+    expect(within(dialog).getByRole('button', { name: '保存' })).toBeTruthy()
+    expect(within(dialog).getByRole('button', { name: '取消' })).toBeTruthy()
+
+    // Esc 关闭（弹窗自身处理；App 的图片预览 Esc 兜底在弹窗打开期间跳过）
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: '设置' })).toBeNull()
+    expect(settingsButton.getAttribute('aria-expanded')).toBe('false')
+
+    // 再次打开 → 弹窗「关闭」按钮关闭
+    fireEvent.click(settingsButton)
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: '设置' })).getByRole('button', {
+        name: '关闭设置',
+      }),
+    )
+    expect(screen.queryByRole('dialog', { name: '设置' })).toBeNull()
   })
 })
 
