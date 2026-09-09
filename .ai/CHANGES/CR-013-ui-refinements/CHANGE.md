@@ -6,7 +6,7 @@
 id: CR-013
 title: "滑动切换 DICOM 时右栏元数据同步更新；左栏箭头旋转指示展开态；左栏先显示患者分组/序列库再显示全素材库；比较可直接选择两个系列"
 change_level: L2
-status: approved
+status: completed
 parent: null
 created_by: Planner
 created_at: 2026-09-08
@@ -56,8 +56,8 @@ Human 反馈（2026-09-08）：
 
 ## Tasks
 
-- [ ] T-001: 右栏元数据随切片同步（metaAsset 逻辑）+ 左栏箭头旋转 + 左栏布局重排
-- [ ] T-002: 系列级比较（series 直接选择进入 DICOM 比较）+ 测试/矩阵/文档
+- [x] T-001: 右栏元数据随切片同步（metaAsset 逻辑）+ 左栏箭头旋转 + 左栏布局重排
+- [x] T-002: 系列级比较（series 直接选择进入 DICOM 比较）+ 测试/矩阵/文档
 
 ## Dependencies
 
@@ -69,4 +69,6 @@ Human 反馈（2026-09-08）：
 
 ## Result
 
-<!-- 合并后填写 -->
+- 2026-09-09 完成。T-001~T-002 合并至 master（PR #57~#58 按序，分支已删）；审查 PASS（REVIEW-CR013.md，451 测试复跑全绿）。
+- 非阻塞 3 项：m-1 混选提示滞留（素材行取消/配对完成未清除）、m-2 selectedSeriesKeys 语义微差、m-3 未解析面板提示冗余——已建议后续随 TD-003 或新 CR 处理。
+- CURRENT 已更新（REQUIREMENTS R-031~R-033、DESIGN 同步/布局/系列比较），Tag v0.7.1。

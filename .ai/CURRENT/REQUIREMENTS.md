@@ -45,6 +45,9 @@
 | R-028 | AI 真实 API 接入（远程 provider，失败/未配置回退 Mock，来源明示，PHI 过滤） | active | CR-012 |
 | R-029 | DICOM 双系列比较（双窗切片/变换同步，W/L 独立） | active | CR-012 |
 | R-030 | STL 双模型比较（旋转/平移/缩放同步） | active | CR-012 |
+| R-031 | 左栏箭头旋转指示展开态（chevron -90°/0°） | active | CR-013 |
+| R-032 | 左栏布局：患者分组/序列库在上，全素材库在下 | active | CR-013 |
+| R-033 | DICOM 系列级比较选择（系列行直接选择，与素材行互斥） | active | CR-013 |
 
 ## Requirements
 
