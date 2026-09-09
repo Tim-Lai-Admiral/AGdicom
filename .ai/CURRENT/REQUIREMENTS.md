@@ -48,6 +48,7 @@
 | R-031 | 左栏箭头旋转指示展开态（chevron -90°/0°） | active | CR-013 |
 | R-032 | 左栏布局：患者分组/序列库在上，全素材库在下 | active | CR-013 |
 | R-033 | DICOM 系列级比较选择（系列行直接选择，与素材行互斥） | active | CR-013 |
+| R-034 | Docker 交付：多阶段镜像 + nginx SPA + compose 一键运行（8080:80） | active | CR-014 |
 
 ## Requirements
 

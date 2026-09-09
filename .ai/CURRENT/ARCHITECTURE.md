@@ -61,6 +61,7 @@ Vite + React 19 + TypeScript 6（strict）+ Tailwind CSS v4（@tailwindcss/vite�
 | ADR-006 | Git 15 条规则（P-004，全文 .ai/AGENTS.md §6）：PR 工作流、CI、Human 合并权 | accepted |
 | ADR-007 | UI 重构：全屏工作台布局 + Tailwind v4 + 深色令牌（源自 Figma 原型 rec/）；W/L 调节与测量 Mock 纳入产品范围 | accepted |
 | ADR-008 | 设置与真实 AI 接入（CR-012）：settingsStore（localStorage 独立 key）；AIProvider 远程实现（请求 PHI 白名单过滤）+ 回退 Mock；比较扩展 DICOM 双系列/STL 双模型（同步方案：切片 index 对齐 + 相机变换复制） | accepted |
+| ADR-009 | Docker 交付（CR-014）：多阶段构建（node:24-alpine → nginx:alpine）+ SPA 回退 + assets 30d 缓存 + docker compose（8080:80） | accepted |
 
 ## Last updated
 
