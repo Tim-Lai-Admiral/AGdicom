@@ -1,4 +1,4 @@
-# Task T-002: 系列级比较选择
+﻿# Task T-002: 系列级比较选择
 
 ## Metadata
 
@@ -54,3 +54,11 @@ branch: feature/CR-013-T-002-series-compare
 ## Definition of done
 
 - [ ] 验收通过；PR（body 写概要）；Reviewer 审查
+## Builder result
+
+- Implementation summary: PatientGroupPanel 比较模式系列行选择（aria-pressed/is-selected，不展开缩略图，组头保持展开/折叠）；App selectedSeriesKeys + 配对约束（系列与素材行互斥，混选 role=alert 拒绝）；选满两系列自动进入 DICOM 双系列比较（CompareView 资产输入契约保留：系列映射为首切片锚点素材，DicomViewport 经 findDicomPatientSeriesGroup 聚合全系列切片）；进入/退出比较清理系列选择
+- Files changed: PatientGroupPanel.tsx、App.tsx、CompareView.tsx（props 文档）、styles.css、PatientGroupPanel.test.tsx、App.scenarioMatrix.test.tsx
+- Tests run and result: verify.ps1 全绿（43 文件 451 用例 + build）；面板 3 用例 + 矩阵系列级比较 3 用例
+- Commit / PR: db2dcd8；PR #58（按序合并 #57 → #58）
+- Known limitations: 比较模式下系列行不再展开缩略图（有意交互：系列行作为选择开关）；无 meta 时面板显示占位
+- 需 Reviewer 关注: 配对约束互斥语义、系列映射锚点方案（复用既有 DicomViewport 聚合链路）、矩阵新增用例
