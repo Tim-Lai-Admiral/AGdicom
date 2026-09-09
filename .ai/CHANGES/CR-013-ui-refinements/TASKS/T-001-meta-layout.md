@@ -62,6 +62,6 @@ branch: feature/CR-013-T-001-meta-layout
   - 折叠箭头（R-031）：`PatientGroupPanel` 新增行内 `Chevron` 组件（aria-hidden chevron SVG）插入分组头/系列行行首；`.dicom-panel__chevron` 收起 `rotate(-90deg)`、`.is-open` 展开 `rotate(0deg)`、`transition: transform 0.15s ease`；aria-expanded 语义保留。
 - 文件清单：`src/App.tsx`、`src/features/workbench/PatientGroupPanel.tsx`、`src/styles.css`、`src/App.workbench.test.tsx`（新增 2 用例：meta 同步/评审绑定、DOM 顺序+无 DICOM 隐藏）、`src/features/workbench/PatientGroupPanel.test.tsx`（新增 1 用例：chevron is-open 类 + CSS 源码断言）
 - 验证结果：`scripts\verify.ps1` 全绿（全部测试文件 + `tsc -b` + `vite build`）
-- Commit：见 PR（feat 提交 + 本卡 result 填写）
+- Commit：`6d6ab00`（feat，代码 + 本卡）；PR：https://github.com/Tim-Lai-Admiral/AGdicom/pull/57
 - 已知限制：右栏 meta/评审页签切换会重挂载 MetadataPanel 并重置其分组折叠态（存量行为，非本任务引入）；`metaAsset` 对指向已删除素材的陈旧 `activeSliceAssetId` 防御性回退 `activeAsset`（删除路径本就有清理）
 - 需 Reviewer 关注：左栏 DOM 顺序变更对存量断言无回归（scenarioMatrix「面板不搬家」位置断言重排后仍通过）；`.dicom-panel` border-top→border-bottom 目检观感；chevron 触达面积未扩大（仅行首 10px 图标，点击目标仍为整行按钮）
