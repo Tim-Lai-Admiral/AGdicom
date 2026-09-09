@@ -314,6 +314,110 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
     expect(screen.getByText('未知患者').closest('button')?.className).not.toContain('is-active')
   })
 
+  it('syncs the meta panel with the viewer slice while the review tab stays on the selected asset (CR-013 T-001 / R-022 扩展)', async () => {
+    // 3 切片同 series：查看器内滑动条切换 → 右栏元数据页签跟随当前切片
+    // （切片序号随切片变化）；评审页签仍绑定选中素材（activeAsset 不随切片改变）
+    const buffers = buildDicomSeriesBuffers(3, {
+      patientName: '',
+      patientID: '',
+      patientIdentityRemoved: 'YES',
+      pixelData: gradientPixels8(8, 8, 30, 200),
+    })
+    let fetchCall = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        const bytes = new Uint8Array(buffers[Math.min(fetchCall, buffers.length - 1)])
+        fetchCall += 1
+        return {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => bytes.slice().buffer,
+        }
+      }),
+    )
+    // jsdom 无 2D Canvas：走查看器“环境不支持”降级分支（元数据通路不依赖画布）
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+
+    const { container } = render(<App />)
+    dropFiles(container, [
+      new File([new Uint8Array(buffers[0])], 's1.dcm', { type: 'application/dicom' }),
+      new File([new Uint8Array(buffers[1])], 's2.dcm', { type: 'application/dicom' }),
+      new File([new Uint8Array(buffers[2])], 's3.dcm', { type: 'application/dicom' }),
+    ])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 3 个素材')).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('button', { name: '查看“s1.dcm”的 DICOM 详情' }))
+    const dialog = screen.getByRole('dialog', { name: 'DICOM 详情' })
+    await waitFor(() => {
+      expect(within(dialog).getByText('CT · 去标识化')).toBeTruthy()
+    })
+
+    // 元数据页签：元数据解析回写后展开“图像信息”分组 → 当前切片（#1）的切片序号
+    const right = screen.getByRole('complementary', { name: '信息面板' })
+    await waitFor(() => {
+      expect(within(right).getByRole('button', { name: /^图像信息/ })).toBeTruthy()
+    })
+    fireEvent.click(within(right).getByRole('button', { name: /^图像信息/ }))
+    await waitFor(() => {
+      expect(within(right).getByText('#1')).toBeTruthy()
+    })
+
+    // 滑动条切到 #2：元数据页签同步为切片 #2（实例号随切片变化）
+    fireEvent.change(within(dialog).getByLabelText('选择切片'), { target: { value: '2' } })
+    await waitFor(() => {
+      expect(within(right).getByText('#2')).toBeTruthy()
+    })
+    expect(within(right).queryByText('#1')).toBeNull()
+
+    // 评审页签仍绑定选中素材（s1.dcm）：面板素材名不随切片切换
+    fireEvent.click(within(right).getByRole('button', { name: '评审' }))
+    expect(
+      within(right).getByText('s1.dcm', { selector: '.review-panel__asset-name' }),
+    ).toBeTruthy()
+
+    // 回到元数据页签：仍绑定当前切片（#2）——页签切换会重挂载面板并重置分组
+    // 折叠态，重新展开“图像信息”后断言
+    fireEvent.click(within(right).getByRole('button', { name: '元数据' }))
+    fireEvent.click(within(right).getByRole('button', { name: /^图像信息/ }))
+    expect(within(right).getByText('#2')).toBeTruthy()
+  })
+
+  it('renders the patient group panel above the asset list and hides it without DICOM assets (CR-013 T-001 / R-032)', async () => {
+    const { container } = render(<App />)
+    // 仅图片素材：无 DICOM → 分组面板不渲染，仅素材库列表（不回归）
+    dropFiles(container, [makeFile('heart.png', 64, 'image/png')])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 1 个素材')).toBeTruthy()
+    })
+    expect(container.querySelector('.dicom-panel')).toBeNull()
+    expect(container.querySelector('.asset-list')).toBeTruthy()
+
+    // 追加 DICOM 素材：分组面板（自带标题）出现在素材库列表上方——DOM 顺序断言
+    const buffer = buildDicomFile({
+      patientName: '',
+      patientID: '',
+      patientIdentityRemoved: 'YES',
+      pixelData: gradientPixels8(8, 8, 30, 200),
+    })
+    dropFiles(container, [
+      new File([new Uint8Array(buffer)], 's1.dcm', { type: 'application/dicom' }),
+    ])
+    await waitFor(() => {
+      expect(screen.getByText('素材库（2）')).toBeTruthy()
+    })
+    const leftBody = container.querySelector('.workbench__left-body') as HTMLElement
+    const panel = leftBody.querySelector('.dicom-panel') as HTMLElement
+    const grid = leftBody.querySelector('.asset-list') as HTMLElement
+    expect(panel).toBeTruthy()
+    expect(grid).toBeTruthy()
+    const children = Array.from(leftBody.children)
+    expect(children.indexOf(panel)).toBeGreaterThan(-1)
+    expect(children.indexOf(grid)).toBeGreaterThan(-1)
+    expect(children.indexOf(panel)).toBeLessThan(children.indexOf(grid))
+  })
+
   it('shows the W/L panel in the right column for a DICOM asset (CR-003 T-003 / R-003 修改)', async () => {
     // 单切片 DICOM：打开查看器后右栏“元数据”页签显示 W/L 区块（元数据分组上方）
     const buffer = buildDicomFile({
