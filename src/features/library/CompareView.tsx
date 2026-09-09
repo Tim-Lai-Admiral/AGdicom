@@ -155,9 +155,14 @@ function DicomComparePanes({
 }
 
 export interface CompareViewProps {
-  /** 左侧素材（先选中的；与 right 同类型，由 App 的选择约束保证） */
+  /**
+   * 左侧素材（先选中的；与 right 同类型，由 App 的选择约束保证）。
+   * 系列选择入口（CR-013 T-002 / R-033）时为该系列首切片锚点素材：本组件沿用
+   * 资产输入契约，DicomViewport 内部经 findDicomPatientSeriesGroup 聚合该系列
+   * 全部切片，双窗仍为“双系列”比较。
+   */
   left: Asset
-  /** 右侧素材（后选中的） */
+  /** 右侧素材（后选中的；系列入口时为该系列首切片锚点素材，同上） */
   right: Asset
   /** 退出比较（“退出比较”按钮与 Esc 键均触发） */
   onExit: () => void

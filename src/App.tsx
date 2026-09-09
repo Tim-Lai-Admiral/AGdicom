@@ -29,7 +29,8 @@ import SettingsDialog from './features/settings/SettingsDialog.tsx'
 import TopToolbar from './features/workbench/TopToolbar.tsx'
 import MetadataPanel from './features/workbench/MetadataPanel.tsx'
 import WindowLevelPanel from './features/workbench/WindowLevelPanel.tsx'
-import PatientGroupPanel from './features/workbench/PatientGroupPanel.tsx'
+import PatientGroupPanel, { buildDicomSeriesEntries } from './features/workbench/PatientGroupPanel.tsx'
+import { groupDicomByPatient } from './features/viewer/dicom/seriesUtils.ts'
 import ImageStage from './features/workbench/ImageStage.tsx'
 
 /** 读取异常的可提示文案（T-002 仓储契约的 UI 呈现） */
@@ -60,6 +61,14 @@ function App() {
    *  （image/dicom/model，CR-012 T-003/T-004）、行点击切换比较选中（满 2 自动比较）；
    *  退出清空选择并恢复列表 */
   const [compareMode, setCompareMode] = useState(false)
+  /** 比较模式系列选择（CR-013 T-002 / R-033）：按选中先后排序的 series 键
+   *  （患者分组语义键，与 PatientGroupPanel 同口径）；选满 2 个自动进入 DICOM
+   *  双系列比较。与素材行选择互斥（先选者锁定入口，混选给出提示并拒绝）；
+   *  进入/退出比较模式清空 */
+  const [selectedSeriesKeys, setSelectedSeriesKeys] = useState<string[]>([])
+  /** 混合选择拒绝提示（CR-013 T-002：系列与素材行不可混选的明确反馈）；
+   *  成功的选择操作 / 进入或退出比较模式时清除 */
+  const [compareMixNotice, setCompareMixNotice] = useState<string | null>(null)
   /** 工作台当前素材（中央查看区 + 右栏联动）；null = 导入视图（T-002 布局壳） */
   const [activeAssetId, setActiveAssetId] = useState<string | null>(null)
   /** 左栏分组面板高亮数据源（CR-008 T-002 / R-022）：中央查看器当前选中的切片素材 ID。
@@ -174,6 +183,15 @@ function App() {
   // 库中存在可比较素材（image/dicom/model）时比较入口可用（CR-012 T-003/T-004 扩展）
   const hasComparable = assets.some((asset) => COMPARE_SELECTABLE_KINDS.includes(asset.kind))
   const dicomAssets = assets.filter((asset) => asset.kind === 'dicom')
+  // 系列分组（CR-013 T-002 / R-033）：与 PatientGroupPanel 同一构建口径
+  // （buildDicomSeriesEntries + groupDicomByPatient），保证系列键语义一致
+  const dicomSeriesGroups = groupDicomByPatient(buildDicomSeriesEntries(dicomAssets))
+  // 比较模式系列选择 → 仍可解析的键（素材删除使系列消失时自动剪除，防陈旧键阻塞配对）
+  const allSeriesKeys = new Set<string>()
+  for (const group of dicomSeriesGroups) {
+    for (const series of group.series) allSeriesKeys.add(series.key)
+  }
+  const validSeriesSelection = selectedSeriesKeys.filter((key) => allSeriesKeys.has(key))
   const activeAsset = activeAssetId !== null ? state.assets[activeAssetId] : undefined
   // 右栏元数据页签数据源（CR-013 T-001 / R-022 扩展）：DICOM 查看时跟随当前切片
   // （查看器内滑动条等路径切换 → 元数据同步展示当前切片 meta）；无当前切片高亮
@@ -185,6 +203,23 @@ function App() {
   const compareAssets = selectedIds
     .map((id) => state.assets[id])
     .filter((asset): asset is Asset => asset !== undefined)
+  // 系列选择入口（CR-013 T-002 / R-033）：把所选系列映射为其首切片锚点素材
+  // （与面板同一分组排序口径），沿用 CompareView 既有资产输入——DicomViewport
+  // 内部经 findDicomPatientSeriesGroup 聚合该系列全部切片，无需新增并行数据契约
+  const compareSeriesAnchors = validSeriesSelection
+    .map((key) => {
+      for (const group of dicomSeriesGroups) {
+        const series = group.series.find((entry) => entry.key === key)
+        const anchorId = series?.slices[0]?.assetId
+        if (anchorId !== undefined) return state.assets[anchorId]
+      }
+      return undefined
+    })
+    .filter((asset): asset is Asset => asset !== undefined)
+  const seriesCompareReady = validSeriesSelection.length === COMPARE_SELECTION_LIMIT
+  // 比较配对（先选的在左）：系列选择就绪时以系列锚点为准，否则用素材行选择
+  // （两种入口互斥，正常不会同时非空；系列优先仅作防御）
+  const comparePair = seriesCompareReady ? compareSeriesAnchors : compareAssets
 
   /**
    * 领域函数结果落库：立即更新会话状态并持久化（R-002/R-005：刷新后仍保留）。
@@ -334,8 +369,14 @@ function App() {
    * 仅可比较类型（image/dicom/model）且两个同类型（先选素材的 kind 锁定配对类型，
    * 混合选择拒绝）；最多两张；选中第二张时自动进入比较视图。行点击只做显式选择/取消，
    * 不再联动中央查看区（普通模式的查看语义由 selectAsset 承担）。
+   * 系列选择互斥（CR-013 T-002 / R-033）：已选系列时素材行点击给出明确提示并拒绝
+   * （系列与素材行不可混选），不改变既有选择。
    */
   const handleToggleCompareSelect = (assetId: string): void => {
+    if (validSeriesSelection.length > 0) {
+      setCompareMixNotice('已选择系列：请再选择一个系列完成比较（系列与素材行不可混选）')
+      return
+    }
     const asset = state.assets[assetId]
     if (asset === undefined || !COMPARE_SELECTABLE_KINDS.includes(asset.kind)) return
     const firstSelected =
@@ -351,16 +392,44 @@ function App() {
     if (next.length === COMPARE_SELECTION_LIMIT) setCompareOpen(true)
   }
 
-  /** 进入比较模式：清空既有选择，列表过滤为可比较素材（image/dicom/model）+ 提示条 */
+  /**
+   * 比较模式系列选择（CR-013 T-002 / R-033）：切换系列键选中；选满 2 个自动进入
+   * DICOM 双系列比较。与素材行选择互斥——已选素材行时给出明确提示并拒绝；
+   * 最多两个系列；成功的切换清除混合选择提示。
+   */
+  const handleToggleSeriesSelect = (seriesKey: string): void => {
+    if (!compareMode) return
+    if (selectedIds.length > 0) {
+      setCompareMixNotice('已选择素材行：请再选择一个素材完成比较（系列与素材行不可混选）')
+      return
+    }
+    if (validSeriesSelection.includes(seriesKey)) {
+      setSelectedSeriesKeys(selectedSeriesKeys.filter((key) => key !== seriesKey))
+      setCompareMixNotice(null)
+      return
+    }
+    if (validSeriesSelection.length >= COMPARE_SELECTION_LIMIT) return // 已选满两个系列
+    const next = [...validSeriesSelection, seriesKey]
+    setSelectedSeriesKeys(next)
+    setCompareMixNotice(null)
+    if (next.length === COMPARE_SELECTION_LIMIT) setCompareOpen(true)
+  }
+
+  /** 进入比较模式：清空既有选择（素材行与系列），列表过滤为可比较素材 + 提示条 */
   const enterCompareMode = (): void => {
     setSelectedIds([])
+    setSelectedSeriesKeys([])
+    setCompareMixNotice(null)
     setCompareOpen(false)
     setCompareMode(true)
   }
 
-  /** 退出比较模式：清空选择并恢复完整列表（比较视图“退出比较”/Esc 与顶栏“完成”均触发） */
+  /** 退出比较模式：清空选择（素材行与系列，CR-013 T-002）并恢复完整列表
+   *  （比较视图“退出比较”/Esc 与顶栏“完成”均触发） */
   const exitCompareMode = (): void => {
     setSelectedIds([])
+    setSelectedSeriesKeys([])
+    setCompareMixNotice(null)
     setCompareOpen(false)
     setCompareMode(false)
   }
@@ -371,21 +440,26 @@ function App() {
     else enterCompareMode()
   }
 
-  // 比较视图仅在比较模式内可达（选中满两张自动进入）
-  const showCompare = compareMode && compareOpen && compareAssets.length === COMPARE_SELECTION_LIMIT
+  // 比较视图仅在比较模式内可达（素材行或系列选满两个自动进入）
+  const showCompare = compareMode && compareOpen && comparePair.length === COMPARE_SELECTION_LIMIT
 
-  /** 比较模式提示条（CR-012 T-003 / R-029 文案扩展）：限两个同类型素材；
-   *  已选其一时明示配对类型（先选素材的 kind 锁定配对） */
-  const compareHint =
-    compareMode && compareAssets.length > 0
-      ? `选择两个同类型素材进行比较（已选 ${selectedIds.length}/${COMPARE_SELECTION_LIMIT}）：请再选择一个${ASSET_KIND_LABELS[compareAssets[0].kind]}`
-      : `选择两个同类型素材进行比较（已选 ${selectedIds.length}/${COMPARE_SELECTION_LIMIT}）`
+  /** 比较模式提示条：系列选择（CR-013 T-002 / R-033）与素材行选择（CR-012 T-003 /
+   *  R-029 文案）两种入口各自明示进度与配对方向 */
+  const compareHint = !compareMode
+    ? ''
+    : validSeriesSelection.length > 0
+      ? `选择两个系列进行比较（已选 ${validSeriesSelection.length}/${COMPARE_SELECTION_LIMIT}）${
+          validSeriesSelection.length < COMPARE_SELECTION_LIMIT ? '：请再选择一个系列' : ''
+        }`
+      : compareAssets.length > 0
+        ? `选择两个同类型素材进行比较（已选 ${selectedIds.length}/${COMPARE_SELECTION_LIMIT}）：请再选择一个${ASSET_KIND_LABELS[compareAssets[0].kind]}`
+        : `选择两个同类型素材进行比较（已选 ${selectedIds.length}/${COMPARE_SELECTION_LIMIT}）`
 
   /** 顶栏工具组目标（CR-009 T-002 / R-024；CR-012 T-003 / R-029 扩展）：DICOM/图片
    *  显示，比较模式内仅 DICOM 双窗比较显示（R-029：四角/工具/W-L 沿用现有查看器，
    *  window 工具拖拽在所在窗独立调 W/L）；图片/模型比较沿用 R-024 契约隐藏工具组 */
   const toolGroupKind = showCompare
-    ? compareAssets[0]?.kind === 'dicom'
+    ? comparePair[0]?.kind === 'dicom'
       ? 'dicom'
       : null
     : activeAsset === undefined
@@ -399,8 +473,8 @@ function App() {
   if (showCompare) {
     centerView = (
       <CompareView
-        left={compareAssets[0]}
-        right={compareAssets[1]}
+        left={comparePair[0]}
+        right={comparePair[1]}
         onExit={exitCompareMode}
         dicomAssets={dicomAssets}
         onMetasParsed={handleDicomMetasParsed}
@@ -536,10 +610,16 @@ function App() {
                   {compareHint}
                 </p>
               ) : null}
+              {compareMode && compareMixNotice !== null ? (
+                <p className="library__mix-notice" role="alert">
+                  {compareMixNotice}
+                </p>
+              ) : null}
               {/* 患者分组面板置于素材库列表上方（CR-013 T-001 / R-032：先分组后素材库；
-                  面板标题自带，header"素材库"计数保留）。比较模式下隐藏（素材行选择
-                  语义），无 DICOM 素材时整体不渲染，空库走上方空态提示 */}
-              {!compareMode && dicomAssets.length > 0 ? (
+                  面板标题自带，header"素材库"计数保留）。比较模式保留（CR-013 T-002 /
+                  R-033：系列行切换为比较选择入口，与素材行选择互斥），无 DICOM 素材时
+                  整体不渲染，空库走上方空态提示 */}
+              {dicomAssets.length > 0 ? (
                 <PatientGroupPanel
                   dicomAssets={dicomAssets}
                   activeSliceAssetId={activeSliceAssetId}
@@ -547,6 +627,9 @@ function App() {
                   onToggleGroup={toggleGroupOpen}
                   onOpenGroup={openGroup}
                   onOpenSlice={selectAsset}
+                  compareMode={compareMode}
+                  selectedSeriesKeys={validSeriesSelection}
+                  onToggleSeriesSelect={handleToggleSeriesSelect}
                 />
               ) : null}
               {gridAssets.length > 0 ? (
