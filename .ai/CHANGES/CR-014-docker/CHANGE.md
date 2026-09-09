@@ -6,7 +6,7 @@
 id: CR-014
 title: "Docker Compose 构建镜像并运行项目（静态 SPA 交付）"
 change_level: L2
-status: approved
+status: completed
 parent: null
 created_by: Planner
 created_at: 2026-09-09
@@ -44,7 +44,7 @@ Human 指示：用 docker compose 让项目可构建镜像。项目为纯前端 
 
 ## Tasks
 
-- [ ] T-001: Docker 化（Dockerfile/nginx.conf/compose/.dockerignore/README）
+- [x] T-001: Docker 化（Dockerfile/nginx.conf/compose/.dockerignore/README）
 
 ## Dependencies
 
@@ -56,4 +56,6 @@ Human 指示：用 docker compose 让项目可构建镜像。项目为纯前端 
 
 ## Result
 
-<!-- 合并后填写 -->
+- 2026-09-09 完成。T-001 合并至 master（PR #60，分支已删）；审查 PASS（REVIEW-CR014.md，独立复跑 451 存量 + 容器冒烟全过）。
+- 非阻塞：nginx server_tokens off 可选加固；container_name 硬编码；.dockerignore *.md 排除 README（不影响构建）——登记 TODO 或后续顺手。
+- CURRENT 已更新（REQUIREMENTS R-034、ARCHITECTURE 容器化部署），Tag v0.8.0。
