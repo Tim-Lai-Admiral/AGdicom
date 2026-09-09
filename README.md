@@ -47,6 +47,22 @@ npm test        # 运行单元测试 (vitest)
 
 - 端到端验收清单见根目录 [E2E-CHECKLIST.md](./E2E-CHECKLIST.md)。
 
+## Docker 运行（CR-014）
+
+无需本地 Node 环境，使用 Docker 一键构建并运行（多阶段构建：`node:24-alpine` 构建产物 → `nginx:alpine` 托管，SPA 路由回退已由 `nginx.conf` 处理）：
+
+```bash
+docker compose build      # 构建镜像（含 dist 与 public/samples 样本）
+docker compose up -d      # 后台启动，访问 http://localhost:8080
+docker compose logs -f    # 查看容器日志
+docker compose down       # 停止并移除容器
+```
+
+- 访问地址：<http://localhost:8080>（容器端口 80 映射到宿主机 8080）。
+- 深链接（如 `/some/path`）由 nginx `try_files` 回退到 `index.html`，刷新不 404。
+- `assets/` 静态资源带 30 天缓存头；响应开启 gzip。
+- 前端为纯静态托管，数据仍保存在浏览器本地（localStorage + IndexedDB），容器本身不存储任何素材。
+
 ## 技术栈
 
 - Vite 8 + React 19 + TypeScript 6（strict 模式）
