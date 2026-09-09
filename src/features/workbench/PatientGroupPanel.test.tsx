@@ -76,12 +76,16 @@ interface RenderOptions {
   onToggleGroup?: (key: string) => void
   onOpenGroup?: (key: string) => void
   onOpenSlice?: (assetId: string) => void
+  compareMode?: boolean
+  selectedSeriesKeys?: readonly string[]
+  onToggleSeriesSelect?: (seriesKey: string) => void
 }
 
 function renderPanel(assets: Asset[], options: RenderOptions = {}) {
   const onToggleGroup = options.onToggleGroup ?? vi.fn()
   const onOpenGroup = options.onOpenGroup ?? vi.fn()
   const onOpenSlice = options.onOpenSlice ?? vi.fn()
+  const onToggleSeriesSelect = options.onToggleSeriesSelect ?? vi.fn()
   const result = render(
     <PatientGroupPanel
       dicomAssets={assets}
@@ -90,9 +94,12 @@ function renderPanel(assets: Asset[], options: RenderOptions = {}) {
       onToggleGroup={onToggleGroup}
       onOpenGroup={onOpenGroup}
       onOpenSlice={onOpenSlice}
+      compareMode={options.compareMode}
+      selectedSeriesKeys={options.selectedSeriesKeys}
+      onToggleSeriesSelect={onToggleSeriesSelect}
     />,
   )
-  return { ...result, onToggleGroup, onOpenGroup, onOpenSlice }
+  return { ...result, onToggleGroup, onOpenGroup, onOpenSlice, onToggleSeriesSelect }
 }
 
 describe('PatientGroupPanel（CR-008 T-001 / R-021）', () => {
@@ -268,5 +275,64 @@ describe('PatientGroupPanel（CR-008 T-001 / R-021）', () => {
     expect(screen.getByText(/暂无切片数据/)).toBeTruthy()
     expect(screen.queryByText('CHEN^WEI')).toBeNull()
     expect(screen.queryByRole('button', { name: /^查看切片/ })).toBeNull()
+  })
+})
+
+describe('PatientGroupPanel 比较模式系列选择（CR-013 T-002 / R-033）', () => {
+  it('compareMode：系列行 = 比较选择开关（aria-pressed/aria-label），点击回调 onToggleSeriesSelect 且不展开缩略图', () => {
+    const assets = chenAssets()
+    const { container, onToggleSeriesSelect } = renderPanel(assets, {
+      compareMode: true,
+      openGroupKeys: new Set([CHEN_KEY]),
+    })
+    // 面板内出现比较操作提示；系列行呈选择开关语义
+    expect(screen.getByText(/比较模式：点击系列行选择比较对象/)).toBeTruthy()
+    const seriesRows = screen.getAllByRole('button', { name: /^比较选择系列/ })
+    expect(seriesRows).toHaveLength(2)
+    expect(seriesRows[0]?.getAttribute('aria-pressed')).toBe('false')
+    expect(seriesRows[0]?.getAttribute('aria-label')).toContain('uid-1')
+    // 选择开关无 aria-expanded / 无缩略图（浏览语义让位于选择语义）
+    expect(seriesRows[0]?.getAttribute('aria-expanded')).toBeNull()
+    expect(container.querySelectorAll('.dicom-panel__thumbs')).toHaveLength(0)
+    expect(container.querySelectorAll('.dicom-panel__series-toggle .dicom-panel__chevron')).toHaveLength(0)
+
+    fireEvent.click(seriesRows[0] as HTMLElement)
+    expect(onToggleSeriesSelect).toHaveBeenCalledWith('uid-1')
+    // 系列行点击不触发展开（无缩略图出现）
+    expect(container.querySelectorAll('.dicom-panel__thumbs')).toHaveLength(0)
+  })
+
+  it('compareMode：selectedSeriesKeys 命中的系列行呈选中态（is-selected + aria-pressed）；患者组头仍可折叠', () => {
+    const assets = chenAssets()
+    const onToggleGroup = vi.fn()
+    const { container } = renderPanel(assets, {
+      compareMode: true,
+      openGroupKeys: new Set([CHEN_KEY]),
+      selectedSeriesKeys: ['uid-1'],
+      onToggleGroup,
+    })
+    const selected = screen.getByRole('button', { name: /比较选择系列 uid-1/ })
+    expect(selected.getAttribute('aria-pressed')).toBe('true')
+    expect(selected.className).toContain('is-selected')
+    const unselected = screen.getByRole('button', { name: /比较选择系列 uid-2/ })
+    expect(unselected.getAttribute('aria-pressed')).toBe('false')
+    expect(unselected.className).not.toContain('is-selected')
+
+    // 患者组头保持展开/折叠职责（选择约束由 App 层承担，面板不拦截）
+    fireEvent.click(container.querySelector('.dicom-panel__group-head') as HTMLElement)
+    expect(onToggleGroup).toHaveBeenCalledWith(CHEN_KEY)
+  })
+
+  it('缺省（非 compareMode）：系列行保持折叠开关语义（aria-expanded，无 is-selected/aria-pressed）', () => {
+    const assets = chenAssets()
+    renderPanel(assets, {
+      openGroupKeys: new Set([CHEN_KEY]),
+      selectedSeriesKeys: ['uid-1'],
+    })
+    const seriesRows = screen.getAllByRole('button', { name: /Series/ })
+    expect(seriesRows[0]?.getAttribute('aria-expanded')).toBe('false')
+    expect(seriesRows[0]?.getAttribute('aria-pressed')).toBeNull()
+    expect(seriesRows[0]?.className).not.toContain('is-selected')
+    expect(screen.queryByText(/比较模式：点击系列行选择比较对象/)).toBeNull()
   })
 })

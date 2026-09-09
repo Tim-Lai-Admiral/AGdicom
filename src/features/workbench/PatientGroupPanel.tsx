@@ -19,6 +19,12 @@
  * 仅切换中央查看器与高亮；分组/系列的展开状态不因切片点击改变（当前切片所属
  * 分组必然已展开，onOpenGroup 幂等无副作用）。
  *
+ * 比较模式系列选择（CR-013 T-002 / R-033）：compareMode 下系列行从“折叠开关”
+ * 切换为“比较选择开关”（点击 → onToggleSeriesSelect(seriesKey)，不展开缩略图、
+ * 无折叠箭头），选中态以 is-selected 类 + aria-pressed 呈现；患者组头仍承担
+ * 展开/折叠（用于浏览系列行）。与素材行选择互斥的约束由 App 层配对逻辑承担，
+ * 面板只负责呈现选择态。
+ *
  * 自动展开联动：当前在中央查看器打开的素材所属患者组经 onOpenGroup 自动展开
  * （幂等：元数据解析晚于选中时也能补开）；当前素材所属 series 自动展开并高亮
  * （患者组头 is-active、当前切片缩略图 is-active）。
@@ -105,6 +111,12 @@ export interface PatientGroupPanelProps {
   onOpenGroup: (groupKey: string) => void
   /** 点击切片缩略图：以该切片素材打开中央查看器（面板位置与展开状态不变） */
   onOpenSlice: (sliceAssetId: string) => void
+  /** 比较模式（CR-013 T-002 / R-033）：系列行切换为比较选择开关（缺省 false = 查看语义） */
+  compareMode?: boolean
+  /** 已选入比较的系列键集合（compareMode 下的选中态数据源；缺省为空） */
+  selectedSeriesKeys?: readonly string[]
+  /** 比较模式点击系列行：切换该系列的比较选中（配对/互斥约束由 App 层承担） */
+  onToggleSeriesSelect?: (seriesKey: string) => void
 }
 
 export default function PatientGroupPanel({
@@ -114,6 +126,9 @@ export default function PatientGroupPanel({
   onToggleGroup,
   onOpenGroup,
   onOpenSlice,
+  compareMode = false,
+  selectedSeriesKeys = [],
+  onToggleSeriesSelect,
 }: PatientGroupPanelProps) {
   const groups = groupDicomByPatient(buildDicomSeriesEntries(dicomAssets))
 
@@ -219,6 +234,11 @@ export default function PatientGroupPanel({
   return (
     <section className="dicom-panel" aria-label="DICOM 患者分组">
       <h3 className="dicom-panel__title">DICOM 患者分组</h3>
+      {compareMode ? (
+        <p className="dicom-panel__compare-hint" role="note">
+          比较模式：点击系列行选择比较对象（最多两个系列）
+        </p>
+      ) : null}
       {groups.length === 0 ? (
         <p className="dicom-panel__empty">
           暂无切片数据：在中央查看器打开解析后，此处按患者分组展示 series 与切片缩略图。
@@ -248,6 +268,42 @@ export default function PatientGroupPanel({
               </button>
               {groupOpen
                 ? group.series.map((series) => {
+                    // 比较模式（CR-013 T-002 / R-033）：系列行 = 比较选择开关
+                    // （aria-pressed + is-selected；不展开、无折叠箭头，浏览缩略图
+                    // 语义让位于选择语义）；普通模式保持折叠开关（aria-expanded）
+                    const seriesSelected = selectedSeriesKeys.includes(series.key)
+                    if (compareMode) {
+                      const seriesUidText =
+                        series.seriesInstanceUID ?? '未知系列'
+                      return (
+                        <div key={series.key} className="dicom-panel__series">
+                          <button
+                            type="button"
+                            className={
+                              seriesSelected
+                                ? 'dicom-panel__series-toggle is-selected'
+                                : 'dicom-panel__series-toggle'
+                            }
+                            aria-pressed={seriesSelected}
+                            aria-label={`比较选择系列 ${seriesUidText}（${series.sliceCount} 张）`}
+                            onClick={() => onToggleSeriesSelect?.(series.key)}
+                          >
+                            <span className="dicom-panel__series-title">Series</span>
+                            <span
+                              className="dicom-panel__series-uid"
+                              title={series.seriesInstanceUID ?? undefined}
+                            >
+                              {series.seriesInstanceUID === null
+                                ? `未知系列（${series.sliceCount} 个文件）`
+                                : series.seriesInstanceUID}
+                            </span>
+                            <span className="dicom-panel__series-count">
+                              {series.sliceCount} 张
+                            </span>
+                          </button>
+                        </div>
+                      )
+                    }
                     const expanded = openSeriesKeys.has(series.key)
                     return (
                       <div key={series.key} className="dicom-panel__series">

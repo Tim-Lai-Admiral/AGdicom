@@ -187,6 +187,13 @@ body {
   color: var(--color-text-muted);
 }
 
+/* 混合选择拒绝提示（CR-013 T-002 / R-033）：系列与素材行不可混选的 alert 反馈 */
+.library__mix-notice {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-danger);
+}
+
 .library__empty {
   margin: 0;
   padding: 1rem;
@@ -2521,6 +2528,20 @@ button.asset-row__main:hover {
 }
 
 .dicom-panel__series-toggle:hover .dicom-panel__series-title {
+  color: var(--accent, #00c4d8);
+}
+
+/* 比较模式系列选择（CR-013 T-002 / R-033）：选中系列行高亮为强调色 */
+.dicom-panel__series-toggle.is-selected .dicom-panel__series-title,
+.dicom-panel__series-toggle.is-selected .dicom-panel__series-uid,
+.dicom-panel__series-toggle.is-selected .dicom-panel__series-count {
+  color: var(--accent, #00c4d8);
+}
+
+/* 比较模式面板内操作提示（CR-013 T-002 / R-033） */
+.dicom-panel__compare-hint {
+  margin: 0 0 4px;
+  font-size: 0.6875rem;
   color: var(--accent, #00c4d8);
 }
 
