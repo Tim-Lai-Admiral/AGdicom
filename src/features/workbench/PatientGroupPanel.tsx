@@ -2,13 +2,18 @@
  * 左栏 DICOM 患者分组独立面板（CR-008 T-001 / R-021）。
  *
  * 患者分组展示从"逐行挂载"（DicomSeriesExpansion，已于本任务移除）改为左栏
- * 素材列表下方的独立区块：一次渲染素材库全部患者组（按 R-012 排序，复用
+ * 独立区块（CR-008 时位于素材列表下方；CR-013 T-001 / R-032 起移至素材列表
+ * 上方——先患者分组、后素材库）：一次渲染素材库全部患者组（按 R-012 排序，复用
  * seriesUtils 的 groupDicomByPatient）——分组头（PatientName + PatientID，可折叠，
  * 展开状态由 App 层 openGroupKeys 独立持有）→ series 行（组内 series 按
  * SeriesInstanceUID 升序；同患者内缺 UID 的文件聚合为单个"未知系列"，文案
  * "未知系列（N 个文件）"，行内可折叠）→ 切片缩略图（按 InstanceNumber 排序、
  * 缺失按文件名）：已解析且像素可解码的切片显示真实首帧像素（sliceThumb 生成的
  * 会话级 dataURL，R-017），未生成/生成失败时回退 ThumbSVG 风格的占位示意 SVG。
+ *
+ * 折叠指示箭头（CR-013 T-001 / R-031）：分组头与系列行行首常驻 chevron SVG，
+ * 随展开态旋转（收起 -90° / 展开 0°，0.15s CSS 过渡，is-open 类切换）；
+ * aria-expanded 语义保留。
  *
  * 与素材行解耦（R-021）：点击面板中的切片缩略图 → onOpenSlice(sliceAssetId)
  * 仅切换中央查看器与高亮；分组/系列的展开状态不因切片点击改变（当前切片所属
@@ -59,6 +64,31 @@ function SliceThumb({ t }: { t: number }) {
       <line x1="32" y1="0" x2="32" y2="64" stroke="rgba(0,196,216,0.15)" strokeWidth="0.5" />
       <line x1="0" y1="32" x2="64" y2="32" stroke="rgba(0,196,216,0.15)" strokeWidth="0.5" />
     </svg>
+  )
+}
+
+/**
+ * 折叠指示箭头（CR-013 T-001 / R-031）：chevron SVG 常驻分组头/系列行行首，
+ * 默认（收起）经 CSS 旋转 -90° 指向右，展开（is-open）回 0° 指向下；
+ * 旋转过渡由 .dicom-panel__chevron 的 transition 承担，本组件只切类名。
+ */
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <span
+      className={open ? 'dicom-panel__chevron is-open' : 'dicom-panel__chevron'}
+      aria-hidden="true"
+    >
+      <svg viewBox="0 0 12 12" width="10" height="10" xmlns="http://www.w3.org/2000/svg">
+        <path
+          d="M2.5 4.25 L6 7.75 L9.5 4.25"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
   )
 }
 
@@ -207,6 +237,7 @@ export default function PatientGroupPanel({
                 aria-expanded={groupOpen}
                 onClick={() => onToggleGroup(group.key)}
               >
+                <Chevron open={groupOpen} />
                 <span className="dicom-panel__group-name">
                   {group.unknown ? '未知患者' : (group.patientName ?? '已置空')}
                 </span>
@@ -226,6 +257,7 @@ export default function PatientGroupPanel({
                           aria-expanded={expanded}
                           onClick={() => toggleSeries(series.key)}
                         >
+                          <Chevron open={expanded} />
                           <span className="dicom-panel__series-title">Series</span>
                           <span
                             className="dicom-panel__series-uid"

@@ -175,6 +175,12 @@ function App() {
   const hasComparable = assets.some((asset) => COMPARE_SELECTABLE_KINDS.includes(asset.kind))
   const dicomAssets = assets.filter((asset) => asset.kind === 'dicom')
   const activeAsset = activeAssetId !== null ? state.assets[activeAssetId] : undefined
+  // 右栏元数据页签数据源（CR-013 T-001 / R-022 扩展）：DICOM 查看时跟随当前切片
+  // （查看器内滑动条等路径切换 → 元数据同步展示当前切片 meta）；无当前切片高亮
+  // （或切片素材已被清理）时回退选中素材。仅 meta 页签消费；评审页签仍绑定
+  // activeAsset（选中素材），不随切片改变。
+  const metaAsset =
+    (activeSliceAssetId !== null ? state.assets[activeSliceAssetId] : undefined) ?? activeAsset
   // 比较素材：按选中先后顺序（先选的在左）
   const compareAssets = selectedIds
     .map((id) => state.assets[id])
@@ -530,6 +536,19 @@ function App() {
                   {compareHint}
                 </p>
               ) : null}
+              {/* 患者分组面板置于素材库列表上方（CR-013 T-001 / R-032：先分组后素材库；
+                  面板标题自带，header"素材库"计数保留）。比较模式下隐藏（素材行选择
+                  语义），无 DICOM 素材时整体不渲染，空库走上方空态提示 */}
+              {!compareMode && dicomAssets.length > 0 ? (
+                <PatientGroupPanel
+                  dicomAssets={dicomAssets}
+                  activeSliceAssetId={activeSliceAssetId}
+                  openGroupKeys={openGroupKeys}
+                  onToggleGroup={toggleGroupOpen}
+                  onOpenGroup={openGroup}
+                  onOpenSlice={selectAsset}
+                />
+              ) : null}
               {gridAssets.length > 0 ? (
                 <AssetGrid
                   assets={gridAssets}
@@ -544,16 +563,6 @@ function App() {
               ) : (
                 <p className="library__empty">没有符合当前筛选条件的素材：可调整上方筛选条件</p>
               )}
-              {!compareMode && dicomAssets.length > 0 ? (
-                <PatientGroupPanel
-                  dicomAssets={dicomAssets}
-                  activeSliceAssetId={activeSliceAssetId}
-                  openGroupKeys={openGroupKeys}
-                  onToggleGroup={toggleGroupOpen}
-                  onOpenGroup={openGroup}
-                  onOpenSlice={selectAsset}
-                />
-              ) : null}
             </div>
           )}
         </aside>
@@ -594,10 +603,10 @@ function App() {
               </button>
             </div>
           ) : null}
-          {showMetaPanel && activeAsset !== undefined ? (
+          {showMetaPanel && metaAsset !== undefined ? (
             <>
               <WindowLevelPanel windowLevel={windowLevel} onChange={setWindowLevel} />
-              <MetadataPanel asset={activeAsset} />
+              <MetadataPanel asset={metaAsset} />
             </>
           ) : null}
           {(showReviewPanel || showDicomReview) && activeAsset !== undefined ? (

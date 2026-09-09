@@ -10,6 +10,9 @@
  * - 姓名/ID 均缺失的"未知患者"组显示；无元数据占位提示不崩溃。
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+// 箭头旋转为 CSS 过渡：jsdom 不应用样式表，断言样式源码（与 App.workbench.test 同口径）
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Asset, DicomMeta } from '../../domain/types.ts'
 import PatientGroupPanel from './PatientGroupPanel.tsx'
@@ -178,6 +181,46 @@ describe('PatientGroupPanel（CR-008 T-001 / R-021）', () => {
     const head = container.querySelector('.dicom-panel__group-head') as HTMLElement
     fireEvent.click(head)
     expect(onToggleGroup).toHaveBeenCalledWith(CHEN_KEY)
+  })
+
+  it('chevron 随展开态切换 is-open 类（收起 -90° / 展开 0°，0.15s 过渡）(CR-013 T-001 / R-031)', () => {
+    // 旋转角度与过渡断言样式源码（jsdom 不应用样式表）；aria-expanded 语义由
+    // 既有分组头/系列行用例覆盖，本用例聚焦 chevron 类名切换
+    const css = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8')
+    const baseRule = (/[.]dicom-panel__chevron\s*\{([^}]*)\}/.exec(css)?.[1] ?? '').replace(
+      /\s+/g,
+      ' ',
+    )
+    expect(baseRule).toContain('transform: rotate(-90deg)')
+    expect(baseRule).toContain('transition: transform 0.15s')
+    const openRule = (/[.]dicom-panel__chevron\.is-open\s*\{([^}]*)\}/.exec(css)?.[1] ?? '').replace(
+      /\s+/g,
+      ' ',
+    )
+    expect(openRule).toContain('transform: rotate(0deg)')
+
+    // 收起态（默认）：分组头与系列行 chevron 均无 is-open（-90°）
+    const { container } = renderPanel(chenAssets())
+    const collapsedChevrons = container.querySelectorAll('.dicom-panel__chevron')
+    expect(collapsedChevrons.length).toBeGreaterThan(0)
+    for (const chevron of collapsedChevrons) {
+      expect(chevron.className).not.toContain('is-open')
+    }
+
+    // 展开态：分组头经 openGroupKeys 展开、series 经当前切片自动展开 → 对应 chevron 有 is-open
+    cleanup()
+    const opened = renderPanel(chenAssets(), {
+      openGroupKeys: new Set([CHEN_KEY]),
+      activeSliceAssetId: 'a-uid-1-1',
+    })
+    const headChevron = opened.container.querySelector(
+      '.dicom-panel__group-head .dicom-panel__chevron',
+    )
+    expect(headChevron?.className).toContain('is-open')
+    const seriesChevron = opened.container.querySelector(
+      '.dicom-panel__series-toggle .dicom-panel__chevron',
+    )
+    expect(seriesChevron?.className).toContain('is-open')
   })
 
   it('shows 未知患者 with 已置空 for files with both patient fields missing', () => {
