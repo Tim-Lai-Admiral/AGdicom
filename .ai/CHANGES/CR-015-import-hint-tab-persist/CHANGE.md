@@ -6,7 +6,7 @@
 id: CR-015
 title: "中央导入视图加备份 JSON 提示（精简文案）；右栏 元数据/评审 页签对所有素材显示并跨素材保持选择"
 change_level: L2
-status: approved
+status: completed
 parent: null
 created_by: Planner
 created_at: 2026-09-09
@@ -46,7 +46,7 @@ Human 指示（2026-09-09）：
 
 ## Tasks
 
-- [ ] T-001: 中央导入备份提示 + 右栏页签全类型/持久化（含 AssetInfoPanel）
+- [x] T-001: 中央导入备份提示 + 右栏页签全类型/持久化（含 AssetInfoPanel）
 
 ## Dependencies
 
@@ -58,4 +58,7 @@ Human 指示（2026-09-09）：
 
 ## Result
 
-<!-- 合并后填写 -->
+- 2026-09-09 完成。T-001 合并至 master（PR #62，分支已删）；审查 PASS（REVIEW-CR015.md，456 测试复跑全绿）。
+- 行为变化（R-036 预期）：DICOM 首开默认页签为上次选择（不再强制元数据）；图片/3D 新增"元数据"页签（文件信息）。
+- 非阻塞：PR 描述乱码瑕疵、任务卡 status 未更新、文件尾缺换行。
+- CURRENT 已更新（REQUIREMENTS R-035/R-036、DESIGN 提示与页签），Tag v0.8.1。

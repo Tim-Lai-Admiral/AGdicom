@@ -49,6 +49,8 @@
 | R-032 | 左栏布局：患者分组/序列库在上，全素材库在下 | active | CR-013 |
 | R-033 | DICOM 系列级比较选择（系列行直接选择，与素材行互斥） | active | CR-013 |
 | R-034 | Docker 交付：多阶段镜像 + nginx SPA + compose 一键运行（8080:80） | active | CR-014 |
+| R-035 | 中央导入视图备份提示（精简文案） | active | CR-015 |
+| R-036 | 右栏页签全类型显示 + 跨素材保持选择（非 DICOM 元数据=文件信息） | active | CR-015 |
 
 ## Requirements
 

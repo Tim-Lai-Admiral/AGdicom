@@ -20,6 +20,8 @@
 ## Design system and accessibility
 
 - 中文界面；**Tailwind v4**（`@tailwindcss/vite`）+ 深色设计令牌（`--bg #060810 / --panel / --surface / --accent #00c4d8 / --text-*`，源自 Figma Make 原型 rec/）；手写 CSS 变量层（index.css）。
+- **中央导入视图（CR-015）**：拖拽提示下新增精简备份提示"数据保存在本机浏览器，可经顶栏「导出」备份 JSON"（muted+mono 小字）。
+- **右栏页签（CR-015）**：元数据/评审页签对所有素材显示并**跨素材保持选择**（不因切换重置）；非 DICOM 的元数据页签显示文件信息（AssetInfoPanel：名称/类型/来源/大小/创建/更新时间）；DICOM 仍为 W/L + 元数据分组。
 - 字体本地化：Inter + JetBrains Mono woff2（public/fonts/，@font-face），零外部 CDN（离线可用）；CJK 回退系统字体。
 - 布局：顶部工具栏 + 左侧素材/序列栏（可折叠）+ 中央查看区 + 右侧面板（可折叠）；窄屏 64rem 收窄，顶栏开关折叠。**左栏（CR-013）：患者分组/序列库面板在上，全素材库列表在下；分组头/系列行 chevron 箭头旋转指示展开态（-90°/0°，0.15s）。**
 - **右栏元数据随切片同步（CR-013）**：DICOM 滑动切换切片时，元数据页签跟随当前切片素材（metaAsset=activeSliceAssetId 优先）；评审页签仍绑定选中素材；W/L 面板不随切片。
