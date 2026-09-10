@@ -4,6 +4,7 @@
  * 交互：拖拽（进入高亮、放下导入）+ 文件选择按钮；导入期间忽略新事件；
  * 反馈：成功计数 / 水合复活（已恢复预览）/ 重复提示 / 未知类型原因 / 超限未入库
  * （>20MB，R-016）/ 持久化异常，可手动关闭。
+ * 提示（CR-015 T-001 / R-035）：拖拽提示下附一行本地存储备份提示（精简文案）。
  */
 import { useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent } from 'react'
@@ -162,6 +163,7 @@ export default function ImportZone({
       >
         <p className="import-zone__hint">将图片 / DICOM / 3D 模型文件拖到此处</p>
         <p className="import-zone__sub">{SUPPORTED_TYPES_HINT}</p>
+        <p className="import-zone__backup-hint">数据保存在本机浏览器，可经顶栏「导出」备份 JSON</p>
         <button
           type="button"
           className="import-zone__button"

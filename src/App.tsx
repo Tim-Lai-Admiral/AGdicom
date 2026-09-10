@@ -28,6 +28,7 @@ import ExportImport from './features/review/ExportImport.tsx'
 import SettingsDialog from './features/settings/SettingsDialog.tsx'
 import TopToolbar from './features/workbench/TopToolbar.tsx'
 import MetadataPanel from './features/workbench/MetadataPanel.tsx'
+import AssetInfoPanel from './features/workbench/AssetInfoPanel.tsx'
 import WindowLevelPanel from './features/workbench/WindowLevelPanel.tsx'
 import PatientGroupPanel, { buildDicomSeriesEntries } from './features/workbench/PatientGroupPanel.tsx'
 import { groupDicomByPatient } from './features/viewer/dicom/seriesUtils.ts'
@@ -48,7 +49,8 @@ const COMPARE_SELECTION_LIMIT = 2
  */
 const COMPARE_SELECTABLE_KINDS: readonly AssetKind[] = ['image', 'dicom', 'model']
 
-/** 右栏信息面板页签：DICOM 默认元数据分组，其余素材评审（R：右栏自动切换） */
+/** 右栏信息面板页签（CR-015 T-001 / R-036）：元数据/评审对所有素材显示，
+ *  选择跨素材切换保持（selectAsset 不再随类型重置），默认评审 */
 type RightTab = 'meta' | 'review'
 
 function App() {
@@ -236,14 +238,14 @@ function App() {
     }
   }
 
-  /** 选中素材（工作台）：中央查看区 + 右栏面板联动（DICOM → 元数据分组，其余 → 评审）；
+  /** 选中素材（工作台）：中央查看区 + 右栏面板联动（CR-015 T-001 / R-036：页签
+   *  选择跨素材保持，不再随素材类型重置；DICOM 打开时若上次页签为元数据则保持）；
    *  左栏分组面板高亮随选中设置/清理（CR-008 T-002 / R-022）；患者分组面板的展开
    *  联动由面板自身完成（当前切片所属分组自动展开，幂等） */
   const selectAsset = (assetId: string): void => {
     setActiveAssetId(assetId)
     setRightOpen(true)
     const asset = state.assets[assetId]
-    setRightTab(asset !== undefined && asset.kind === 'dicom' ? 'meta' : 'review')
     setActiveSliceAssetId(asset !== undefined && asset.kind === 'dicom' ? assetId : null)
   }
 
@@ -524,11 +526,10 @@ function App() {
     )
   }
 
-  const showReviewPanel = activeAsset !== undefined && activeAsset.kind !== 'dicom'
-  const showMetaPanel =
-    activeAsset !== undefined && activeAsset.kind === 'dicom' && rightTab === 'meta'
-  const showDicomReview =
-    activeAsset !== undefined && activeAsset.kind === 'dicom' && rightTab === 'review'
+  // 右栏页签（CR-015 T-001 / R-036）：对所有素材显示；元数据页签 DICOM 走
+  // MetadataPanel（+ W/L），非 DICOM 走 AssetInfoPanel；评审页签所有素材同面板
+  const showMetaPanel = activeAsset !== undefined && rightTab === 'meta'
+  const showReviewPanel = activeAsset !== undefined && rightTab === 'review'
 
   return (
     <div className="workbench">
@@ -663,10 +664,10 @@ function App() {
         >
           {activeAsset === undefined ? (
             <p className="workbench__right-empty">
-              在左栏选择素材：DICOM 显示元数据分组，其余素材显示评审面板；顶栏按钮可折叠本面板。
+              在左栏选择素材：页签可切换元数据/评审；顶栏按钮可折叠本面板
             </p>
           ) : null}
-          {activeAsset !== undefined && activeAsset.kind === 'dicom' ? (
+          {activeAsset !== undefined ? (
             <div className="workbench__right-tabs">
               <button
                 type="button"
@@ -686,13 +687,17 @@ function App() {
               </button>
             </div>
           ) : null}
-          {showMetaPanel && metaAsset !== undefined ? (
+          {showMetaPanel && activeAsset !== undefined && activeAsset.kind === 'dicom' &&
+          metaAsset !== undefined ? (
             <>
               <WindowLevelPanel windowLevel={windowLevel} onChange={setWindowLevel} />
               <MetadataPanel asset={metaAsset} />
             </>
           ) : null}
-          {(showReviewPanel || showDicomReview) && activeAsset !== undefined ? (
+          {showMetaPanel && activeAsset !== undefined && activeAsset.kind !== 'dicom' ? (
+            <AssetInfoPanel asset={activeAsset} />
+          ) : null}
+          {showReviewPanel && activeAsset !== undefined ? (
             <ReviewPanel
               asset={activeAsset}
               history={state.reviews[activeAsset.id]}

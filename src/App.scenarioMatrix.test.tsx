@@ -708,6 +708,9 @@ describe('App: 场景矩阵——视口收尾（CR-009 T-004 / R-023·R-024·R-0
       expect(within(dialog).getByText('Inst #1 / 2')).toBeTruthy()
     })
     const right = screen.getByRole('complementary', { name: '信息面板' })
+    // CR-015 T-001 / R-036：页签选择跨素材保持（默认评审，不再强制元数据）——
+    // 切到元数据页签后 MetadataPanel 可达，唯一元数据源断言照常
+    fireEvent.click(within(right).getByRole('button', { name: '元数据' }))
     await waitFor(() => {
       expect(within(right).getAllByText('SeriesInstanceUID')).toHaveLength(1)
     })

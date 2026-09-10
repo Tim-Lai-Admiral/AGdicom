@@ -51,6 +51,11 @@ describe('ImportZone', () => {
     expect(screen.getByRole('button', { name: '选择文件' })).toBeTruthy()
   })
 
+  it('shows the local-storage backup hint under the drop hints (CR-015 T-001 / R-035)', () => {
+    renderZone()
+    expect(screen.getByText('数据保存在本机浏览器，可经顶栏「导出」备份 JSON')).toBeTruthy()
+  })
+
   it('highlights while dragging over and clears on leave', () => {
     const { dropzone } = renderZone()
     expect(dropzone.className).not.toContain('is-active')
