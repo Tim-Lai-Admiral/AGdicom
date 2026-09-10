@@ -181,8 +181,13 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
     })
 
     const right = screen.getByRole('complementary', { name: '信息面板' })
+    // CR-015 T-001 / R-036：页签选择跨素材保持（默认评审，不再强制元数据）——
+    // 切到元数据页签验证 DICOM 分组面板不回归
+    fireEvent.click(within(right).getByRole('button', { name: '元数据' }))
     expect(within(right).getByText('DICOM 元数据')).toBeTruthy()
-    expect(within(right).getByRole('button', { name: /^患者信息/ })).toBeTruthy()
+    await waitFor(() => {
+      expect(within(right).getByRole('button', { name: /^患者信息/ })).toBeTruthy()
+    })
     expect(within(right).getAllByText('已置空')).toHaveLength(2)
 
     // 元数据分组可折叠：点击“患者信息”收起该组
@@ -354,8 +359,10 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
       expect(within(dialog).getByText('CT · 去标识化')).toBeTruthy()
     })
 
-    // 元数据页签：元数据解析回写后展开“图像信息”分组 → 当前切片（#1）的切片序号
+    // 元数据页签（CR-015 T-001 / R-036：默认评审，先切到元数据再验证切片跟随）：
+    // 元数据解析回写后展开“图像信息”分组 → 当前切片（#1）的切片序号
     const right = screen.getByRole('complementary', { name: '信息面板' })
+    fireEvent.click(within(right).getByRole('button', { name: '元数据' }))
     await waitFor(() => {
       expect(within(right).getByRole('button', { name: /^图像信息/ })).toBeTruthy()
     })
@@ -419,7 +426,8 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
   })
 
   it('shows the W/L panel in the right column for a DICOM asset (CR-003 T-003 / R-003 修改)', async () => {
-    // 单切片 DICOM：打开查看器后右栏“元数据”页签显示 W/L 区块（元数据分组上方）
+    // 单切片 DICOM：打开查看器后切到“元数据”页签，W/L 区块显示在分组上方
+    // （CR-015 T-001 / R-036：默认评审页签，元数据经页签切换可达，不回归）
     const buffer = buildDicomFile({
       patientName: '',
       patientID: '',
@@ -450,6 +458,7 @@ describe('App: 工作台布局（CR-003 T-002）', () => {
     })
 
     const right = screen.getByRole('complementary', { name: '信息面板' })
+    fireEvent.click(within(right).getByRole('button', { name: '元数据' }))
     expect(within(right).getByText('窗宽窗位（W/L）')).toBeTruthy()
     expect(
       within(right).getByRole('button', { name: '自动 min-max' }).getAttribute('aria-pressed'),
@@ -778,5 +787,99 @@ describe('App: 素材删除（CR-006 T-001 / R-015）', () => {
     expect(screen.getByText('未知患者')).toBeTruthy()
     expect(screen.getAllByRole('button', { name: /^查看切片/ })).toHaveLength(1)
     expect(Object.keys(loadState().state.assets)).toHaveLength(1)
+  })
+})
+
+describe('App: 右栏页签持久化与全类型（CR-015 T-001 / R-036）', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+  afterEach(() => {
+    cleanup() // vitest 未启用 globals，RTL 自动清理不生效，需手动卸载
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+    localStorage.clear()
+  })
+
+  it('keeps the meta tab across asset switches and shows the file info panel for non-DICOM assets', async () => {
+    const { container } = render(<App />)
+    dropFiles(container, [
+      makeFile('heart.png', 64, 'image/png'),
+      makeFile('lung.png', 128, 'image/png'),
+    ])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 2 个素材')).toBeTruthy()
+    })
+
+    // 页签对所有素材显示（选中图片后同样有 元数据/评审 页签）
+    const right = screen.getByRole('complementary', { name: '信息面板' })
+    fireEvent.click(screen.getByRole('button', { name: '查看图片“heart.png”' }))
+    expect(within(right).getByRole('button', { name: '元数据' })).toBeTruthy()
+    expect(within(right).getByRole('button', { name: '评审' })).toBeTruthy()
+
+    // 默认评审：选中图片 A → 评审面板
+    expect(within(right).getByRole('complementary', { name: '评审面板' })).toBeTruthy()
+
+    // A 切到元数据：显示文件信息面板（AssetInfoPanel，文件级信息）
+    fireEvent.click(within(right).getByRole('button', { name: '元数据' }))
+    expect(within(right).getByText('素材信息')).toBeTruthy()
+    expect(within(right).getByText('heart.png')).toBeTruthy()
+    expect(within(right).getByText('64B')).toBeTruthy()
+
+    // 切到图片 B：页签保持元数据（不重置），并显示 B 的文件信息
+    fireEvent.click(screen.getByRole('button', { name: '查看图片“lung.png”' }))
+    expect(
+      within(right).getByRole('button', { name: '元数据' }).getAttribute('aria-pressed'),
+    ).toBe('true')
+    expect(within(right).getByText('lung.png')).toBeTruthy()
+    expect(within(right).getByText('128B')).toBeTruthy()
+    expect(within(right).queryByText('heart.png')).toBeNull()
+  })
+
+  it('opens DICOM on the review tab by default and keeps the meta tab across kind switches (DICOM 不回归)', async () => {
+    const buffer = buildDicomFile({
+      patientName: '',
+      patientID: '',
+      patientIdentityRemoved: 'YES',
+      pixelData: gradientPixels8(8, 8, 30, 200),
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => new Uint8Array(buffer).slice().buffer,
+      })),
+    )
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+
+    const { container } = render(<App />)
+    dropFiles(container, [
+      new File([new Uint8Array(buffer)], 's1.dcm', { type: 'application/dicom' }),
+      makeFile('heart.png', 64, 'image/png'),
+    ])
+    await waitFor(() => {
+      expect(screen.getByText('成功导入 2 个素材')).toBeTruthy()
+    })
+
+    const right = screen.getByRole('complementary', { name: '信息面板' })
+    // DICOM 打开：默认评审页签（不再强制元数据），评审面板可达
+    fireEvent.click(screen.getByRole('button', { name: '查看“s1.dcm”的 DICOM 详情' }))
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: 'DICOM 详情' })).toBeTruthy()
+    })
+    expect(within(right).getByRole('complementary', { name: '评审面板' })).toBeTruthy()
+
+    // 切到元数据：MetadataPanel 照常渲染（DICOM 不回归）
+    fireEvent.click(within(right).getByRole('button', { name: '元数据' }))
+    expect(within(right).getByText('DICOM 元数据')).toBeTruthy()
+
+    // 切到图片：页签保持元数据，显示图片文件信息（跨类型保持）
+    fireEvent.click(screen.getByRole('button', { name: '查看图片“heart.png”' }))
+    expect(
+      within(right).getByRole('button', { name: '元数据' }).getAttribute('aria-pressed'),
+    ).toBe('true')
+    expect(within(right).getByText('素材信息')).toBeTruthy()
+    expect(within(right).getByText('heart.png')).toBeTruthy()
   })
 })

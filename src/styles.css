@@ -74,6 +74,14 @@ body {
   font-size: 0.875rem;
 }
 
+/* 备份提示（CR-015 T-001 / R-035）：muted/mono 小字，可发现性提示 */
+.import-zone__backup-hint {
+  margin: 0.25rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-family: var(--font-mono-data, ui-monospace, monospace);
+}
+
 .import-zone__button {
   margin-top: 0.5rem;
   border: 1px solid var(--color-primary);

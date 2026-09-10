@@ -55,3 +55,12 @@ branch: feature/CR-015-T-001-hint-tabs
 ## Definition of done
 
 - [ ] 验收通过；PR（body 写概要）；Reviewer 审查
+
+## Builder result
+
+- 实现摘要：R-035 中央导入视图备份提示行（`数据保存在本机浏览器，可经顶栏「导出」备份 JSON`，muted/mono 小字）；R-036 页签（元数据/评审）对所有素材渲染（`activeAsset !== undefined`），selectAsset 移除 setRightTab 重置（默认 review、跨素材保持），元数据页签 DICOM 走 MetadataPanel+W/L（不变）、非 DICOM 走新增 AssetInfoPanel（名称/类型/来源/大小(B·KB·MB)/创建/更新时间(本地化)，复用 .meta-row 样式）；右栏空态文案更新。
+- 文件清单：`src/features/library/ImportZone.tsx`、`src/styles.css`、`src/App.tsx`、新增 `src/features/workbench/AssetInfoPanel.tsx`；测试：`ImportZone.test.tsx`、新增 `AssetInfoPanel.test.tsx`、`App.workbench.test.tsx`（新增页签持久化 describe + 3 个 DICOM 默认页签用例适配 R-036）、`App.scenarioMatrix.test.tsx`（1 处适配）。
+- 验证结果：`scripts\verify.ps1` 全绿（456/456 tests，44 files；build OK）。存量 451 无回归，新增 5 用例（含适配后断言）。
+- 行为变化说明（R-036 预期）：DICOM 首开默认显示评审页签（原强制元数据页签）；上次页签为元数据时打开 DICOM 仍保持元数据。相关 DICOM 用例已按新契约适配。
+- 已知限制：无跨会话 rightTab 持久化（任务卡要求为会话内跨素材保持，未要求 refresh 持久化）。
+- 需 Reviewer 关注：AssetInfoPanel 大小格式化对 <1KB 显示 B（卡片写 KB/MB，<1KB 回退 B 为低风险实现细节）；右栏空态文案按派发指令（无句号结尾）。
